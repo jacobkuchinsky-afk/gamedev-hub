@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   ChevronDown,
   ChevronRight,
-  Check,
   Square,
   CheckSquare,
   Rocket,
@@ -19,6 +18,11 @@ import {
   CalendarClock,
   RotateCcw,
   PartyPopper,
+  Plus,
+  MessageSquare,
+  X,
+  Target,
+  Check,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 
@@ -26,6 +30,7 @@ interface ChecklistItem {
   id: string;
   label: string;
   detail?: string;
+  isCustom?: boolean;
 }
 
 interface ChecklistCategory {
@@ -36,7 +41,7 @@ interface ChecklistCategory {
   items: ChecklistItem[];
 }
 
-const CHECKLIST: ChecklistCategory[] = [
+const DEFAULT_CHECKLIST: ChecklistCategory[] = [
   {
     id: "storePage",
     title: "Store Page",
@@ -123,16 +128,36 @@ const CHECKLIST: ChecklistCategory[] = [
 function getChecklistKey(projectId: string) {
   return `gameforge_launch_${projectId}`;
 }
-
-function loadChecklist(projectId: string): Record<string, boolean> {
-  if (typeof window === "undefined") return {};
-  const raw = localStorage.getItem(getChecklistKey(projectId));
-  if (raw) return JSON.parse(raw);
-  return {};
+function getCustomItemsKey(projectId: string) {
+  return `gameforge_launch_custom_${projectId}`;
+}
+function getNotesKey(projectId: string) {
+  return `gameforge_launch_notes_${projectId}`;
 }
 
-function saveChecklist(projectId: string, data: Record<string, boolean>) {
-  localStorage.setItem(getChecklistKey(projectId), JSON.stringify(data));
+function loadData<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  const raw = localStorage.getItem(key);
+  return raw ? JSON.parse(raw) : fallback;
+}
+
+function saveData(key: string, data: unknown) {
+  localStorage.setItem(key, JSON.stringify(data));
+}
+
+function getScoreColor(pct: number): string {
+  if (pct >= 80) return "#10B981";
+  if (pct >= 50) return "#F59E0B";
+  return "#EF4444";
+}
+
+function getScoreLabel(pct: number): string {
+  if (pct === 100) return "You're Ready to Launch!";
+  if (pct >= 80) return "Looking Good!";
+  if (pct >= 50) return "Almost There";
+  if (pct >= 25) return "Making Progress";
+  if (pct > 0) return "Just Getting Started";
+  return "No Items Checked";
 }
 
 export default function LaunchChecklistPage() {
@@ -143,27 +168,46 @@ export default function LaunchChecklistPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [customItems, setCustomItems] = useState<Record<string, ChecklistItem[]>>({});
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [openNotes, setOpenNotes] = useState<Record<string, boolean>>({});
+  const [newItemInputs, setNewItemInputs] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    console.log("[LaunchChecklist] rendered, id:", projectId);
     const p = getProject(projectId);
     if (!p) {
       router.replace("/dashboard/projects");
       return;
     }
     setProject(p);
-    setChecked(loadChecklist(projectId));
+    setChecked(loadData(getChecklistKey(projectId), {}));
+    setCustomItems(loadData(getCustomItemsKey(projectId), {}));
+    setNotes(loadData(getNotesKey(projectId), {}));
     const initial: Record<string, boolean> = {};
-    CHECKLIST.forEach((c) => (initial[c.id] = true));
+    DEFAULT_CHECKLIST.forEach((c) => (initial[c.id] = true));
     setExpanded(initial);
   }, [projectId, router]);
+
+  const effectiveChecklist = DEFAULT_CHECKLIST.map((cat) => ({
+    ...cat,
+    items: [
+      ...cat.items,
+      ...(customItems[cat.id] || []).map((i) => ({ ...i, isCustom: true })),
+    ],
+  }));
+
+  const allItemIds = new Set(effectiveChecklist.flatMap((c) => c.items.map((i) => i.id)));
+  const totalItems = effectiveChecklist.reduce((acc, c) => acc + c.items.length, 0);
+  const totalChecked = Object.entries(checked).filter(([id, v]) => v && allItemIds.has(id)).length;
+  const overallPct = totalItems > 0 ? Math.round((totalChecked / totalItems) * 100) : 0;
+  const allDone = totalChecked === totalItems && totalItems > 0;
+  const scoreColor = getScoreColor(overallPct);
 
   const toggleItem = useCallback(
     (itemId: string) => {
       setChecked((prev) => {
         const next = { ...prev, [itemId]: !prev[itemId] };
-        saveChecklist(projectId, next);
-        console.log("[LaunchChecklist] toggled:", itemId, "->", next[itemId]);
+        saveData(getChecklistKey(projectId), next);
         return next;
       });
     },
@@ -174,17 +218,74 @@ export default function LaunchChecklistPage() {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
 
+  const toggleNote = useCallback((itemId: string) => {
+    setOpenNotes((prev) => ({ ...prev, [itemId]: !prev[itemId] }));
+  }, []);
+
+  const updateNote = useCallback(
+    (itemId: string, text: string) => {
+      setNotes((prev) => {
+        const next = { ...prev, [itemId]: text };
+        saveData(getNotesKey(projectId), next);
+        return next;
+      });
+    },
+    [projectId]
+  );
+
+  const addCustomItem = useCallback(
+    (categoryId: string) => {
+      const label = (newItemInputs[categoryId] || "").trim();
+      if (!label) return;
+      const newItem: ChecklistItem = {
+        id: `custom_${categoryId}_${Date.now()}`,
+        label,
+        isCustom: true,
+      };
+      setCustomItems((prev) => {
+        const next = {
+          ...prev,
+          [categoryId]: [...(prev[categoryId] || []), newItem],
+        };
+        saveData(getCustomItemsKey(projectId), next);
+        return next;
+      });
+      setNewItemInputs((prev) => ({ ...prev, [categoryId]: "" }));
+    },
+    [projectId, newItemInputs]
+  );
+
+  const removeCustomItem = useCallback(
+    (categoryId: string, itemId: string) => {
+      setCustomItems((prev) => {
+        const next = {
+          ...prev,
+          [categoryId]: (prev[categoryId] || []).filter((i) => i.id !== itemId),
+        };
+        saveData(getCustomItemsKey(projectId), next);
+        return next;
+      });
+      setChecked((prev) => {
+        const next = { ...prev };
+        delete next[itemId];
+        saveData(getChecklistKey(projectId), next);
+        return next;
+      });
+      setNotes((prev) => {
+        const next = { ...prev };
+        delete next[itemId];
+        saveData(getNotesKey(projectId), next);
+        return next;
+      });
+    },
+    [projectId]
+  );
+
   const handleReset = useCallback(() => {
     if (!confirm("Reset all checklist items? This cannot be undone.")) return;
     setChecked({});
-    saveChecklist(projectId, {});
-    console.log("[LaunchChecklist] reset all items for project:", projectId);
+    saveData(getChecklistKey(projectId), {});
   }, [projectId]);
-
-  const totalItems = CHECKLIST.reduce((acc, c) => acc + c.items.length, 0);
-  const totalChecked = Object.values(checked).filter(Boolean).length;
-  const overallPct = totalItems > 0 ? Math.round((totalChecked / totalItems) * 100) : 0;
-  const allDone = totalChecked === totalItems && totalItems > 0;
 
   if (!project) return null;
 
@@ -219,48 +320,98 @@ export default function LaunchChecklistPage() {
         </div>
       </div>
 
-      {/* Overall Progress */}
-      <div className={`rounded-xl border p-5 transition-colors ${allDone ? "border-[#10B981]/30 bg-[#10B981]/5" : "border-[#2A2A2A] bg-[#1A1A1A]"}`}>
-        {allDone ? (
-          <div className="flex items-center gap-3">
-            <PartyPopper className="h-6 w-6 text-[#10B981]" />
-            <div>
-              <p className="font-semibold text-[#10B981]">Ready to Launch!</p>
-              <p className="text-sm text-[#6B7280]">All {totalItems} items completed. Ship it.</p>
+      {/* Launch Readiness Score */}
+      <div
+        className={`relative overflow-hidden rounded-xl border p-6 transition-all ${
+          allDone
+            ? "border-[#10B981]/40 bg-[#10B981]/5"
+            : "border-[#2A2A2A] bg-[#1A1A1A]"
+        }`}
+      >
+        {allDone && (
+          <div className="absolute inset-0 bg-gradient-to-br from-[#10B981]/5 to-transparent" />
+        )}
+        <div className="relative flex flex-col items-center gap-4 sm:flex-row sm:gap-8">
+          {/* Score circle */}
+          <div className="flex flex-col items-center gap-2">
+            <div
+              className="flex h-28 w-28 items-center justify-center rounded-full border-4"
+              style={{
+                borderColor: scoreColor,
+                backgroundColor: `${scoreColor}10`,
+              }}
+            >
+              {allDone ? (
+                <PartyPopper className="h-10 w-10" style={{ color: scoreColor }} />
+              ) : (
+                <span
+                  className="text-4xl font-black tabular-nums"
+                  style={{ color: scoreColor }}
+                >
+                  {overallPct}
+                </span>
+              )}
             </div>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-[#9CA3AF]">Overall Progress</span>
-              <span className="font-medium text-[#F59E0B]">
-                {totalChecked}/{totalItems} ({overallPct}%)
+            {!allDone && (
+              <span className="text-xs font-medium text-[#6B7280]">
+                Readiness
               </span>
+            )}
+          </div>
+
+          {/* Score details */}
+          <div className="flex-1 text-center sm:text-left">
+            <div className="flex items-center justify-center gap-2 sm:justify-start">
+              <Target className="h-4 w-4" style={{ color: scoreColor }} />
+              <h2 className="text-lg font-bold" style={{ color: scoreColor }}>
+                {getScoreLabel(overallPct)}
+              </h2>
             </div>
-            <div className="mt-2 h-3 overflow-hidden rounded-full bg-[#2A2A2A]">
+            <p className="mt-1 text-sm text-[#6B7280]">
+              {totalChecked} of {totalItems} items completed
+            </p>
+            {/* Progress bar */}
+            <div className="mt-3 h-3 overflow-hidden rounded-full bg-[#2A2A2A]">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-[#F59E0B] to-[#10B981] transition-all duration-500"
-                style={{ width: `${overallPct}%` }}
+                className="h-full rounded-full transition-all duration-700 ease-out"
+                style={{
+                  width: `${overallPct}%`,
+                  backgroundColor: scoreColor,
+                }}
               />
             </div>
-          </>
-        )}
+            {allDone && (
+              <p className="mt-3 text-sm text-[#10B981]/80">
+                Every item is checked off. Time to ship it!
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Category Cards */}
+      {/* Category Summary Cards */}
       <div className="grid gap-3 sm:grid-cols-3">
-        {CHECKLIST.map((cat) => {
+        {effectiveChecklist.map((cat) => {
           const catChecked = cat.items.filter((i) => checked[i.id]).length;
-          const catPct = Math.round((catChecked / cat.items.length) * 100);
-          const catDone = catChecked === cat.items.length;
+          const catPct = cat.items.length > 0 ? Math.round((catChecked / cat.items.length) * 100) : 0;
+          const catDone = catChecked === cat.items.length && cat.items.length > 0;
           return (
-            <div
+            <button
               key={cat.id}
-              className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4"
+              onClick={() => {
+                setExpanded((prev) => ({ ...prev, [cat.id]: true }));
+                document.getElementById(`section-${cat.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+              className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 text-left transition-colors hover:border-[#3A3A3A]"
             >
-              <div className="flex items-center gap-2">
-                <cat.icon className="h-4 w-4" style={{ color: cat.color }} />
-                <span className="text-sm font-medium">{cat.title}</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <cat.icon className="h-4 w-4" style={{ color: cat.color }} />
+                  <span className="text-sm font-medium">{cat.title}</span>
+                </div>
+                {catDone && (
+                  <Check className="h-3.5 w-3.5 text-[#10B981]" />
+                )}
               </div>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#2A2A2A]">
                 <div
@@ -274,23 +425,25 @@ export default function LaunchChecklistPage() {
               <p className="mt-1.5 text-xs text-[#6B7280]">
                 {catChecked}/{cat.items.length}
               </p>
-            </div>
+            </button>
           );
         })}
       </div>
 
       {/* Checklist Sections */}
       <div className="space-y-3">
-        {CHECKLIST.map((cat) => {
+        {effectiveChecklist.map((cat) => {
           const isOpen = expanded[cat.id] ?? false;
           const catChecked = cat.items.filter((i) => checked[i.id]).length;
-          const catDone = catChecked === cat.items.length;
+          const catDone = catChecked === cat.items.length && cat.items.length > 0;
 
           return (
             <div
               key={cat.id}
+              id={`section-${cat.id}`}
               className="overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]"
             >
+              {/* Category header */}
               <button
                 onClick={() => toggleSection(cat.id)}
                 className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-[#1F1F1F]"
@@ -323,39 +476,124 @@ export default function LaunchChecklistPage() {
                 <div className="border-t border-[#2A2A2A]">
                   {cat.items.map((item, idx) => {
                     const isChecked = checked[item.id] || false;
+                    const hasNote = !!notes[item.id];
+                    const noteOpen = openNotes[item.id] || false;
+
                     return (
-                      <button
+                      <div
                         key={item.id}
-                        onClick={() => toggleItem(item.id)}
-                        className={`flex w-full items-start gap-3 px-5 py-3.5 text-left transition-colors hover:bg-[#1F1F1F] ${
-                          idx < cat.items.length - 1 ? "border-b border-[#2A2A2A]/50" : ""
-                        }`}
+                        className={
+                          idx < cat.items.length - 1
+                            ? "border-b border-[#2A2A2A]/50"
+                            : ""
+                        }
                       >
-                        {isChecked ? (
-                          <CheckSquare className="mt-0.5 h-4 w-4 shrink-0 text-[#10B981]" />
-                        ) : (
-                          <Square className="mt-0.5 h-4 w-4 shrink-0 text-[#6B7280]" />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p
-                            className={`text-sm font-medium transition-colors ${
-                              isChecked ? "text-[#6B7280] line-through" : "text-[#F5F5F5]"
-                            }`}
+                        <div className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-[#1F1F1F]">
+                          {/* Checkbox */}
+                          <button
+                            onClick={() => toggleItem(item.id)}
+                            className="mt-0.5 shrink-0"
                           >
-                            {item.label}
-                          </p>
-                          {item.detail && (
-                            <p className="mt-0.5 text-xs text-[#6B7280]">
-                              {item.detail}
+                            {isChecked ? (
+                              <CheckSquare className="h-4 w-4 text-[#10B981]" />
+                            ) : (
+                              <Square className="h-4 w-4 text-[#6B7280] hover:text-[#9CA3AF]" />
+                            )}
+                          </button>
+
+                          {/* Label & detail */}
+                          <button
+                            onClick={() => toggleItem(item.id)}
+                            className="min-w-0 flex-1 text-left"
+                          >
+                            <p
+                              className={`text-sm font-medium transition-colors ${
+                                isChecked
+                                  ? "text-[#6B7280] line-through"
+                                  : "text-[#F5F5F5]"
+                              }`}
+                            >
+                              {item.label}
                             </p>
+                            {item.detail && (
+                              <p className="mt-0.5 text-xs text-[#6B7280]">
+                                {item.detail}
+                              </p>
+                            )}
+                          </button>
+
+                          {/* Note toggle */}
+                          <button
+                            onClick={() => toggleNote(item.id)}
+                            className="mt-0.5 shrink-0 rounded p-1 transition-colors hover:bg-[#2A2A2A]"
+                            title={noteOpen ? "Hide note" : "Add note"}
+                          >
+                            <MessageSquare
+                              className={`h-3.5 w-3.5 ${
+                                hasNote
+                                  ? "text-[#F59E0B]"
+                                  : "text-[#4B5563] hover:text-[#9CA3AF]"
+                              }`}
+                            />
+                          </button>
+
+                          {/* Delete custom item */}
+                          {item.isCustom && (
+                            <button
+                              onClick={() => removeCustomItem(cat.id, item.id)}
+                              className="mt-0.5 shrink-0 rounded p-1 text-[#4B5563] transition-colors hover:bg-red-500/10 hover:text-red-400"
+                              title="Remove custom item"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
                           )}
                         </div>
-                        {isChecked && (
-                          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#10B981]" />
+
+                        {/* Note textarea */}
+                        {noteOpen && (
+                          <div className="px-5 pb-3 pl-12">
+                            <textarea
+                              value={notes[item.id] || ""}
+                              onChange={(e) =>
+                                updateNote(item.id, e.target.value)
+                              }
+                              placeholder="Write a note..."
+                              rows={2}
+                              className="w-full resize-none rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#D1D5DB] placeholder-[#4B5563] outline-none transition-colors focus:border-[#F59E0B]/40"
+                            />
+                          </div>
                         )}
-                      </button>
+                      </div>
                     );
                   })}
+
+                  {/* Add custom item */}
+                  <div className="flex items-center gap-2 border-t border-[#2A2A2A]/50 px-5 py-3">
+                    <Plus className="h-3.5 w-3.5 shrink-0 text-[#4B5563]" />
+                    <input
+                      type="text"
+                      value={newItemInputs[cat.id] || ""}
+                      onChange={(e) =>
+                        setNewItemInputs((prev) => ({
+                          ...prev,
+                          [cat.id]: e.target.value,
+                        }))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") addCustomItem(cat.id);
+                      }}
+                      placeholder="Add custom item..."
+                      className="min-w-0 flex-1 bg-transparent text-sm text-[#D1D5DB] placeholder-[#4B5563] outline-none"
+                    />
+                    {(newItemInputs[cat.id] || "").trim() && (
+                      <button
+                        onClick={() => addCustomItem(cat.id)}
+                        className="shrink-0 rounded-md bg-[#F59E0B]/10 px-2.5 py-1 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20"
+                      >
+                        Add
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
