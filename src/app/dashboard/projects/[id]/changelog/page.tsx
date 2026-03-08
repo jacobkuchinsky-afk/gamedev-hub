@@ -18,6 +18,7 @@ import {
   Sparkles,
   Loader2,
   GitCompare,
+  Braces,
 } from "lucide-react";
 import {
   getProject,
@@ -422,6 +423,29 @@ Be specific and brief. Only include sections that have items.`;
     URL.revokeObjectURL(url);
   }
 
+  function exportJSON() {
+    const data = entries.map((entry) => ({
+      version: entry.version,
+      type: entry.type,
+      date: entry.date,
+      title: entry.title,
+      changes: Object.fromEntries(
+        CHANGE_CATEGORIES.filter(
+          (cat) => entry.changes[cat] && entry.changes[cat].length > 0
+        ).map((cat) => [cat, entry.changes[cat]])
+      ),
+    }));
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project!.name.toLowerCase().replace(/\s+/g, "-")}-changelog.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const totalChanges = entries.reduce((sum, e) => {
     return sum + CHANGE_CATEGORIES.reduce((s, cat) => s + (e.changes[cat]?.length || 0), 0);
   }, 0);
@@ -486,6 +510,13 @@ Be specific and brief. Only include sections that have items.`;
             >
               <Download className="h-4 w-4" />
               Export .md
+            </button>
+            <button
+              onClick={exportJSON}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+            >
+              <Braces className="h-4 w-4" />
+              Export JSON
             </button>
             <button
               onClick={generateReleaseNotes}

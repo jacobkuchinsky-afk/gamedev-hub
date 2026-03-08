@@ -21,6 +21,9 @@ import {
   Wind,
   Sparkles,
   Loader2,
+  ListMusic,
+  Check,
+  ChevronDown,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -39,6 +42,17 @@ interface Preset {
   name: string;
   icon: typeof Play;
   params: SoundParams;
+}
+
+interface SoundAdviceItem {
+  name: string;
+  description: string;
+  checked: boolean;
+}
+
+interface SoundAdvice {
+  category: string;
+  items: SoundAdviceItem[];
 }
 
 const WAVE_TYPES: WaveType[] = ["sine", "square", "sawtooth", "triangle"];
@@ -170,6 +184,139 @@ export default function SoundsPage() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number>(0);
+
+  const [showAdvisor, setShowAdvisor] = useState(false);
+  const [advisorGenre, setAdvisorGenre] = useState("");
+  const [advisorStyle, setAdvisorStyle] = useState("");
+  const [advisorMood, setAdvisorMood] = useState("");
+  const [advisorLoading, setAdvisorLoading] = useState(false);
+  const [advisorResults, setAdvisorResults] = useState<SoundAdvice[]>([]);
+
+  const toggleAdvisorCheck = (catIdx: number, itemIdx: number) => {
+    setAdvisorResults((prev) =>
+      prev.map((group, gi) =>
+        gi === catIdx
+          ? {
+              ...group,
+              items: group.items.map((item, ii) =>
+                ii === itemIdx ? { ...item, checked: !item.checked } : item
+              ),
+            }
+          : group
+      )
+    );
+  };
+
+  const handleAISoundDesign = async () => {
+    if (!advisorGenre.trim() || advisorLoading) return;
+    setAdvisorLoading(true);
+    setAdvisorResults([]);
+    try {
+      const style = advisorStyle.trim() || "stylized";
+      const mood = advisorMood.trim() || "engaging";
+      const prompt = `List the essential sound effects needed for a ${advisorGenre.trim()} game with ${style} art and ${mood} mood. Group by: Player Actions (5), Environment (5), UI (5), Combat (5). For each: name and brief description of the sound. Be specific to the genre.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 800,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content =
+        data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+
+      const groups: SoundAdvice[] = [];
+      const groupNames = ["Player Actions", "Environment", "UI", "Combat"];
+
+      for (const gn of groupNames) {
+        const idx = content.search(new RegExp(`(?:\\*\\*|#{1,3}\\s*)?${gn}`, "i"));
+        if (idx === -1) continue;
+        const afterHeader = content.slice(idx);
+        const nextGroupIdx = groupNames
+          .filter((n) => n !== gn)
+          .map((n) => {
+            const m = afterHeader
+              .slice(gn.length)
+              .search(new RegExp(`(?:\\*\\*|#{1,3}\\s*)?${n}`, "i"));
+            return m === -1 ? Infinity : m + gn.length;
+          })
+          .reduce((min, v) => Math.min(min, v), Infinity);
+        const sectionText = afterHeader.slice(
+          0,
+          nextGroupIdx === Infinity ? undefined : nextGroupIdx
+        );
+        const items = sectionText
+          .split("\n")
+          .slice(1)
+          .map((l) => l.replace(/^[-*\d.)\s]+/, "").trim())
+          .filter((l) => l.length > 3)
+          .map((l) => {
+            const sep = l.search(/\s*[-\u2013\u2014]\s/);
+            if (sep > 0) {
+              return {
+                name: l.slice(0, sep).replace(/\*\*/g, "").trim(),
+                description: l
+                  .slice(sep)
+                  .replace(/^[-\u2013\u2014\s]+/, "")
+                  .replace(/\*\*/g, "")
+                  .trim(),
+                checked: false,
+              };
+            }
+            const colonIdx = l.indexOf(":");
+            if (colonIdx > 0 && colonIdx < l.length - 1) {
+              return {
+                name: l.slice(0, colonIdx).replace(/\*\*/g, "").trim(),
+                description: l
+                  .slice(colonIdx + 1)
+                  .replace(/\*\*/g, "")
+                  .trim(),
+                checked: false,
+              };
+            }
+            return { name: l.replace(/\*\*/g, "").trim(), description: "", checked: false };
+          });
+        if (items.length > 0) {
+          groups.push({ category: gn, items });
+        }
+      }
+
+      if (groups.length === 0) {
+        const lines = content.split("\n").filter((l: string) => /^\d/.test(l.trim()));
+        if (lines.length > 0) {
+          groups.push({
+            category: "Recommended Sounds",
+            items: lines.map((line: string) => {
+              const clean = line.replace(/^\d+[.)]\s*/, "").trim();
+              const sep = clean.search(/\s*[-\u2013\u2014]\s/);
+              if (sep > 0) {
+                return {
+                  name: clean.slice(0, sep).trim(),
+                  description: clean.slice(sep).replace(/^[-\u2013\u2014\s]+/, "").trim(),
+                  checked: false,
+                };
+              }
+              return { name: clean, description: "", checked: false };
+            }),
+          });
+        }
+      }
+
+      setAdvisorResults(groups);
+    } catch {
+      // silently fail
+    } finally {
+      setAdvisorLoading(false);
+    }
+  };
 
   const getAudioCtx = useCallback(() => {
     if (!audioCtxRef.current) {
@@ -549,6 +696,109 @@ export default function SoundsPage() {
           >
             <Download className="h-4 w-4 text-[#F59E0B]" /> Export WAV
           </button>
+
+          {/* AI Sound Design Advisor */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            <button
+              onClick={() => setShowAdvisor(!showAdvisor)}
+              className="flex w-full items-center justify-between"
+            >
+              <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">
+                <ListMusic className="h-4 w-4 text-[#F59E0B]" />
+                AI Sound Design Advisor
+              </h3>
+              <ChevronDown
+                className={`h-4 w-4 text-[#6B7280] transition-transform ${showAdvisor ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            {showAdvisor && (
+              <div className="mt-3 space-y-2.5">
+                <input
+                  type="text"
+                  value={advisorGenre}
+                  onChange={(e) => setAdvisorGenre(e.target.value)}
+                  placeholder="Genre (e.g. platformer, RPG, horror)"
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/40"
+                />
+                <input
+                  type="text"
+                  value={advisorStyle}
+                  onChange={(e) => setAdvisorStyle(e.target.value)}
+                  placeholder="Art style (e.g. pixel art, 3D realistic)"
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/40"
+                />
+                <input
+                  type="text"
+                  value={advisorMood}
+                  onChange={(e) => setAdvisorMood(e.target.value)}
+                  placeholder="Mood (e.g. whimsical, dark, intense)"
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/40"
+                />
+                <button
+                  onClick={handleAISoundDesign}
+                  disabled={advisorLoading || !advisorGenre.trim()}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-3 py-2.5 text-sm font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/20 active:scale-[0.97] disabled:opacity-50"
+                >
+                  {advisorLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" /> Get Sound Checklist
+                    </>
+                  )}
+                </button>
+
+                {advisorResults.length > 0 && (
+                  <div className="mt-1 space-y-3">
+                    {advisorResults.map((group, gi) => (
+                      <div key={gi}>
+                        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-[#F59E0B]">
+                          {group.category}
+                        </p>
+                        <div className="space-y-1">
+                          {group.items.map((item, ii) => (
+                            <button
+                              key={ii}
+                              onClick={() => toggleAdvisorCheck(gi, ii)}
+                              className={`flex w-full items-start gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
+                                item.checked
+                                  ? "bg-[#F59E0B]/5 text-[#6B7280] line-through"
+                                  : "text-[#D1D5DB] hover:bg-[#0F0F0F]"
+                              }`}
+                            >
+                              <span
+                                className={`mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
+                                  item.checked
+                                    ? "border-[#F59E0B] bg-[#F59E0B]"
+                                    : "border-[#4B5563]"
+                                }`}
+                              >
+                                {item.checked && (
+                                  <Check className="h-2.5 w-2.5 text-[#0F0F0F]" />
+                                )}
+                              </span>
+                              <span>
+                                <span className="font-medium">{item.name}</span>
+                                {item.description && (
+                                  <span className="text-[#6B7280]">
+                                    {" "}
+                                    &mdash; {item.description}
+                                  </span>
+                                )}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Current params summary */}
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
