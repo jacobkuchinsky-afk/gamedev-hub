@@ -13,6 +13,7 @@ import {
   LogOut,
   X,
   ChevronRight,
+  ChevronLeft,
   Clock,
   Search,
   Paintbrush,
@@ -645,6 +646,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -689,6 +691,12 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    try {
+      setSidebarCollapsed(localStorage.getItem("gameforge_sidebar_collapsed") === "1");
+    } catch {}
+  }, []);
 
   useEffect(() => {
     if (!pathname) return;
@@ -797,6 +805,16 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     router.push("/login");
   };
 
+  const toggleSidebarCollapse = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("gameforge_sidebar_collapsed", next ? "1" : "0");
+      } catch {}
+      return next;
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#0F0F0F]">
@@ -831,17 +849,19 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       <aside
         role="navigation"
         aria-label="Main navigation"
-        className={`fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-[#2A2A2A] bg-[#0F0F0F] transition-transform duration-300 ease-out md:relative md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-[#2A2A2A] bg-[#0F0F0F] transition-all duration-300 ease-out md:relative md:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        } w-60 ${sidebarCollapsed ? "md:w-[60px] md:overflow-hidden" : ""}`}
       >
         {/* Logo */}
-        <div className="flex h-16 items-center justify-between border-b border-[#2A2A2A] px-5">
-          <Link href="/dashboard" className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+        <div className={`flex h-16 items-center justify-between border-b border-[#2A2A2A] px-5 transition-all duration-300 ${
+          sidebarCollapsed ? "md:justify-center md:px-0" : ""
+        }`}>
+          <Link href="/dashboard" className={`flex items-center gap-2.5 ${sidebarCollapsed ? "justify-center" : ""}`}>
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#F59E0B]/10">
               <Gamepad2 className="h-4 w-4 text-[#F59E0B]" />
             </div>
-            <span className="text-base font-bold tracking-tight">GameForge</span>
+            {!sidebarCollapsed && <span className="text-base font-bold tracking-tight">GameForge</span>}
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -856,79 +876,99 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           <div className="space-y-1">
             {NAV_ITEMS.map((item) => {
               const active = pathname === item.href;
+              const badge =
+                item.label === "Dashboard" ? pendingCount :
+                item.label === "Tools" ? 23 :
+                item.label === "Projects" ? projects.length :
+                item.label === "Devlog" ? devlogCount : null;
               return (
                 <div key={item.href} className="group/tip relative">
                   <Link
                     href={item.href}
                     aria-current={active ? "page" : undefined}
+                    title={sidebarCollapsed ? item.label : undefined}
                     className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                      sidebarCollapsed ? "justify-center px-2 md:justify-center" : ""
+                    } ${
                       active
                         ? "bg-[#F59E0B]/10 text-[#F59E0B]"
                         : "text-[#9CA3AF] hover:bg-[#1A1A1A] hover:text-[#F5F5F5]"
                     }`}
                   >
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
-                    {item.label === "Dashboard" && pendingCount > 0 && (
-                      <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#F59E0B] px-1 text-[10px] font-bold leading-none text-[#0F0F0F]">
-                        {pendingCount}
-                      </span>
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    {!sidebarCollapsed && (
+                      <>
+                        {item.label}
+                        {badge != null && badge > 0 && (
+                          <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#F59E0B] px-1 text-[10px] font-bold leading-none text-[#0F0F0F]">
+                            {badge}
+                          </span>
+                        )}
+                      </>
                     )}
-                    {item.label === "Tools" && (
-                      <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#F59E0B] px-1 text-[10px] font-bold leading-none text-[#0F0F0F]">
-                        23
-                      </span>
-                    )}
-                    {item.label === "Projects" && (
-                      <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#F59E0B] px-1 text-[10px] font-bold leading-none text-[#0F0F0F]">
-                        {projects.length}
-                      </span>
-                    )}
-                    {item.label === "Devlog" && (
-                      <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#F59E0B] px-1 text-[10px] font-bold leading-none text-[#0F0F0F]">
-                        {devlogCount}
+                    {sidebarCollapsed && badge != null && badge > 0 && (
+                      <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#F59E0B] text-[9px] font-bold leading-none text-[#0F0F0F]">
+                        {badge}
                       </span>
                     )}
                   </Link>
-                  <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md bg-[#2A2A2A] px-2.5 py-1.5 text-xs font-medium text-[#F5F5F5] opacity-0 shadow-lg transition-opacity duration-150 group-hover/tip:opacity-100">
-                    {item.label}
-                    <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#2A2A2A]" />
-                  </span>
+                  {sidebarCollapsed && (
+                    <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md bg-[#2A2A2A] px-2.5 py-1.5 text-xs font-medium text-[#F5F5F5] opacity-0 shadow-lg transition-opacity duration-150 group-hover/tip:opacity-100 md:block">
+                      {item.label}
+                      <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#2A2A2A]" />
+                    </span>
+                  )}
                 </div>
               );
             })}
           </div>
 
           {/* Projects */}
-          <div className="mt-8">
-            <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
-              Projects
-            </p>
-            <div className="space-y-0.5">
+          <div className={`mt-8 ${sidebarCollapsed ? "md:mt-4" : ""}`}>
+            {!sidebarCollapsed && (
+              <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
+                Projects
+              </p>
+            )}
+            <div className={`space-y-0.5 ${sidebarCollapsed ? "md:flex md:flex-col md:items-center md:gap-1" : ""}`}>
               {projects.map((project) => {
                 const projectPath = `/dashboard/projects/${project.id}`;
                 const active = pathname === projectPath;
                 return (
-                  <Link
-                    key={project.id}
-                    href={projectPath}
-                    className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                      active
-                        ? "bg-[#1A1A1A] text-[#F5F5F5]"
-                        : "text-[#9CA3AF] hover:bg-[#1A1A1A] hover:text-[#F5F5F5]"
-                    }`}
-                  >
-                    <div
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: getStatusColor(project.status) }}
-                    />
-                    <span className="truncate">{project.name}</span>
-                    <ChevronRight className="ml-auto h-3 w-3 shrink-0 text-[#6B7280]" />
-                  </Link>
+                  <div key={project.id} className="group/proj relative">
+                    <Link
+                      href={projectPath}
+                      title={sidebarCollapsed ? project.name : undefined}
+                      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                        sidebarCollapsed ? "justify-center px-2 md:justify-center md:px-2" : ""
+                      } ${
+                        active
+                          ? "bg-[#1A1A1A] text-[#F5F5F5]"
+                          : "text-[#9CA3AF] hover:bg-[#1A1A1A] hover:text-[#F5F5F5]"
+                      }`}
+                    >
+                      <div
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: getStatusColor(project.status) }}
+                      />
+                      {!sidebarCollapsed && (
+                        <>
+                          <span className="truncate">{project.name}</span>
+                          <ChevronRight className="ml-auto h-3 w-3 shrink-0 text-[#6B7280]" />
+                        </>
+                      )}
+                    </Link>
+                    {sidebarCollapsed && (
+                      <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md bg-[#2A2A2A] px-2.5 py-1.5 text-xs font-medium text-[#F5F5F5] opacity-0 shadow-lg transition-opacity duration-150 group-hover/proj:opacity-100 md:block">
+                        {project.name}
+                        <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#2A2A2A]" />
+                      </span>
+                    )}
+                  </div>
                 );
               })}
             </div>
-            {projects.length > 0 && (
+            {!sidebarCollapsed && projects.length > 0 && (
               <p className="mt-2 px-3 text-[11px] text-[#6B7280]">
                 {projects.filter((p) => p.status !== "released").length} active
               </p>
@@ -937,69 +977,108 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
           {/* Pinned */}
           {pinnedPages.length > 0 && (
-            <div className="mt-6">
-              <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
-                Pinned
-              </p>
-              <div className="space-y-0.5">
+            <div className={`mt-6 ${sidebarCollapsed ? "md:mt-4" : ""}`}>
+              {!sidebarCollapsed && (
+                <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
+                  Pinned
+                </p>
+              )}
+              <div className={`space-y-0.5 ${sidebarCollapsed ? "md:flex md:flex-col md:items-center md:gap-1" : ""}`}>
                 {pinnedPages.map((page) => {
                   const active = pathname === page.href;
+                  const cmdItem = CMD_ITEMS.find((i) => i.href === page.href);
+                  const Icon = cmdItem?.icon ?? Pin;
                   return (
-                    <div key={page.href} className="group/pin flex items-center">
+                    <div key={page.href} className="group/pin relative flex items-center">
                       <Link
                         href={page.href}
+                        title={sidebarCollapsed ? page.label : undefined}
                         className={`flex flex-1 items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                          sidebarCollapsed ? "justify-center px-2 md:flex-1 md:justify-center md:px-2" : ""
+                        } ${
                           active
                             ? "bg-[#F59E0B]/10 text-[#F59E0B]"
                             : "text-[#9CA3AF] hover:bg-[#1A1A1A] hover:text-[#F5F5F5]"
                         }`}
                       >
-                        <Pin className="h-3 w-3 shrink-0 text-[#F59E0B]/50" />
-                        <span className="truncate">{page.label}</span>
+                        <Icon className="h-3 w-3 shrink-0 text-[#F59E0B]/50" />
+                        {!sidebarCollapsed && <span className="truncate">{page.label}</span>}
                       </Link>
-                      <button
-                        onClick={() => togglePin(page.href, page.label)}
-                        className="mr-1 rounded p-1 text-[#6B7280] opacity-0 transition-all hover:text-[#EF4444] group-hover/pin:opacity-100"
-                        title="Unpin"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+                      {!sidebarCollapsed && (
+                        <button
+                          onClick={() => togglePin(page.href, page.label)}
+                          className="mr-1 rounded p-1 text-[#6B7280] opacity-0 transition-all hover:text-[#EF4444] group-hover/pin:opacity-100"
+                          title="Unpin"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                      {sidebarCollapsed && (
+                        <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md bg-[#2A2A2A] px-2.5 py-1.5 text-xs font-medium text-[#F5F5F5] opacity-0 shadow-lg transition-opacity duration-150 group-hover/pin:opacity-100 md:block">
+                          {page.label}
+                          <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#2A2A2A]" />
+                        </span>
+                      )}
                     </div>
                   );
                 })}
               </div>
-              <p className="mt-1 px-3 text-[10px] text-[#6B7280]">
-                {pinnedPages.length}/5 pinned
-              </p>
+              {!sidebarCollapsed && (
+                <p className="mt-1 px-3 text-[10px] text-[#6B7280]">
+                  {pinnedPages.length}/5 pinned
+                </p>
+              )}
             </div>
           )}
         </nav>
 
+        {/* Collapse toggle - desktop only */}
+        <div className="hidden border-t border-[#2A2A2A] md:block">
+          <button
+            onClick={toggleSidebarCollapse}
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="flex w-full items-center justify-center gap-2 py-2.5 text-[#6B7280] transition-colors hover:bg-[#1A1A1A] hover:text-[#F59E0B]"
+          >
+            {sidebarCollapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <>
+                <ChevronLeft className="h-4 w-4" />
+                <span className="text-xs font-medium">Collapse</span>
+              </>
+            )}
+          </button>
+        </div>
+
         {/* User */}
-        <div className="border-t border-[#2A2A2A] p-3">
-          <div className="flex items-center gap-3 rounded-lg px-3 py-2">
+        <div className={`border-t border-[#2A2A2A] p-3 transition-all duration-300 ${sidebarCollapsed ? "md:px-2" : ""}`}>
+          <div className={`flex items-center gap-3 rounded-lg px-3 py-2 ${sidebarCollapsed ? "md:justify-center md:px-2" : ""}`}>
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F59E0B]/15 text-xs font-bold text-[#F59E0B]">
               {initials}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{user.username}</p>
-              <p className="truncate text-xs text-[#6B7280]">{user.email}</p>
-            </div>
+            {!sidebarCollapsed && (
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{user.username}</p>
+                <p className="truncate text-xs text-[#6B7280]">{user.email}</p>
+              </div>
+            )}
           </div>
-          <div className="mt-1 flex gap-1">
+          <div className={`mt-1 flex gap-1 ${sidebarCollapsed ? "md:flex-col md:gap-0.5" : ""}`}>
             <Link
               href="/dashboard/settings"
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs text-[#9CA3AF] transition-colors hover:bg-[#1A1A1A] hover:text-[#F5F5F5]"
+              title={sidebarCollapsed ? "Settings" : undefined}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs text-[#9CA3AF] transition-colors hover:bg-[#1A1A1A] hover:text-[#F5F5F5] ${sidebarCollapsed ? "md:flex-1 md:justify-center md:px-2 md:py-1.5" : ""}`}
             >
-              <Settings className="h-3.5 w-3.5" />
-              Settings
+              <Settings className="h-3.5 w-3.5 shrink-0" />
+              {!sidebarCollapsed && <span>Settings</span>}
             </Link>
             <button
               onClick={handleLogout}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs text-[#9CA3AF] transition-colors hover:bg-red-500/10 hover:text-red-400"
+              title={sidebarCollapsed ? "Logout" : undefined}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs text-[#9CA3AF] transition-colors hover:bg-red-500/10 hover:text-red-400 ${sidebarCollapsed ? "md:flex-1 md:justify-center md:px-2 md:py-1.5" : ""}`}
             >
-              <LogOut className="h-3.5 w-3.5" />
-              Logout
+              <LogOut className="h-3.5 w-3.5 shrink-0" />
+              {!sidebarCollapsed && <span>Logout</span>}
             </button>
           </div>
         </div>
