@@ -191,6 +191,15 @@ const TOOLS: {
     color: "#F59E0B",
     category: "Game Design",
   },
+  {
+    href: "/dashboard/tools/particles",
+    icon: Flame,
+    name: "Particle Designer",
+    description:
+      "Visual particle effect designer with presets for fire, smoke, sparks, rain, and more. Export as JSON.",
+    color: "#F97316",
+    category: "Animation",
+  },
 ];
 
 const CATEGORIES: Category[] = ["All", "Art & Design", "Audio", "Game Design", "AI-Powered", "Level Design", "Animation"];
