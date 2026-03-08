@@ -279,6 +279,28 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Platform Stats */}
+      <section className="relative border-t border-[#2A2A2A] py-20 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0F0F0F] via-[#131313] to-[#0F0F0F]" />
+        <div className="relative mx-auto max-w-5xl px-6">
+          <div className="grid gap-8 sm:grid-cols-3">
+            {[
+              { value: "100+", label: "AI Features", desc: "Built into every tool and workflow" },
+              { value: "23", label: "Game Dev Tools", desc: "Sprites, sound, dialogue, and more" },
+              { value: "10+", label: "Project Templates", desc: "Hit the ground running instantly" },
+            ].map((stat) => (
+              <div key={stat.label} className="group text-center">
+                <p className="text-5xl font-extrabold tracking-tight text-[#F59E0B] md:text-6xl">
+                  {stat.value}
+                </p>
+                <p className="mt-2 text-lg font-bold text-[#F5F5F5]">{stat.label}</p>
+                <p className="mt-1 text-sm text-[#9CA3AF]">{stat.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* How It Works */}
       <section className="border-t border-[#2A2A2A] py-24">
         <div className="mx-auto max-w-6xl px-6">

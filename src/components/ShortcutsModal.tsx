@@ -29,6 +29,7 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: ["G", "T"], description: "Go to Tools" },
       { keys: ["G", "L"], description: "Go to Devlog" },
       { keys: ["G", "S"], description: "Go to Settings" },
+      { keys: ["G", "W"], description: "Quick launch last used tool" },
     ],
   },
   {

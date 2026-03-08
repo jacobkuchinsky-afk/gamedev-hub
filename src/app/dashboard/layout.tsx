@@ -693,6 +693,22 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
     if (pendingKeyRef.current === "g") {
       const lower = e.key.toLowerCase();
+      if (lower === "w") {
+        e.preventDefault();
+        try {
+          const usage: Record<string, number> = JSON.parse(localStorage.getItem("gameforge_tool_usage") || "{}");
+          const sorted = Object.entries(usage).sort((a, b) => b[1] - a[1]);
+          if (sorted.length > 0) {
+            router.push(sorted[0][0]);
+          } else {
+            router.push("/dashboard/tools");
+          }
+        } catch {
+          router.push("/dashboard/tools");
+        }
+        clearPending();
+        return;
+      }
       const dest = VIM_NAV[lower];
       if (dest) {
         e.preventDefault();
