@@ -544,7 +544,10 @@ export default function LandingPage() {
               { value: "23", label: "Game Dev Tools", desc: "Sprites, sound, dialogue, and more" },
               { value: "10+", label: "Project Templates", desc: "Hit the ground running instantly" },
             ].map((stat) => (
-              <div key={stat.label} className="group text-center">
+              <div
+                key={stat.label}
+                className="group rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6 text-center transition-all duration-200 hover:scale-[1.05] hover:border-[#F59E0B]/50"
+              >
                 <p className="text-5xl font-extrabold tracking-tight text-[#F59E0B] md:text-6xl">
                   {stat.value}
                 </p>
