@@ -195,6 +195,11 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   display: none;
 }
 
+.collapse-transition {
+  overflow: hidden;
+  transition: max-height 300ms ease, opacity 300ms ease;
+}
+
 .hamburger-bar {
   display: block;
   width: 18px;
