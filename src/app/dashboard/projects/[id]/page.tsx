@@ -67,13 +67,22 @@ import {
   addMilestone,
   updateMilestone,
   deleteMilestone,
+  addTask,
+  addBug,
+  addDevlogEntry,
+  addSprint,
+  addAsset,
+  addReference,
   type Project,
   type Task,
+  type Task as TaskType,
   type Bug as BugType,
   type DevlogEntry,
   type PlaytestResponse,
   type Sprint,
   type Milestone,
+  type GameAsset,
+  type Reference,
   ALL_TASK_TAGS,
   TASK_TAG_COLORS,
   type TaskTag,
@@ -368,6 +377,258 @@ function DeleteProjectModal({
             className="rounded-lg bg-[#EF4444] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#DC2626] disabled:cursor-not-allowed disabled:opacity-40"
           >
             Delete Forever
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type DuplicateDataKey = "tasks" | "bugs" | "sprints" | "assets" | "references" | "milestones" | "devlog";
+
+const DUPLICATE_DATA_OPTIONS: { key: DuplicateDataKey; label: string; icon: typeof ListTodo }[] = [
+  { key: "tasks", label: "Tasks", icon: ListTodo },
+  { key: "bugs", label: "Bugs", icon: Bug },
+  { key: "sprints", label: "Sprints", icon: Rocket },
+  { key: "assets", label: "Assets", icon: Package },
+  { key: "references", label: "References", icon: ScrollText },
+  { key: "milestones", label: "Milestones", icon: Flag },
+  { key: "devlog", label: "Devlog Entries", icon: BookOpen },
+];
+
+function shiftDateFromToday(originalDate: string, referenceDate: string): string {
+  const ref = new Date(referenceDate);
+  const orig = new Date(originalDate);
+  const diffMs = orig.getTime() - ref.getTime();
+  const shifted = new Date(Date.now() + diffMs);
+  return shifted.toISOString().split("T")[0];
+}
+
+function DuplicateWithDataModal({
+  project,
+  projectId,
+  open,
+  onClose,
+  onDuplicated,
+}: {
+  project: Project;
+  projectId: string;
+  open: boolean;
+  onClose: () => void;
+  onDuplicated: (newId: string) => void;
+}) {
+  const [selected, setSelected] = useState<Set<DuplicateDataKey>>(new Set());
+  const [duplicating, setDuplicating] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setSelected(new Set());
+      setDuplicating(false);
+    }
+  }, [open]);
+
+  const toggle = (key: DuplicateDataKey) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selected.size === DUPLICATE_DATA_OPTIONS.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(DUPLICATE_DATA_OPTIONS.map((o) => o.key)));
+    }
+  };
+
+  const handleDuplicate = () => {
+    setDuplicating(true);
+
+    const newProject = addProject({
+      name: `${project.name} (Copy)`,
+      description: project.description,
+      engine: project.engine,
+      genre: project.genre,
+      status: "concept",
+      coverColor: project.coverColor,
+    });
+
+    const refDate = project.created_at;
+
+    if (selected.has("tasks")) {
+      const tasks = getTasks(projectId);
+      for (const t of tasks) {
+        const { id, created_at, projectId: _pid, dueDate, ...rest } = t;
+        addTask({
+          ...rest,
+          projectId: newProject.id,
+          status: "todo",
+          ...(dueDate ? { dueDate: shiftDateFromToday(dueDate, refDate) } : {}),
+        });
+      }
+    }
+
+    if (selected.has("bugs")) {
+      const bugs = getBugs(projectId);
+      for (const b of bugs) {
+        const { id, created_at, projectId: _pid, ...rest } = b;
+        addBug({ ...rest, projectId: newProject.id, status: "open" });
+      }
+    }
+
+    if (selected.has("sprints")) {
+      const sprints = getSprints(projectId);
+      for (const s of sprints) {
+        const { id, created_at, projectId: _pid, ...rest } = s;
+        addSprint({
+          ...rest,
+          projectId: newProject.id,
+          startDate: shiftDateFromToday(s.startDate, refDate),
+          endDate: shiftDateFromToday(s.endDate, refDate),
+          status: "planned",
+        });
+      }
+    }
+
+    if (selected.has("assets")) {
+      const assets = getAssets(projectId);
+      for (const a of assets) {
+        const { id, created_at, projectId: _pid, ...rest } = a;
+        addAsset({ ...rest, projectId: newProject.id });
+      }
+    }
+
+    if (selected.has("references")) {
+      const refs = getReferences(projectId);
+      for (const r of refs) {
+        const { id, created_at, projectId: _pid, ...rest } = r;
+        addReference({ ...rest, projectId: newProject.id });
+      }
+    }
+
+    if (selected.has("milestones")) {
+      const milestones = getMilestones(projectId);
+      for (const m of milestones) {
+        const { id, created_at, projectId: _pid, ...rest } = m;
+        addMilestone({
+          ...rest,
+          projectId: newProject.id,
+          targetDate: shiftDateFromToday(m.targetDate, refDate),
+          status: "upcoming",
+        });
+      }
+    }
+
+    if (selected.has("devlog")) {
+      const entries = getDevlog(projectId);
+      for (const e of entries) {
+        const { id, projectId: _pid, ...rest } = e;
+        addDevlogEntry({ ...rest, projectId: newProject.id });
+      }
+    }
+
+    onDuplicated(newProject.id);
+  };
+
+  if (!open) return null;
+
+  const allSelected = selected.size === DUPLICATE_DATA_OPTIONS.length;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/60" />
+      <div
+        className="relative z-10 w-full max-w-md overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 border-b border-[#2A2A2A] px-6 py-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+            <Copy className="h-4 w-4 text-[#F59E0B]" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-[#F5F5F5]">Duplicate with Data</h2>
+            <p className="text-xs text-[#6B7280]">Choose what to carry over</p>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-3">
+          <button
+            onClick={toggleAll}
+            className="flex w-full items-center gap-2 rounded-lg border border-[#2A2A2A] px-3 py-2 text-xs font-medium text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+          >
+            <div
+              className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${
+                allSelected
+                  ? "border-[#F59E0B] bg-[#F59E0B]"
+                  : "border-[#4A4A4A]"
+              }`}
+            >
+              {allSelected && (
+                <svg className="h-3 w-3 text-[#0F0F0F]" viewBox="0 0 12 12" fill="none">
+                  <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </div>
+            {allSelected ? "Deselect All" : "Select All"}
+          </button>
+
+          <div className="space-y-1">
+            {DUPLICATE_DATA_OPTIONS.map((opt) => {
+              const checked = selected.has(opt.key);
+              const Icon = opt.icon;
+              return (
+                <button
+                  key={opt.key}
+                  onClick={() => toggle(opt.key)}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${
+                    checked
+                      ? "bg-[#F59E0B]/5 text-[#F5F5F5]"
+                      : "text-[#9CA3AF] hover:bg-[#0F0F0F]"
+                  }`}
+                >
+                  <div
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                      checked
+                        ? "border-[#F59E0B] bg-[#F59E0B]"
+                        : "border-[#4A4A4A]"
+                    }`}
+                  >
+                    {checked && (
+                      <svg className="h-3 w-3 text-[#0F0F0F]" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </div>
+                  <Icon className={`h-3.5 w-3.5 ${checked ? "text-[#F59E0B]" : ""}`} />
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {selected.has("sprints") || selected.has("milestones") ? (
+            <p className="rounded-lg bg-[#F59E0B]/5 px-3 py-2 text-[11px] text-[#F59E0B]/80">
+              Sprint and milestone dates will be shifted relative to today.
+            </p>
+          ) : null}
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-[#2A2A2A] px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-sm text-[#9CA3AF] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleDuplicate}
+            disabled={selected.size === 0 || duplicating}
+            className="rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-[#0F0F0F] transition-colors hover:bg-[#D97706] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {duplicating ? "Duplicating..." : `Duplicate (${selected.size} selected)`}
           </button>
         </div>
       </div>
@@ -1426,6 +1687,7 @@ export default function ProjectDetailPage() {
 
   const [aiMilestoneLoading, setAiMilestoneLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [dupDataOpen, setDupDataOpen] = useState(false);
 
   const [riskLoading, setRiskLoading] = useState(false);
   const [riskCards, setRiskCards] = useState<{ title: string; level: "High" | "Medium" | "Low"; description: string; mitigation: string }[] | null>(null);
@@ -2235,6 +2497,16 @@ export default function ProjectDetailPage() {
             onClose={() => setDeleteOpen(false)}
             onConfirm={handleDeleteProject}
           />
+          <DuplicateWithDataModal
+            project={project}
+            projectId={projectId}
+            open={dupDataOpen}
+            onClose={() => setDupDataOpen(false)}
+            onDuplicated={(newId) => {
+              setDupDataOpen(false);
+              router.push(`/dashboard/projects/${newId}`);
+            }}
+          />
         </>
       )}
 
@@ -2396,13 +2668,22 @@ export default function ProjectDetailPage() {
               )}
               Postmortem
             </button>
-            <button
-              onClick={handleDuplicateProject}
-              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
-            >
-              <Copy className="h-3.5 w-3.5" />
-              Duplicate
-            </button>
+            <div className="flex items-center">
+              <button
+                onClick={handleDuplicateProject}
+                className="flex items-center gap-1.5 rounded-l-lg border border-r-0 border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Duplicate
+              </button>
+              <button
+                onClick={() => setDupDataOpen(true)}
+                className="flex items-center rounded-r-lg border border-[#2A2A2A] px-2 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                title="Duplicate with data"
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+            </div>
             <button
               onClick={() => setSettingsOpen(true)}
               className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"

@@ -955,7 +955,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         </header>
 
         <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} pinnedPages={pinnedPages} onTogglePin={togglePin} />
-        <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+        <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} currentPath={pathname} />
         <WhatsNew />
         <KeyboardShortcutsHint />
 
