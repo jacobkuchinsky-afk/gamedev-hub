@@ -1654,7 +1654,7 @@ export default function GDDPage() {
   if (!project) return null;
 
   return (
-    <div className="flex gap-8">
+    <div className="flex gap-8 animate-slide-up">
       {/* TOC Sidebar */}
       <nav className="hidden lg:block w-56 shrink-0">
         <div className="sticky top-24 space-y-4">

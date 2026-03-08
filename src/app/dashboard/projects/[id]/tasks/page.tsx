@@ -1495,7 +1495,7 @@ export default function TaskBoardPage() {
   const RING_C = 2 * Math.PI * RING_R;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5">
+    <div className="mx-auto max-w-7xl space-y-5 animate-slide-up">
       {/* Header */}
       <div>
         <Breadcrumbs

@@ -2772,7 +2772,7 @@ export default function ProjectDetailPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6 animate-slide-up">
       {project && (
         <>
           <EditProjectModal
