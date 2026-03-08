@@ -712,8 +712,37 @@ export default function TaskBoardPage() {
     const pct = total ? Math.round((done / total) * 100) : 0;
     const totalEstimated = pool.reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
     const totalLogged = pool.reduce((sum, t) => sum + (t.loggedHours || 0), 0);
-    return { total, done, inProgress, pct, totalEstimated, totalLogged };
-  }, [tasks, selectedSprint]);
+
+    let goalStatus: "on-track" | "at-risk" | "behind" | "completed" | "none" = "none";
+    let goalMet: boolean | null = null;
+    const sprint = sprints.find((s) => s.name === selectedSprint);
+    if (sprint) {
+      if (sprint.status === "completed") {
+        goalStatus = "completed";
+        goalMet = total > 0 && done === total;
+      } else if (sprint.startDate && sprint.endDate) {
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const start = new Date(sprint.startDate + "T00:00:00");
+        const end = new Date(sprint.endDate + "T00:00:00");
+        const totalDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86400000));
+        const elapsedDays = Math.max(0, Math.min(totalDays, Math.ceil((now.getTime() - start.getTime()) / 86400000)));
+        const timePct = elapsedDays / totalDays;
+        const donePct = total > 0 ? done / total : 0;
+        if (elapsedDays === 0) {
+          goalStatus = "on-track";
+        } else if (donePct >= timePct - 0.05) {
+          goalStatus = "on-track";
+        } else if (donePct >= timePct - 0.2) {
+          goalStatus = "at-risk";
+        } else {
+          goalStatus = "behind";
+        }
+      }
+    }
+
+    return { total, done, inProgress, pct, totalEstimated, totalLogged, goalStatus, goalMet };
+  }, [tasks, selectedSprint, sprints]);
 
   const velocity = useMemo(() => {
     const completed = sprints.filter((s) => s.status === "completed");
@@ -955,6 +984,32 @@ export default function TaskBoardPage() {
 
   if (!project) return null;
 
+  const goalRingColor =
+    sprintSummary.goalStatus === "completed"
+      ? sprintSummary.goalMet ? "#10B981" : "#EF4444"
+      : sprintSummary.goalStatus === "behind" ? "#EF4444"
+      : sprintSummary.goalStatus === "at-risk" ? "#F59E0B"
+      : sprintSummary.goalStatus === "on-track" ? "#10B981"
+      : "#F59E0B";
+
+  const goalStatusLabel =
+    sprintSummary.goalStatus === "on-track" ? "On Track"
+    : sprintSummary.goalStatus === "at-risk" ? "At Risk"
+    : sprintSummary.goalStatus === "behind" ? "Behind"
+    : sprintSummary.goalStatus === "completed"
+      ? sprintSummary.goalMet ? "Goal Met" : "Goal Missed"
+      : "";
+
+  const goalBadgeClass =
+    sprintSummary.goalStatus === "on-track" ? "bg-[#10B981]/15 text-[#10B981]"
+    : sprintSummary.goalStatus === "at-risk" ? "bg-[#F59E0B]/15 text-[#F59E0B]"
+    : sprintSummary.goalStatus === "behind" ? "bg-[#EF4444]/15 text-[#EF4444]"
+    : sprintSummary.goalMet ? "bg-[#10B981]/15 text-[#10B981]"
+    : "bg-[#EF4444]/15 text-[#EF4444]";
+
+  const RING_R = 30;
+  const RING_C = 2 * Math.PI * RING_R;
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       {/* Header */}
@@ -1156,40 +1211,80 @@ export default function TaskBoardPage() {
       </div>
 
       {/* Sprint Summary */}
-      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            {currentSprintInfo ? (
-              <>
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+          <div className="flex items-start gap-4 lg:flex-1">
+            {/* Progress Ring */}
+            <div className="relative flex h-[72px] w-[72px] shrink-0 items-center justify-center">
+              <svg className="absolute inset-0" viewBox="0 0 72 72">
+                <circle cx="36" cy="36" r={RING_R} fill="none" stroke="#2A2A2A" strokeWidth="4" />
+                <circle
+                  cx="36" cy="36" r={RING_R} fill="none"
+                  stroke={goalRingColor}
+                  strokeWidth="4" strokeLinecap="round"
+                  strokeDasharray={RING_C}
+                  strokeDashoffset={RING_C * (1 - sprintSummary.pct / 100)}
+                  transform="rotate(-90 36 36)"
+                  className="transition-all duration-700"
+                />
+              </svg>
+              <span className="text-base font-bold text-[#F5F5F5]">{sprintSummary.pct}%</span>
+            </div>
+
+            <div className="min-w-0 flex-1">
+              {currentSprintInfo ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Target className="h-4 w-4 shrink-0 text-[#F59E0B]" />
+                    <span className="font-semibold text-[#F5F5F5]">
+                      {currentSprintInfo.name}
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${SPRINT_STATUS_STYLES[currentSprintInfo.status].bg} ${SPRINT_STATUS_STYLES[currentSprintInfo.status].text}`}
+                    >
+                      {currentSprintInfo.status}
+                    </span>
+                    {sprintSummary.goalStatus !== "none" && goalStatusLabel && (
+                      <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${goalBadgeClass}`}>
+                        {goalStatusLabel}
+                      </span>
+                    )}
+                  </div>
+                  {currentSprintInfo.goal && (
+                    <p className="mt-1.5 text-sm font-medium text-[#D1D5DB]">
+                      &ldquo;{currentSprintInfo.goal}&rdquo;
+                    </p>
+                  )}
+                  {currentSprintInfo.startDate && (
+                    <p className="mt-0.5 text-xs text-[#6B7280]">
+                      {currentSprintInfo.startDate} &mdash; {currentSprintInfo.endDate}
+                    </p>
+                  )}
+                  {sprintSummary.goalStatus === "completed" && (
+                    <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-2.5 py-1">
+                      {sprintSummary.goalMet ? (
+                        <Check className="h-3.5 w-3.5 text-[#10B981]" />
+                      ) : (
+                        <AlertTriangle className="h-3.5 w-3.5 text-[#EF4444]" />
+                      )}
+                      <span className={`text-xs font-medium ${sprintSummary.goalMet ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+                        Goal Met: {sprintSummary.goalMet ? "Yes" : "No"} &mdash; {sprintSummary.done}/{sprintSummary.total} completed
+                      </span>
+                    </div>
+                  )}
+                </>
+              ) : (
                 <div className="flex items-center gap-2">
-                  <Target className="h-4 w-4 shrink-0 text-[#F59E0B]" />
+                  <Target className="h-4 w-4 text-[#F59E0B]" />
                   <span className="font-semibold text-[#F5F5F5]">
-                    {currentSprintInfo.name}
-                  </span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${SPRINT_STATUS_STYLES[currentSprintInfo.status].bg} ${SPRINT_STATUS_STYLES[currentSprintInfo.status].text}`}
-                  >
-                    {currentSprintInfo.status}
+                    {selectedSprint === "backlog" ? "Backlog" : "All Sprints"}
                   </span>
                 </div>
-                {(currentSprintInfo.goal || currentSprintInfo.startDate) && (
-                  <p className="mt-1 truncate text-xs text-[#6B7280]">
-                    {currentSprintInfo.goal}
-                    {currentSprintInfo.startDate &&
-                      ` · ${currentSprintInfo.startDate} — ${currentSprintInfo.endDate}`}
-                  </p>
-                )}
-              </>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Target className="h-4 w-4 text-[#F59E0B]" />
-                <span className="font-semibold text-[#F5F5F5]">
-                  {selectedSprint === "backlog" ? "Backlog" : "All Sprints"}
-                </span>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-5">
+
+          <div className="flex flex-wrap items-center gap-4 lg:gap-5">
             <div className="text-center">
               <p className="text-lg font-bold text-[#F5F5F5]">
                 {sprintSummary.total}
@@ -1213,18 +1308,6 @@ export default function TaskBoardPage() {
               <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">
                 Active
               </p>
-            </div>
-            <div className="w-24">
-              <div className="flex items-center justify-between text-[10px] text-[#6B7280]">
-                <span>Progress</span>
-                <span>{sprintSummary.pct}%</span>
-              </div>
-              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#2A2A2A]">
-                <div
-                  className="h-full rounded-full bg-[#F59E0B] transition-all"
-                  style={{ width: `${sprintSummary.pct}%` }}
-                />
-              </div>
             </div>
             <div className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-2.5 py-1.5">
               <TrendingUp className="h-3.5 w-3.5 text-[#F59E0B]" />

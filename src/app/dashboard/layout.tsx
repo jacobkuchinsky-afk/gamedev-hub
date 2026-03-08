@@ -33,6 +33,7 @@ import {
   RotateCcw,
   CheckSquare,
   AlertTriangle,
+  Pin,
 } from "lucide-react";
 import { AuthProvider, useAuthContext } from "@/components/AuthProvider";
 import { getProjects, getStatusColor, getTasks, getBugs, getDevlog, validateStorage, type Project, type Task, type Bug, type DevlogEntry } from "@/lib/store";
@@ -246,7 +247,14 @@ function FocusTimer() {
   );
 }
 
-function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
+interface PinnedPage { href: string; label: string }
+
+function CommandPalette({ open, onClose, pinnedPages, onTogglePin }: {
+  open: boolean;
+  onClose: () => void;
+  pinnedPages: PinnedPage[];
+  onTogglePin: (href: string, label: string) => void;
+}) {
   const [query, setQuery] = useState("");
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -325,6 +333,22 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
     onClose();
   };
 
+  const isPinned = (href: string) => pinnedPages.some((p) => p.href === href);
+
+  const PinBtn = ({ href, label }: { href: string; label: string }) => (
+    <button
+      onClick={(e) => { e.stopPropagation(); onTogglePin(href, label); }}
+      className={`absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 transition-all ${
+        isPinned(href)
+          ? "text-[#F59E0B] opacity-100"
+          : "text-[#6B7280] opacity-0 group-hover/row:opacity-100"
+      } hover:text-[#F59E0B]`}
+      title={isPinned(href) ? "Unpin" : "Pin"}
+    >
+      <Pin className="h-3 w-3" />
+    </button>
+  );
+
   if (!open) return null;
 
   return (
@@ -363,14 +387,16 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
                 Recent
               </p>
               {recentPages.slice(0, MAX).map((page) => (
-                <button
-                  key={page.href}
-                  onClick={() => go(page.href)}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
-                >
-                  <Clock className="h-4 w-4" />
-                  <span className="flex-1 truncate text-left">{page.label}</span>
-                </button>
+                <div key={page.href} className="group/row relative">
+                  <button
+                    onClick={() => go(page.href)}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 pr-8 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
+                  >
+                    <Clock className="h-4 w-4" />
+                    <span className="flex-1 truncate text-left">{page.label}</span>
+                  </button>
+                  <PinBtn href={page.href} label={page.label} />
+                </div>
               ))}
             </div>
           )}
@@ -381,20 +407,22 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
                 Projects
               </p>
               {limitedProjects.map((project) => (
-                <button
-                  key={project.id}
-                  onClick={() => go(`/dashboard/projects/${project.id}`)}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
-                >
-                  <div
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: getStatusColor(project.status) }}
-                  />
-                  <span className="flex-1 truncate text-left">{project.name}</span>
-                  <span className="rounded px-1.5 py-0.5 text-[10px] capitalize text-[#6B7280]">
-                    {project.status}
-                  </span>
-                </button>
+                <div key={project.id} className="group/row relative">
+                  <button
+                    onClick={() => go(`/dashboard/projects/${project.id}`)}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 pr-8 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
+                  >
+                    <div
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: getStatusColor(project.status) }}
+                    />
+                    <span className="flex-1 truncate text-left">{project.name}</span>
+                    <span className="rounded px-1.5 py-0.5 text-[10px] capitalize text-[#6B7280]">
+                      {project.status}
+                    </span>
+                  </button>
+                  <PinBtn href={`/dashboard/projects/${project.id}`} label={project.name} />
+                </div>
               ))}
             </div>
           )}
@@ -405,14 +433,16 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
                 {section}
               </p>
               {items.map((item) => (
-                <button
-                  key={item.href}
-                  onClick={() => go(item.href)}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
-                >
-                  <item.icon className="h-4 w-4" />
-                  {item.label}
-                </button>
+                <div key={item.href} className="group/row relative">
+                  <button
+                    onClick={() => go(item.href)}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 pr-8 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
+                  >
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </button>
+                  <PinBtn href={item.href} label={item.label} />
+                </div>
               ))}
             </div>
           ))}
@@ -423,19 +453,21 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
                 Tasks
               </p>
               {filteredTasks.map((task) => (
-                <button
-                  key={task.id}
-                  onClick={() => go(`/dashboard/projects/${task.projectId}/tasks`)}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
-                >
-                  <CheckSquare className="h-4 w-4 shrink-0" />
-                  <span className="flex-1 truncate text-left">
-                    <span className="text-[#6B7280]">Task:</span> {task.title}
-                  </span>
-                  <span className="shrink-0 rounded bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] text-[#6B7280]">
-                    {projectName(task.projectId)}
-                  </span>
-                </button>
+                <div key={task.id} className="group/row relative">
+                  <button
+                    onClick={() => go(`/dashboard/projects/${task.projectId}/tasks`)}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 pr-8 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
+                  >
+                    <CheckSquare className="h-4 w-4 shrink-0" />
+                    <span className="flex-1 truncate text-left">
+                      <span className="text-[#6B7280]">Task:</span> {task.title}
+                    </span>
+                    <span className="shrink-0 rounded bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] text-[#6B7280]">
+                      {projectName(task.projectId)}
+                    </span>
+                  </button>
+                  <PinBtn href={`/dashboard/projects/${task.projectId}/tasks`} label={`Task: ${task.title}`} />
+                </div>
               ))}
             </div>
           )}
@@ -446,19 +478,21 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
                 Bugs
               </p>
               {filteredBugs.map((bug) => (
-                <button
-                  key={bug.id}
-                  onClick={() => go(`/dashboard/projects/${bug.projectId}/bugs`)}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
-                >
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  <span className="flex-1 truncate text-left">
-                    <span className="text-[#6B7280]">Bug:</span> {bug.title}
-                  </span>
-                  <span className="shrink-0 rounded bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] text-[#6B7280]">
-                    {projectName(bug.projectId)}
-                  </span>
-                </button>
+                <div key={bug.id} className="group/row relative">
+                  <button
+                    onClick={() => go(`/dashboard/projects/${bug.projectId}/bugs`)}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 pr-8 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
+                  >
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <span className="flex-1 truncate text-left">
+                      <span className="text-[#6B7280]">Bug:</span> {bug.title}
+                    </span>
+                    <span className="shrink-0 rounded bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] text-[#6B7280]">
+                      {projectName(bug.projectId)}
+                    </span>
+                  </button>
+                  <PinBtn href={`/dashboard/projects/${bug.projectId}/bugs`} label={`Bug: ${bug.title}`} />
+                </div>
               ))}
             </div>
           )}
@@ -469,19 +503,21 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
                 Devlogs
               </p>
               {filteredDevlogs.map((entry) => (
-                <button
-                  key={entry.id}
-                  onClick={() => go(`/dashboard/projects/${entry.projectId}/devlog`)}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
-                >
-                  <BookOpen className="h-4 w-4 shrink-0" />
-                  <span className="flex-1 truncate text-left">
-                    <span className="text-[#6B7280]">Devlog:</span> {entry.title}
-                  </span>
-                  <span className="shrink-0 rounded bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] text-[#6B7280]">
-                    {projectName(entry.projectId)}
-                  </span>
-                </button>
+                <div key={entry.id} className="group/row relative">
+                  <button
+                    onClick={() => go(`/dashboard/projects/${entry.projectId}/devlog`)}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 pr-8 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
+                  >
+                    <BookOpen className="h-4 w-4 shrink-0" />
+                    <span className="flex-1 truncate text-left">
+                      <span className="text-[#6B7280]">Devlog:</span> {entry.title}
+                    </span>
+                    <span className="shrink-0 rounded bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] text-[#6B7280]">
+                      {projectName(entry.projectId)}
+                    </span>
+                  </button>
+                  <PinBtn href={`/dashboard/projects/${entry.projectId}/devlog`} label={`Devlog: ${entry.title}`} />
+                </div>
               ))}
             </div>
           )}
@@ -571,6 +607,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
+  const [pinnedPages, setPinnedPages] = useState<PinnedPage[]>([]);
   const pendingKeyRef = useRef<string | null>(null);
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -588,8 +625,22 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       const openTasks = getTasks().filter((t) => t.status !== "done").length;
       const openBugs = getBugs().filter((b) => b.status !== "closed").length;
       setPendingCount(openTasks + openBugs);
+      try {
+        setPinnedPages(JSON.parse(localStorage.getItem("gameforge_pinned_pages") || "[]"));
+      } catch { setPinnedPages([]); }
     }
   }, [user]);
+
+  const togglePin = useCallback((href: string, label: string) => {
+    setPinnedPages((prev) => {
+      const exists = prev.some((p) => p.href === href);
+      const next = exists
+        ? prev.filter((p) => p.href !== href)
+        : prev.length >= 5 ? prev : [...prev, { href, label }];
+      localStorage.setItem("gameforge_pinned_pages", JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     setSidebarOpen(false);
@@ -803,6 +854,45 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
               </p>
             )}
           </div>
+
+          {/* Pinned */}
+          {pinnedPages.length > 0 && (
+            <div className="mt-6">
+              <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
+                Pinned
+              </p>
+              <div className="space-y-0.5">
+                {pinnedPages.map((page) => {
+                  const active = pathname === page.href;
+                  return (
+                    <div key={page.href} className="group/pin flex items-center">
+                      <Link
+                        href={page.href}
+                        className={`flex flex-1 items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                          active
+                            ? "bg-[#F59E0B]/10 text-[#F59E0B]"
+                            : "text-[#9CA3AF] hover:bg-[#1A1A1A] hover:text-[#F5F5F5]"
+                        }`}
+                      >
+                        <Pin className="h-3 w-3 shrink-0 text-[#F59E0B]/50" />
+                        <span className="truncate">{page.label}</span>
+                      </Link>
+                      <button
+                        onClick={() => togglePin(page.href, page.label)}
+                        className="mr-1 rounded p-1 text-[#6B7280] opacity-0 transition-all hover:text-[#EF4444] group-hover/pin:opacity-100"
+                        title="Unpin"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-1 px-3 text-[10px] text-[#6B7280]">
+                {pinnedPages.length}/5 pinned
+              </p>
+            </div>
+          )}
         </nav>
 
         {/* User */}
@@ -864,7 +954,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
+        <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} pinnedPages={pinnedPages} onTogglePin={togglePin} />
         <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
         <WhatsNew />
         <KeyboardShortcutsHint />
