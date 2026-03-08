@@ -34,6 +34,12 @@ import {
   Map,
   GraduationCap,
   Languages,
+  Target,
+  Plus,
+  Pencil,
+  Trash2,
+  Star,
+  Anchor,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -51,6 +57,26 @@ interface GDDField {
   type: "text" | "textarea" | "select";
   placeholder: string;
   options?: string[];
+}
+
+interface Competitor {
+  name: string;
+  type: "direct" | "indirect";
+  strengths: string;
+  weaknesses: string;
+  differentiation: string;
+}
+
+interface CompetitorAnalysis {
+  competitors: Competitor[];
+  usp: string;
+}
+
+interface DesignPillar {
+  id: string;
+  name: string;
+  description: string;
+  priority: number;
 }
 
 const GDD_SECTIONS: GDDSection[] = [
@@ -498,6 +524,21 @@ function saveGDD(projectId: string, data: Record<string, string>) {
   localStorage.setItem(getGDDKey(projectId), JSON.stringify(data));
 }
 
+function getPillarsKey(projectId: string) {
+  return `gameforge_pillars_${projectId}`;
+}
+
+function loadPillarsData(projectId: string): DesignPillar[] {
+  if (typeof window === "undefined") return [];
+  const raw = localStorage.getItem(getPillarsKey(projectId));
+  if (raw) return JSON.parse(raw);
+  return [];
+}
+
+function savePillarsData(projectId: string, pillars: DesignPillar[]) {
+  localStorage.setItem(getPillarsKey(projectId), JSON.stringify(pillars));
+}
+
 export default function GDDPage() {
   const params = useParams();
   const router = useRouter();
@@ -533,6 +574,17 @@ export default function GDDPage() {
   const [localizeResult, setLocalizeResult] = useState("");
   const [localizeCopied, setLocalizeCopied] = useState(false);
 
+  const [competitorLoading, setCompetitorLoading] = useState(false);
+  const [competitorResult, setCompetitorResult] = useState<CompetitorAnalysis | null>(null);
+  const [showCompetitor, setShowCompetitor] = useState(false);
+  const [competitorCopied, setCompetitorCopied] = useState(false);
+
+  const [pillars, setPillars] = useState<DesignPillar[]>([]);
+  const [editingPillar, setEditingPillar] = useState<DesignPillar | null>(null);
+  const [showPillarForm, setShowPillarForm] = useState(false);
+  const [pillarForm, setPillarForm] = useState({ name: "", description: "", priority: 3 });
+  const [pillarsAILoading, setPillarsAILoading] = useState(false);
+
   useEffect(() => {
     console.log("[GDDPage] rendered, id:", projectId);
     const p = getProject(projectId);
@@ -542,6 +594,7 @@ export default function GDDPage() {
     }
     setProject(p);
     setData(loadGDD(projectId));
+    setPillars(loadPillarsData(projectId));
     const initial: Record<string, boolean> = {};
     GDD_SECTIONS.forEach((s) => (initial[s.id] = true));
     setExpanded(initial);
@@ -898,6 +951,147 @@ export default function GDDPage() {
     }
   }, [localizeSource, localizeLang]);
 
+  const handleCompetitorAnalysis = useCallback(async () => {
+    if (!project) return;
+    setCompetitorLoading(true);
+    setShowCompetitor(true);
+
+    const genre = data.genre || project.genre || "unspecified";
+    const name = data.gameTitle || project.name || "Untitled";
+    const description = data.elevatorPitch || data.tagline || project.description || "No description";
+
+    const prompt = `Analyze the competitive landscape for a ${genre} game called '${name}'. Describe: ${description}. Identify 3 direct competitors and 2 indirect competitors. For each: name, what they do well, what they lack, and how '${name}' can differentiate. Also suggest the game's unique selling proposition. Return as JSON: {"competitors":[{"name":"...","type":"direct"|"indirect","strengths":"...","weaknesses":"...","differentiation":"..."}],"usp":"..."}. Return ONLY raw JSON, no markdown.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 1024,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+      const apiData = await response.json();
+      const content = apiData.choices?.[0]?.message?.content || apiData.choices?.[0]?.message?.reasoning || "";
+      const cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      setCompetitorResult(parsed);
+      setToast({ message: "Competitor analysis complete!", type: "success" });
+    } catch (err) {
+      console.error("[GDD Competitor Analysis]", err);
+      setToast({ message: "Failed to analyze competitors — try again", type: "error" });
+    } finally {
+      setCompetitorLoading(false);
+    }
+  }, [project, data]);
+
+  const handleSavePillar = useCallback(() => {
+    if (!pillarForm.name.trim()) return;
+    setPillars((prev) => {
+      let next: DesignPillar[];
+      if (editingPillar) {
+        next = prev.map((p) =>
+          p.id === editingPillar.id
+            ? { ...p, name: pillarForm.name, description: pillarForm.description, priority: pillarForm.priority }
+            : p
+        );
+      } else {
+        next = [
+          ...prev,
+          {
+            id: `pillar_${Date.now()}`,
+            name: pillarForm.name,
+            description: pillarForm.description,
+            priority: pillarForm.priority,
+          },
+        ];
+      }
+      savePillarsData(projectId, next);
+      return next;
+    });
+    setShowPillarForm(false);
+    setEditingPillar(null);
+    setPillarForm({ name: "", description: "", priority: 3 });
+  }, [pillarForm, editingPillar, projectId]);
+
+  const handleDeletePillar = useCallback(
+    (id: string) => {
+      setPillars((prev) => {
+        const next = prev.filter((p) => p.id !== id);
+        savePillarsData(projectId, next);
+        return next;
+      });
+    },
+    [projectId]
+  );
+
+  const handleEditPillar = useCallback((pillar: DesignPillar) => {
+    setEditingPillar(pillar);
+    setPillarForm({ name: pillar.name, description: pillar.description, priority: pillar.priority });
+    setShowPillarForm(true);
+  }, []);
+
+  const handleAISuggestPillars = useCallback(async () => {
+    if (!project) return;
+    if (pillars.length > 0 && !confirm("This will replace your existing design pillars. Continue?")) return;
+    setPillarsAILoading(true);
+
+    const genre = data.genre || project.genre || "unspecified";
+    const description = data.elevatorPitch || data.tagline || project.description || "No description";
+
+    const prompt = `Suggest 4 design pillars for a ${genre} game: '${description}'. Design pillars are the core principles the game should follow. For each: name (2-3 words), description (1-2 sentences), and priority (1-5, where 5 is highest). Return as JSON array: [{"name":"...","description":"...","priority":N}]. Return ONLY raw JSON, no markdown.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+      const apiData = await response.json();
+      const content = apiData.choices?.[0]?.message?.content || apiData.choices?.[0]?.message?.reasoning || "";
+      const cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+
+      if (Array.isArray(parsed)) {
+        const newPillars: DesignPillar[] = parsed.map(
+          (p: { name: string; description: string; priority: number }, i: number) => ({
+            id: `pillar_ai_${Date.now()}_${i}`,
+            name: p.name || "Untitled",
+            description: p.description || "",
+            priority: Math.min(5, Math.max(1, p.priority || 3)),
+          })
+        );
+        setPillars(newPillars);
+        savePillarsData(projectId, newPillars);
+        setToast({ message: "AI suggested 4 design pillars!", type: "success" });
+      }
+    } catch (err) {
+      console.error("[GDD AI Pillars]", err);
+      setToast({ message: "Failed to suggest pillars — try again", type: "error" });
+    } finally {
+      setPillarsAILoading(false);
+    }
+  }, [project, data, projectId, pillars.length]);
+
   const filledFields = Object.values(data).filter((v) => v.trim().length > 0).length;
   const totalFields = GDD_SECTIONS.reduce((acc, s) => acc + s.fields.length, 0);
   const completionPct = totalFields > 0 ? Math.round((filledFields / totalFields) * 100) : 0;
@@ -1010,6 +1204,18 @@ export default function GDDPage() {
                 AI Localize
               </button>
               <button
+                onClick={handleCompetitorAnalysis}
+                disabled={competitorLoading}
+                className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {competitorLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Target className="h-3.5 w-3.5" />
+                )}
+                AI Competitors
+              </button>
+              <button
                 onClick={handleScenePlanner}
                 disabled={scenePlannerLoading}
                 className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1094,6 +1300,199 @@ export default function GDDPage() {
             {filledFields} of {totalFields} fields completed
           </p>
         </div>
+
+        {/* Design Pillars */}
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                <Anchor className="h-4 w-4 text-[#F59E0B]" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Design Pillars</h3>
+                <p className="text-xs text-[#6B7280]">Core principles guiding {project.name}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleAISuggestPillars}
+                disabled={pillarsAILoading}
+                className="flex items-center gap-1.5 rounded-lg border border-dashed border-[#8B5CF6]/30 bg-[#8B5CF6]/5 px-3 py-2 text-sm text-[#8B5CF6] transition-colors hover:border-[#8B5CF6]/50 hover:bg-[#8B5CF6]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {pillarsAILoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                {pillarsAILoading ? "Suggesting..." : "AI Suggest Pillars"}
+              </button>
+              <button
+                onClick={() => {
+                  setEditingPillar(null);
+                  setPillarForm({ name: "", description: "", priority: 3 });
+                  setShowPillarForm(true);
+                }}
+                className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-3 py-2 text-sm font-medium text-black hover:bg-[#F59E0B]/90"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Pillar
+              </button>
+            </div>
+          </div>
+
+          <div className="p-5">
+            {pillars.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-3">
+                <Anchor className="h-10 w-10 text-[#2A2A2A]" />
+                <p className="text-sm text-[#6B7280]">
+                  No design pillars yet. Add your core principles or let AI suggest them.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {pillars.map((pillar) => (
+                  <div
+                    key={pillar.id}
+                    className="group rounded-xl border border-[#2A2A2A] bg-[#0F0F0F] p-4 transition-all hover:border-[#F59E0B]/30"
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <h4 className="text-sm font-semibold text-[#F5F5F5]">{pillar.name}</h4>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => handleEditPillar(pillar)}
+                          className="rounded-md p-1 text-[#6B7280] hover:text-[#F59E0B] hover:bg-[#F59E0B]/10"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeletePillar(pillar.id)}
+                          className="rounded-md p-1 text-[#6B7280] hover:text-red-400 hover:bg-red-400/10"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-[#9CA3AF] leading-relaxed mb-3">{pillar.description}</p>
+                    <div className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star
+                          key={s}
+                          className={`h-3.5 w-3.5 ${
+                            s <= pillar.priority ? "fill-[#F59E0B] text-[#F59E0B]" : "text-[#2A2A2A]"
+                          }`}
+                        />
+                      ))}
+                      <span className="ml-2 text-[10px] text-[#6B7280] uppercase tracking-wider">
+                        {pillar.priority === 5
+                          ? "Critical"
+                          : pillar.priority === 4
+                          ? "High"
+                          : pillar.priority === 3
+                          ? "Medium"
+                          : pillar.priority === 2
+                          ? "Low"
+                          : "Optional"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Pillar Add/Edit Modal */}
+        {showPillarForm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-md rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+              <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
+                <h3 className="text-lg font-semibold">
+                  {editingPillar ? "Edit Pillar" : "Add Design Pillar"}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowPillarForm(false);
+                    setEditingPillar(null);
+                  }}
+                  className="rounded-lg p-1 text-[#9CA3AF] hover:text-[#F5F5F5]"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-[#9CA3AF]">Pillar Name</label>
+                  <input
+                    type="text"
+                    value={pillarForm.name}
+                    onChange={(e) => setPillarForm((p) => ({ ...p, name: e.target.value }))}
+                    placeholder="e.g. Player Agency, Tactile Feedback"
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] focus:border-[#F59E0B]/50 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-[#9CA3AF]">Description</label>
+                  <textarea
+                    value={pillarForm.description}
+                    onChange={(e) => setPillarForm((p) => ({ ...p, description: e.target.value }))}
+                    placeholder="Describe what this pillar means for your game..."
+                    rows={3}
+                    className="w-full resize-y rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] focus:border-[#F59E0B]/50 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-[#9CA3AF]">Priority</label>
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setPillarForm((p) => ({ ...p, priority: s }))}
+                        className="rounded-md p-1 transition-colors hover:bg-[#F59E0B]/10"
+                      >
+                        <Star
+                          className={`h-5 w-5 ${
+                            s <= pillarForm.priority ? "fill-[#F59E0B] text-[#F59E0B]" : "text-[#3A3A3A]"
+                          }`}
+                        />
+                      </button>
+                    ))}
+                    <span className="ml-2 text-xs text-[#6B7280]">
+                      {pillarForm.priority === 5
+                        ? "Critical"
+                        : pillarForm.priority === 4
+                        ? "High"
+                        : pillarForm.priority === 3
+                        ? "Medium"
+                        : pillarForm.priority === 2
+                        ? "Low"
+                        : "Optional"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 border-t border-[#2A2A2A] px-6 py-4">
+                <button
+                  onClick={() => {
+                    setShowPillarForm(false);
+                    setEditingPillar(null);
+                  }}
+                  className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-sm text-[#9CA3AF] hover:text-[#F5F5F5]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSavePillar}
+                  disabled={!pillarForm.name.trim()}
+                  className="rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black hover:bg-[#F59E0B]/90 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {editingPillar ? "Save Changes" : "Add Pillar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Sections */}
         <div className="space-y-3">
@@ -1492,6 +1891,171 @@ export default function GDDPage() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* AI Competitor Analysis Panel */}
+        {showCompetitor && (
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                  <Target className="h-4 w-4 text-[#F59E0B]" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">AI Competitor Analysis</h3>
+                  <p className="text-xs text-[#6B7280]">
+                    Competitive landscape for {project?.name}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {competitorResult && !competitorLoading && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(JSON.stringify(competitorResult, null, 2));
+                      setCompetitorCopied(true);
+                      setTimeout(() => setCompetitorCopied(false), 2000);
+                    }}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                      competitorCopied
+                        ? "bg-[#10B981] text-white"
+                        : "border border-[#2A2A2A] text-[#9CA3AF] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                    }`}
+                  >
+                    {competitorCopied ? (
+                      <>
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" /> Copy JSON
+                      </>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowCompetitor(false)}
+                  className="rounded-lg p-1 text-[#9CA3AF] hover:text-[#F5F5F5]"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5">
+              {competitorLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#F59E0B]" />
+                  <p className="text-sm text-[#6B7280]">Analyzing competitors...</p>
+                </div>
+              ) : competitorResult ? (
+                <div className="space-y-5">
+                  {competitorResult.usp && (
+                    <div className="rounded-xl border border-[#F59E0B]/30 bg-[#F59E0B]/5 p-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-[#F59E0B] mb-2">
+                        Unique Selling Proposition
+                      </p>
+                      <p className="text-sm leading-relaxed text-[#F5F5F5]">{competitorResult.usp}</p>
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[#6B7280] mb-3">
+                      Direct Competitors
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {competitorResult.competitors
+                        ?.filter((c) => (c.type || "direct").toLowerCase() === "direct")
+                        .map((comp, i) => (
+                          <div
+                            key={i}
+                            className="rounded-xl border border-[#2A2A2A] bg-[#0F0F0F] p-4"
+                          >
+                            <h4 className="text-sm font-semibold text-[#F5F5F5] mb-3">{comp.name}</h4>
+                            <div className="space-y-2.5">
+                              <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#10B981] mb-1">
+                                  Strengths
+                                </p>
+                                <p className="text-xs text-[#9CA3AF] leading-relaxed">{comp.strengths}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-red-400 mb-1">
+                                  Weaknesses
+                                </p>
+                                <p className="text-xs text-[#9CA3AF] leading-relaxed">{comp.weaknesses}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#F59E0B] mb-1">
+                                  Our Edge
+                                </p>
+                                <p className="text-xs text-[#9CA3AF] leading-relaxed">
+                                  {comp.differentiation}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[#6B7280] mb-3">
+                      Indirect Competitors
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {competitorResult.competitors
+                        ?.filter((c) => (c.type || "").toLowerCase() === "indirect")
+                        .map((comp, i) => (
+                          <div
+                            key={i}
+                            className="rounded-xl border border-dashed border-[#2A2A2A] bg-[#0F0F0F] p-4"
+                          >
+                            <h4 className="text-sm font-semibold text-[#F5F5F5] mb-3">{comp.name}</h4>
+                            <div className="space-y-2.5">
+                              <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#10B981] mb-1">
+                                  Strengths
+                                </p>
+                                <p className="text-xs text-[#9CA3AF] leading-relaxed">{comp.strengths}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-red-400 mb-1">
+                                  Weaknesses
+                                </p>
+                                <p className="text-xs text-[#9CA3AF] leading-relaxed">{comp.weaknesses}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#F59E0B] mb-1">
+                                  Our Edge
+                                </p>
+                                <p className="text-xs text-[#9CA3AF] leading-relaxed">
+                                  {comp.differentiation}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {competitorResult && !competitorLoading && (
+              <div className="flex items-center justify-between border-t border-[#2A2A2A] px-5 py-3">
+                <p className="text-xs text-[#6B7280]">Based on your GDD genre, name, and description</p>
+                <button
+                  onClick={handleCompetitorAnalysis}
+                  disabled={competitorLoading}
+                  className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black hover:bg-[#F59E0B]/90 disabled:opacity-50"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Regenerate
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
