@@ -1069,8 +1069,12 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         {/* User */}
         <div className={`border-t border-[#2A2A2A] p-3 transition-all duration-300 ${sidebarCollapsed ? "md:px-2" : ""}`}>
           <div className={`flex items-center gap-3 rounded-lg px-3 py-2 ${sidebarCollapsed ? "md:justify-center md:px-2" : ""}`}>
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F59E0B]/15 text-xs font-bold text-[#F59E0B]">
+            <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F59E0B]/15 text-xs font-bold text-[#F59E0B]">
               {initials}
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-1.5 w-1.5 items-center justify-center" aria-hidden>
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#22C55E] opacity-50" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#22C55E] ring-2 ring-[#0F0F0F]" />
+              </span>
             </div>
             {!sidebarCollapsed && (
               <div className="min-w-0 flex-1">
