@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
+import Link from "next/link";
 import {
   Search,
   Copy,
@@ -228,6 +229,12 @@ export default function CheatsheetPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
+        <Link
+          href="/dashboard/tools"
+          className="mb-2 inline-block text-xs text-[#9CA3AF] hover:text-[#F59E0B] transition-colors"
+        >
+          ← All Tools
+        </Link>
         <div className="flex items-center gap-2">
           <BookOpen className="h-5 w-5 text-[#F59E0B]" />
           <h1 className="text-2xl font-bold">Game Dev Cheat Sheet</h1>

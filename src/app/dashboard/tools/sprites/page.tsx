@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import Link from "next/link";
 import {
   Pencil,
   Eraser,
@@ -928,6 +929,12 @@ export default function SpriteEditorPage() {
     <div className="-m-6 flex flex-col overflow-hidden" style={{ height: "calc(100vh - 4rem)" }}>
       {/* Header */}
       <div className="flex h-11 shrink-0 items-center gap-3 border-b border-[#2A2A2A] bg-[#141414] px-4">
+        <Link
+          href="/dashboard/tools"
+          className="text-xs text-[#9CA3AF] hover:text-[#F59E0B] transition-colors shrink-0"
+        >
+          ← All Tools
+        </Link>
         <h1 className="text-sm font-semibold text-[#F5F5F5]">Sprite Editor</h1>
         <span className="rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] font-medium text-[#9CA3AF]">
           {canvasSize}&times;{canvasSize}
