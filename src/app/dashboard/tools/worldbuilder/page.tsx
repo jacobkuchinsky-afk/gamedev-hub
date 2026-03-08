@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -12,11 +12,38 @@ import {
   ChevronDown,
   ChevronRight,
   Plus,
+  Users,
+  X,
 } from "lucide-react";
 
 const SETTINGS = ["Fantasy", "Sci-Fi", "Post-Apocalyptic", "Modern", "Historical"] as const;
 const TONES = ["Dark", "Light", "Mysterious", "Epic"] as const;
 const WORLD_SIZES = ["Small", "Medium", "Large", "Massive"] as const;
+
+const RELATIONSHIP_TYPES = ["ally", "enemy", "neutral", "romantic", "mentor", "rival"] as const;
+type RelationshipType = (typeof RELATIONSHIP_TYPES)[number];
+
+const REL_COLORS: Record<RelationshipType, string> = {
+  ally: "#22C55E",
+  enemy: "#EF4444",
+  neutral: "#6B7280",
+  romantic: "#EC4899",
+  mentor: "#F59E0B",
+  rival: "#3B82F6",
+};
+
+interface Character {
+  id: string;
+  name: string;
+  role: string;
+  faction: string;
+}
+
+interface Relationship {
+  from: string;
+  to: string;
+  type: RelationshipType;
+}
 
 interface SavedWorld {
   id: string;
@@ -110,7 +137,71 @@ function FormatContent({
   );
 }
 
+function RelationshipMap({
+  characters,
+  relationships,
+}: {
+  characters: Character[];
+  relationships: Relationship[];
+}) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const W = 600, H = 400;
+  const cx = W / 2, cy = H / 2, radius = 140;
+
+  const positions = characters.map((_, i) => {
+    const angle = (2 * Math.PI * i) / characters.length - Math.PI / 2;
+    return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
+  });
+
+  const charIndex = (name: string) => characters.findIndex((c) => c.name === name);
+
+  return (
+    <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
+      {relationships.map((rel, i) => {
+        const fi = charIndex(rel.from);
+        const ti = charIndex(rel.to);
+        if (fi === -1 || ti === -1) return null;
+        const from = positions[fi];
+        const to = positions[ti];
+        const color = REL_COLORS[rel.type] || "#6B7280";
+        const midX = (from.x + to.x) / 2;
+        const midY = (from.y + to.y) / 2;
+        return (
+          <g key={i}>
+            <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={color} strokeWidth={2} strokeOpacity={0.7} />
+            <rect x={midX - 22} y={midY - 8} width={44} height={16} rx={4} fill="#0F0F0F" stroke={color} strokeWidth={1} strokeOpacity={0.4} />
+            <text x={midX} y={midY + 4} textAnchor="middle" fill={color} fontSize={8} fontWeight={500}>
+              {rel.type}
+            </text>
+          </g>
+        );
+      })}
+      {characters.map((char, i) => {
+        const pos = positions[i];
+        return (
+          <g key={char.id}>
+            <circle cx={pos.x} cy={pos.y} r={28} fill="#1A1A1A" stroke="#F59E0B" strokeWidth={2} />
+            <text x={pos.x} y={pos.y - 4} textAnchor="middle" fill="#F5F5F5" fontSize={10} fontWeight={600}>
+              {char.name.length > 10 ? char.name.slice(0, 9) + "…" : char.name}
+            </text>
+            <text x={pos.x} y={pos.y + 8} textAnchor="middle" fill="#9CA3AF" fontSize={7}>
+              {char.role}
+            </text>
+            <text x={pos.x} y={pos.y + 42} textAnchor="middle" fill="#6B7280" fontSize={7} fontStyle="italic">
+              {char.faction}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+const CHAR_STORAGE_KEY = "gameforge_characters";
+const REL_STORAGE_KEY = "gameforge_relationships";
+
 export default function WorldBuilderPage() {
+  const [activeTab, setActiveTab] = useState<"world" | "characters">("world");
   const [name, setName] = useState("");
   const [setting, setSetting] = useState<string>(SETTINGS[0]);
   const [tone, setTone] = useState<string>(TONES[0]);
@@ -121,16 +212,129 @@ export default function WorldBuilderPage() {
   const [savedWorlds, setSavedWorlds] = useState<SavedWorld[]>([]);
   const [expandedWorld, setExpandedWorld] = useState<string | null>(null);
 
+  const [characters, setCharacters] = useState<Character[]>([]);
+  const [relationships, setRelationships] = useState<Relationship[]>([]);
+  const [charName, setCharName] = useState("");
+  const [charRole, setCharRole] = useState("");
+  const [charFaction, setCharFaction] = useState("");
+  const [relFrom, setRelFrom] = useState("");
+  const [relTo, setRelTo] = useState("");
+  const [relType, setRelType] = useState<RelationshipType>("ally");
+  const [charGenLoading, setCharGenLoading] = useState(false);
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) setSavedWorlds(JSON.parse(stored));
+      const storedChars = localStorage.getItem(CHAR_STORAGE_KEY);
+      if (storedChars) setCharacters(JSON.parse(storedChars));
+      const storedRels = localStorage.getItem(REL_STORAGE_KEY);
+      if (storedRels) setRelationships(JSON.parse(storedRels));
     } catch {}
   }, []);
 
   const saveToStorage = useCallback((worlds: SavedWorld[]) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(worlds));
   }, []);
+
+  const saveCharsToStorage = useCallback((chars: Character[]) => {
+    localStorage.setItem(CHAR_STORAGE_KEY, JSON.stringify(chars));
+  }, []);
+
+  const saveRelsToStorage = useCallback((rels: Relationship[]) => {
+    localStorage.setItem(REL_STORAGE_KEY, JSON.stringify(rels));
+  }, []);
+
+  const addCharacter = useCallback(() => {
+    if (!charName.trim()) return;
+    const newChar: Character = { id: Date.now().toString(), name: charName.trim(), role: charRole.trim() || "Unknown", faction: charFaction.trim() || "Unaligned" };
+    const updated = [...characters, newChar];
+    setCharacters(updated);
+    saveCharsToStorage(updated);
+    setCharName("");
+    setCharRole("");
+    setCharFaction("");
+  }, [charName, charRole, charFaction, characters, saveCharsToStorage]);
+
+  const removeCharacter = useCallback((id: string) => {
+    const char = characters.find((c) => c.id === id);
+    const updatedChars = characters.filter((c) => c.id !== id);
+    setCharacters(updatedChars);
+    saveCharsToStorage(updatedChars);
+    if (char) {
+      const updatedRels = relationships.filter((r) => r.from !== char.name && r.to !== char.name);
+      setRelationships(updatedRels);
+      saveRelsToStorage(updatedRels);
+    }
+  }, [characters, relationships, saveCharsToStorage, saveRelsToStorage]);
+
+  const addRelationship = useCallback(() => {
+    if (!relFrom || !relTo || relFrom === relTo) return;
+    const exists = relationships.some((r) => (r.from === relFrom && r.to === relTo) || (r.from === relTo && r.to === relFrom));
+    if (exists) return;
+    const updated = [...relationships, { from: relFrom, to: relTo, type: relType }];
+    setRelationships(updated);
+    saveRelsToStorage(updated);
+    setRelFrom("");
+    setRelTo("");
+  }, [relFrom, relTo, relType, relationships, saveRelsToStorage]);
+
+  const removeRelationship = useCallback((idx: number) => {
+    const updated = relationships.filter((_, i) => i !== idx);
+    setRelationships(updated);
+    saveRelsToStorage(updated);
+  }, [relationships, saveRelsToStorage]);
+
+  const generateCharacterWeb = useCallback(async () => {
+    setCharGenLoading(true);
+    try {
+      const prompt = `Create a character relationship web for a ${setting} game. Include 6 characters: names, roles, factions. Define 8 relationships between them (ally, enemy, neutral, romantic, mentor, rival). Format as JSON: {"characters": [{"name": "...", "role": "...", "faction": "..."}], "relationships": [{"from": "character_name", "to": "character_name", "type": "ally|enemy|neutral|romantic|mentor|rival"}]}. Return ONLY the JSON, no markdown fences.`;
+
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.8,
+        }),
+      });
+
+      const data = await response.json();
+      let content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      content = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      const parsed = JSON.parse(content);
+
+      if (parsed.characters && Array.isArray(parsed.characters)) {
+        const newChars: Character[] = parsed.characters.map((c: { name: string; role: string; faction: string }, i: number) => ({
+          id: Date.now().toString() + i,
+          name: c.name || `Character ${i + 1}`,
+          role: c.role || "Unknown",
+          faction: c.faction || "Unaligned",
+        }));
+        setCharacters(newChars);
+        saveCharsToStorage(newChars);
+
+        if (parsed.relationships && Array.isArray(parsed.relationships)) {
+          const validTypes = new Set(RELATIONSHIP_TYPES as unknown as string[]);
+          const newRels: Relationship[] = parsed.relationships
+            .filter((r: { from: string; to: string; type: string }) => r.from && r.to && validTypes.has(r.type))
+            .map((r: { from: string; to: string; type: string }) => ({ from: r.from, to: r.to, type: r.type as RelationshipType }));
+          setRelationships(newRels);
+          saveRelsToStorage(newRels);
+        }
+      }
+    } catch {
+      // parse error — silently fail, user can retry
+    } finally {
+      setCharGenLoading(false);
+    }
+  }, [setting, saveCharsToStorage, saveRelsToStorage]);
 
   const generateWorld = useCallback(async () => {
     if (!name.trim() || loading) return;
@@ -278,7 +482,192 @@ export default function WorldBuilderPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+      <div className="flex gap-1 rounded-lg border border-[#2A2A2A] bg-[#111] p-1">
+        <button
+          onClick={() => setActiveTab("world")}
+          className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all ${activeTab === "world" ? "bg-[#F59E0B]/15 text-[#F59E0B]" : "text-[#9CA3AF] hover:text-[#F5F5F5]"}`}
+        >
+          <Globe className="h-4 w-4" /> World Lore
+        </button>
+        <button
+          onClick={() => setActiveTab("characters")}
+          className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all ${activeTab === "characters" ? "bg-[#F59E0B]/15 text-[#F59E0B]" : "text-[#9CA3AF] hover:text-[#F5F5F5]"}`}
+        >
+          <Users className="h-4 w-4" /> Character Relationships
+        </button>
+      </div>
+
+      {activeTab === "characters" && (
+        <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+          <div className="space-y-4">
+            <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 space-y-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">Add Character</h3>
+              <input
+                type="text"
+                value={charName}
+                onChange={(e) => setCharName(e.target.value)}
+                placeholder="Character name..."
+                className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#555] outline-none focus:border-[#F59E0B]/40 transition-colors"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  value={charRole}
+                  onChange={(e) => setCharRole(e.target.value)}
+                  placeholder="Role (e.g. Warrior)"
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#555] outline-none focus:border-[#F59E0B]/40 transition-colors"
+                />
+                <input
+                  type="text"
+                  value={charFaction}
+                  onChange={(e) => setCharFaction(e.target.value)}
+                  placeholder="Faction (e.g. The Order)"
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#555] outline-none focus:border-[#F59E0B]/40 transition-colors"
+                />
+              </div>
+              <button
+                onClick={addCharacter}
+                disabled={!charName.trim()}
+                className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#111] px-4 py-2.5 text-sm font-medium text-[#F5F5F5] transition-colors hover:bg-[#2A2A2A] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Plus className="h-4 w-4" /> Add Character
+              </button>
+            </div>
+
+            {characters.length > 0 && (
+              <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">Characters ({characters.length})</h3>
+                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                  {characters.map((c) => (
+                    <div key={c.id} className="flex items-center gap-3 rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-[#F5F5F5] truncate">{c.name}</p>
+                        <p className="text-[10px] text-[#6B7280]">{c.role} &middot; {c.faction}</p>
+                      </div>
+                      <button onClick={() => removeCharacter(c.id)} className="shrink-0 p-1 text-[#555] hover:text-red-400 transition-colors">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {characters.length >= 2 && (
+              <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 space-y-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">Add Relationship</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={relFrom}
+                    onChange={(e) => setRelFrom(e.target.value)}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2.5 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/40 transition-colors"
+                  >
+                    <option value="">From...</option>
+                    {characters.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  </select>
+                  <select
+                    value={relTo}
+                    onChange={(e) => setRelTo(e.target.value)}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2.5 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/40 transition-colors"
+                  >
+                    <option value="">To...</option>
+                    {characters.filter((c) => c.name !== relFrom).map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {RELATIONSHIP_TYPES.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setRelType(t)}
+                      className={`rounded-lg px-3 py-2 text-xs font-medium transition-all ${relType === t ? "ring-1" : "bg-[#111] text-[#9CA3AF] hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"}`}
+                      style={relType === t ? { background: REL_COLORS[t] + "20", color: REL_COLORS[t], boxShadow: `0 0 0 1px ${REL_COLORS[t]}50` } : {}}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={addRelationship}
+                  disabled={!relFrom || !relTo || relFrom === relTo}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#111] px-4 py-2.5 text-sm font-medium text-[#F5F5F5] transition-colors hover:bg-[#2A2A2A] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Plus className="h-4 w-4" /> Add Relationship
+                </button>
+
+                {relationships.length > 0 && (
+                  <div className="space-y-1.5 max-h-[150px] overflow-y-auto pr-1">
+                    {relationships.map((r, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs rounded-lg bg-[#111] border border-[#2A2A2A] px-3 py-2">
+                        <span className="text-[#F5F5F5]">{r.from}</span>
+                        <span className="font-medium px-1.5 py-0.5 rounded" style={{ color: REL_COLORS[r.type], background: REL_COLORS[r.type] + "15" }}>{r.type}</span>
+                        <span className="text-[#F5F5F5]">{r.to}</span>
+                        <button onClick={() => removeRelationship(i)} className="ml-auto shrink-0 p-0.5 text-[#555] hover:text-red-400 transition-colors">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={generateCharacterWeb}
+              disabled={charGenLoading}
+              className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-[#D97706] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {charGenLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Generating Character Web...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  Generate Character Web
+                </>
+              )}
+            </button>
+          </div>
+
+          <div>
+            <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] min-h-[300px] sticky top-4">
+              {characters.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+                  <Users className="h-12 w-12 text-[#2A2A2A] mb-4" />
+                  <p className="text-sm text-[#555]">
+                    Add characters manually or click Generate Character Web to create a relationship map
+                  </p>
+                </div>
+              ) : charGenLoading ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#F59E0B] mb-3" />
+                  <p className="text-sm text-[#9CA3AF]">Generating character web...</p>
+                </div>
+              ) : (
+                <div className="p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-[#F5F5F5]">Relationship Map</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {RELATIONSHIP_TYPES.map((t) => (
+                        <span key={t} className="flex items-center gap-1 text-[10px]" style={{ color: REL_COLORS[t] }}>
+                          <span className="inline-block h-2 w-2 rounded-full" style={{ background: REL_COLORS[t] }} />
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] overflow-hidden">
+                    <RelationshipMap characters={characters} relationships={relationships} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "world" && <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
         {/* Left: Input Panel */}
         <div className="space-y-4">
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 space-y-4">
@@ -492,7 +881,7 @@ export default function WorldBuilderPage() {
             )}
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

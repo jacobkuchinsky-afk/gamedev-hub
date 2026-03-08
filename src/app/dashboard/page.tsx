@@ -107,7 +107,7 @@ const QC_ENGINES = ["Unity", "Unreal", "Godot", "GameMaker", "Custom"];
 const QC_GENRES = ["RPG", "Platformer", "FPS", "Puzzle", "Strategy", "Simulation", "Horror", "Racing", "Other"];
 const QC_COLORS = ["#EF4444", "#F97316", "#F59E0B", "#10B981", "#3B82F6", "#6366F1", "#8B5CF6", "#EC4899"];
 
-const GAME_DEV_TIPS = [
+const TIPS_GENERAL = [
   "Playtest early and often — don't wait until it's \"ready.\"",
   "Your first idea is rarely your best. Iterate ruthlessly.",
   "Polish the first 5 minutes of your game before anything else.",
@@ -116,34 +116,73 @@ const GAME_DEV_TIPS = [
   "Juice it up: screen shake, particles, and sound make everything feel better.",
   "Write your game's store description before you build it. Clarity comes from constraints.",
   "If a mechanic isn't fun in a gray-box prototype, art won't save it.",
-  "Keep a devlog — future you will thank present you.",
-  "Don't optimize until you know what's actually slow. Profile first.",
-  "Playtesters don't lie. If they're confused, your design is the problem.",
-  "Ship your \"embarrassing\" prototype. The feedback is worth more than your pride.",
   "Sound design is 50% of the experience. Don't leave it for last.",
   "Build the game you want to play, not the game you think will sell.",
   "Deadlines create decisions. Set one, even if it's arbitrary.",
   "Every feature you add is a feature you have to debug, balance, and support.",
   "Reward the player constantly. Micro-feedback loops keep people hooked.",
   "If your tutorial is boring, players will never see the fun parts.",
-  "Learn from games you dislike too — knowing what doesn't work is valuable.",
   "Accessibility isn't optional. Rebindable keys and subtitles go a long way.",
   "Version control isn't just for teams. Solo devs need git too.",
   "Take breaks. Your subconscious solves design problems while you rest.",
   "Consistent art style beats expensive art. Cohesion is king.",
   "Test on the lowest-spec machine you can find. Not everyone has a gaming rig.",
   "Make failing fun. The best games make you want to try again immediately.",
-  "Don't build an engine. Build a game. You can refactor later.",
-  "Watch someone play your game without saying a word. It's painful and invaluable.",
   "Color palette and lighting set the mood more than detailed textures.",
   "If you can't explain your game in one sentence, simplify it.",
   "Back up your project. Right now. Today. Seriously.",
-  "Your game's feel is defined by the first 3 seconds of input response.",
   "Steal mechanics, not aesthetics. Combine ideas from different genres.",
   "Finish something. An okay finished game teaches more than a perfect unfinished one.",
-  "Add a screenshot key. You'll need marketing material eventually.",
   "Analytics are your friend — track where players quit to find your weak spots.",
 ];
+
+const TIPS_BUGS = [
+  "Reproduce the bug before you fix it. If you can't trigger it, you can't verify the fix.",
+  "Fix bugs in batches. Context-switching between features and bugs kills momentum.",
+  "The best bug reports include steps to reproduce, expected behavior, and actual behavior.",
+  "Prioritize blocker bugs ruthlessly. A crash bug matters more than a typo.",
+  "Write a test case for every bug you fix. Regressions are the worst kind of bug.",
+  "If a bug keeps coming back, the fix is architectural, not a patch.",
+  "Rubber duck debugging works. Explain the bug out loud — you'll find it faster.",
+  "Check the console first. Most bugs leave breadcrumbs in error logs.",
+];
+
+const TIPS_DEVLOG = [
+  "Keep a devlog — future you will thank present you.",
+  "Your devlog is your marketing. Share progress, not just polish.",
+  "Write devlogs the same day you make progress. Memory fades fast.",
+  "Screenshot everything. Visual progress posts get 10x the engagement.",
+  "A short devlog is better than no devlog. Three sentences count.",
+  "Document your failures too. Other devs learn more from your struggles.",
+  "Ship your \"embarrassing\" prototype. The feedback is worth more than your pride.",
+  "Don't wait for something impressive. Post the mundane stuff too.",
+];
+
+function getContextualTip(openBugs: number, devlogThisWeek: number, offset: number): { tip: string; category: string } {
+  const dayIndex = Math.floor(Date.now() / 86400000);
+  const hasManyBugs = openBugs >= 3;
+  const hasLowDevlog = devlogThisWeek === 0;
+
+  let pool: string[];
+  let category: string;
+
+  if (hasManyBugs && hasLowDevlog) {
+    pool = [...TIPS_BUGS, ...TIPS_DEVLOG];
+    category = "Based on your bugs & devlog";
+  } else if (hasManyBugs) {
+    pool = TIPS_BUGS;
+    category = "You have " + openBugs + " open bugs";
+  } else if (hasLowDevlog) {
+    pool = TIPS_DEVLOG;
+    category = "No devlogs this week";
+  } else {
+    pool = TIPS_GENERAL;
+    category = "Tip of the Day";
+  }
+
+  const idx = ((dayIndex + offset) % pool.length + pool.length) % pool.length;
+  return { tip: pool[idx], category };
+}
 
 
 interface GameForgeBadge {
@@ -360,6 +399,8 @@ export default function DashboardPage() {
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [focusItems, setFocusItems] = useState<FocusItem[]>([]);
   const [tipOffset, setTipOffset] = useState(0);
+  const [tipFeedback, setTipFeedback] = useState<"knew" | "learned" | null>(null);
+  const [tipCopied, setTipCopied] = useState(false);
   const [showStandup, setShowStandup] = useState(false);
   const [standupLoading, setStandupLoading] = useState(false);
   const [standupText, setStandupText] = useState("");
@@ -2290,28 +2331,57 @@ export default function DashboardPage() {
 
       {/* Game Dev Tip of the Day */}
       {(() => {
-        const dayIndex = Math.floor(Date.now() / 86400000);
-        const tipIndex = (dayIndex + tipOffset) % GAME_DEV_TIPS.length;
-        const tip = GAME_DEV_TIPS[tipIndex < 0 ? tipIndex + GAME_DEV_TIPS.length : tipIndex];
+        const { tip, category } = getContextualTip(stats.openBugs, stats.devlogThisWeek, tipOffset);
         return (
-          <div className="flex items-start gap-3 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-5 py-4">
-            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#F59E0B]/10">
-              <Lightbulb className="h-4 w-4 text-[#F59E0B]" />
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-5 py-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                <Lightbulb className="h-4 w-4 text-[#F59E0B]" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                    Game Dev Tip
+                  </p>
+                  {category !== "Tip of the Day" && (
+                    <span className="rounded-full bg-[#F59E0B]/10 px-2 py-0.5 text-[9px] font-medium text-[#F59E0B]">
+                      {category}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1.5 text-sm leading-relaxed text-[#9CA3AF]">
+                  {tip}
+                </p>
+              </div>
+              <button
+                onClick={() => { setTipOffset((prev) => prev + 1); setTipFeedback(null); setTipCopied(false); }}
+                className="shrink-0 rounded-lg border border-[#2A2A2A] px-2.5 py-1 text-xs text-[#6B7280] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              >
+                Next tip
+              </button>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
-                Game Dev Tip of the Day
-              </p>
-              <p className="mt-1.5 text-sm leading-relaxed text-[#9CA3AF]">
-                {tip}
-              </p>
+            <div className="flex items-center gap-2 pl-11">
+              <button
+                onClick={() => { navigator.clipboard.writeText(tip); setTipCopied(true); setTimeout(() => setTipCopied(false), 2000); }}
+                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-colors ${tipCopied ? "border-[#22C55E]/30 text-[#22C55E]" : "border-[#2A2A2A] text-[#6B7280] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"}`}
+              >
+                {tipCopied ? <CheckCircle2 className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                {tipCopied ? "Copied" : "Share"}
+              </button>
+              <button
+                onClick={() => setTipFeedback("knew")}
+                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-colors ${tipFeedback === "knew" ? "border-[#6B7280]/50 bg-[#6B7280]/10 text-[#9CA3AF]" : "border-[#2A2A2A] text-[#6B7280] hover:border-[#6B7280]/40 hover:text-[#9CA3AF]"}`}
+              >
+                I knew this
+              </button>
+              <button
+                onClick={() => setTipFeedback("learned")}
+                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-colors ${tipFeedback === "learned" ? "border-[#F59E0B]/50 bg-[#F59E0B]/10 text-[#F59E0B]" : "border-[#2A2A2A] text-[#6B7280] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"}`}
+              >
+                <Sparkles className="h-3 w-3" />
+                Learned something
+              </button>
             </div>
-            <button
-              onClick={() => setTipOffset((prev) => prev + 1)}
-              className="shrink-0 rounded-lg border border-[#2A2A2A] px-2.5 py-1 text-xs text-[#6B7280] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
-            >
-              Next tip
-            </button>
           </div>
         );
       })()}
