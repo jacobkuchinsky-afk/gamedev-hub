@@ -47,6 +47,15 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Ambient card shadow - depth for dark UI */
+.card-shadow {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+[class*="rounded-xl"][class*="1A1A1A"] {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
 a {
   transition: color 150ms ease;
 }
