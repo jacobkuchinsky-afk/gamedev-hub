@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -29,6 +29,8 @@ import {
   Loader2,
   BarChart3,
   Copy,
+  Download,
+  ChevronDown,
 } from "lucide-react";
 import {
   getProject,
@@ -44,6 +46,9 @@ import {
   updateProject,
   deleteProject,
   addProject,
+  getAssets,
+  getReferences,
+  getChangelog,
   type Project,
   type Task,
   type Bug as BugType,
@@ -667,6 +672,18 @@ export default function ProjectDetailPage() {
   const [healthReport, setHealthReport] = useState<string | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthError, setHealthError] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -782,6 +799,125 @@ export default function ProjectDetailPage() {
       color: "#F59E0B",
     },
   ];
+
+  const handleExportJSON = useCallback(() => {
+    if (!project) return;
+    const gddRaw = localStorage.getItem(`gameforge_gdd_${projectId}`);
+    const gddData = gddRaw ? JSON.parse(gddRaw) : null;
+    const launchRaw = localStorage.getItem(`gameforge_launch_${projectId}`);
+    const launchData = launchRaw ? JSON.parse(launchRaw) : {};
+
+    const exportData = {
+      project,
+      tasks,
+      bugs,
+      devlog,
+      gdd: gddData,
+      assets: getAssets(projectId),
+      references: getReferences(projectId),
+      changelog: getChangelog(projectId),
+      playtest,
+      sprints,
+      launchChecklist: launchData,
+      exportedAt: new Date().toISOString(),
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.name.replace(/\s+/g, "-").toLowerCase()}-export.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setExportOpen(false);
+  }, [project, tasks, bugs, devlog, playtest, sprints, projectId]);
+
+  const handleExportMarkdown = useCallback(() => {
+    if (!project) return;
+    const gddRaw = localStorage.getItem(`gameforge_gdd_${projectId}`);
+    const gddData: Record<string, string> | null = gddRaw ? JSON.parse(gddRaw) : null;
+    const changelog = getChangelog(projectId);
+    const launchRaw = localStorage.getItem(`gameforge_launch_${projectId}`);
+    const launchChecked: Record<string, boolean> = launchRaw ? JSON.parse(launchRaw) : {};
+
+    const lines: string[] = [];
+    lines.push(`# ${project.name}`, "");
+    lines.push("## Overview");
+    lines.push(`- **Status**: ${project.status}`);
+    lines.push(`- **Engine**: ${project.engine}`);
+    lines.push(`- **Genre**: ${project.genre}`);
+    lines.push(`- **Created**: ${new Date(project.created_at).toLocaleDateString()}`);
+    lines.push(`- **Last Updated**: ${new Date(project.updated_at).toLocaleDateString()}`);
+    if (project.description) {
+      lines.push("", project.description);
+    }
+    lines.push("");
+
+    if (gddData && Object.keys(gddData).length > 0) {
+      lines.push("## Game Design Document", "");
+      for (const [key, val] of Object.entries(gddData)) {
+        if (val) {
+          const title = key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase());
+          lines.push(`### ${title}`, val, "");
+        }
+      }
+    }
+
+    lines.push(`## Tasks (${doneTasks}/${tasks.length} complete)`, "");
+    if (tasks.length > 0) {
+      lines.push("| Status | Priority | Title | Sprint | Assignee |");
+      lines.push("|--------|----------|-------|--------|----------|");
+      for (const t of tasks) {
+        lines.push(`| ${t.status} | ${t.priority} | ${t.title} | ${t.sprint} | ${t.assignee} |`);
+      }
+    } else {
+      lines.push("No tasks yet.");
+    }
+    lines.push("");
+
+    lines.push(`## Bugs (${openBugs} open)`, "");
+    if (bugs.length > 0) {
+      lines.push("| Severity | Status | Title | Platform |");
+      lines.push("|----------|--------|-------|----------|");
+      for (const b of bugs) {
+        lines.push(`| ${b.severity} | ${b.status} | ${b.title} | ${b.platform} |`);
+      }
+    } else {
+      lines.push("No bugs reported.");
+    }
+    lines.push("");
+
+    if (changelog.length > 0) {
+      lines.push("## Changelog", "");
+      for (const entry of changelog) {
+        lines.push(`### ${entry.version} - ${entry.title} (${entry.date})`);
+        for (const [cat, items] of Object.entries(entry.changes)) {
+          if ((items as string[]).length > 0) {
+            lines.push(`**${cat}**`);
+            for (const item of items as string[]) {
+              lines.push(`- ${item}`);
+            }
+          }
+        }
+        lines.push("");
+      }
+    }
+
+    const totalLaunchItems = 33;
+    const checkedCount = Object.values(launchChecked).filter(Boolean).length;
+    const readinessPct = totalLaunchItems > 0 ? Math.round((checkedCount / totalLaunchItems) * 100) : 0;
+    lines.push("## Launch Readiness");
+    lines.push(`**${checkedCount}/${totalLaunchItems} items checked (${readinessPct}%)**`, "");
+
+    const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.name.replace(/\s+/g, "-").toLowerCase()}-export.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setExportOpen(false);
+  }, [project, tasks, bugs, doneTasks, openBugs, projectId]);
 
   const runHealthReport = useCallback(async () => {
     setHealthOpen(true);
@@ -955,6 +1091,35 @@ export default function ProjectDetailPage() {
               <BookOpen className="h-3.5 w-3.5" />
               Write Devlog
             </Link>
+            <div className="relative" ref={exportRef}>
+              <button
+                onClick={() => setExportOpen(!exportOpen)}
+                className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export
+                <ChevronDown className={`h-3 w-3 transition-transform ${exportOpen ? "rotate-180" : ""}`} />
+              </button>
+              {exportOpen && (
+                <div className="absolute right-0 top-full z-50 mt-1.5 w-52 overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-xl">
+                  <button
+                    onClick={handleExportJSON}
+                    className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm text-[#D1D5DB] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                  >
+                    <FileText className="h-4 w-4 text-[#F59E0B]" />
+                    Export as JSON
+                  </button>
+                  <div className="mx-3 border-t border-[#2A2A2A]" />
+                  <button
+                    onClick={handleExportMarkdown}
+                    className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm text-[#D1D5DB] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                  >
+                    <ScrollText className="h-4 w-4 text-[#3B82F6]" />
+                    Export as Markdown
+                  </button>
+                </div>
+              )}
+            </div>
             <button
               onClick={runHealthReport}
               className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/40 hover:bg-[#F59E0B]/10"

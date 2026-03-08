@@ -25,6 +25,7 @@ import {
   TrendingUp,
   Flame,
   CalendarDays,
+  Target,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
 import {
@@ -72,6 +73,54 @@ interface ProjectHealth {
   doneTasks: number;
 }
 
+interface FocusItem {
+  type: "task" | "bug" | "launch";
+  title: string;
+  subtitle: string;
+  href: string;
+  color: string;
+  icon: typeof ListTodo;
+}
+
+const PRIORITY_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+const SEVERITY_RANK: Record<string, number> = { blocker: 0, critical: 1, major: 2, minor: 3, trivial: 4 };
+
+const LAUNCH_ITEMS = [
+  { id: "sp_title", label: "Finalize game title" },
+  { id: "sp_desc", label: "Write store description" },
+  { id: "sp_screenshots", label: "Prepare store screenshots" },
+  { id: "sp_trailer", label: "Upload trailer" },
+  { id: "sp_capsule", label: "Design capsule art" },
+  { id: "sp_tags", label: "Set tags & categories" },
+  { id: "sp_sysreq", label: "List system requirements" },
+  { id: "b_release", label: "Test release build" },
+  { id: "b_nodebug", label: "Remove debug code" },
+  { id: "b_perf", label: "Profile performance" },
+  { id: "b_crash", label: "Enable crash reporting" },
+  { id: "b_install", label: "Test install/uninstall" },
+  { id: "b_saves", label: "Save/load regression test" },
+  { id: "m_presskit", label: "Prepare press kit" },
+  { id: "m_influencers", label: "Compile influencer list" },
+  { id: "m_social", label: "Schedule social posts" },
+  { id: "m_landing", label: "Launch landing page" },
+  { id: "m_devlog", label: "Write launch devlog" },
+  { id: "l_eula", label: "Draft EULA / ToS" },
+  { id: "l_privacy", label: "Publish privacy policy" },
+  { id: "l_rating", label: "Obtain age rating" },
+  { id: "l_credits", label: "Complete credits screen" },
+  { id: "l_licenses", label: "Review third-party licenses" },
+  { id: "c_discord", label: "Set up Discord server" },
+  { id: "c_guidelines", label: "Post community guidelines" },
+  { id: "c_bugreport", label: "Prepare bug report form" },
+  { id: "c_feedback", label: "Create feedback channel" },
+  { id: "c_faq", label: "Write FAQ page" },
+  { id: "pl_dayone", label: "Document day-1 patch plan" },
+  { id: "pl_monitoring", label: "Set up monitoring dashboard" },
+  { id: "pl_hotfix", label: "Establish hotfix process" },
+  { id: "pl_roadmap", label: "Publish roadmap" },
+  { id: "pl_support", label: "Set up support system" },
+];
+
 function relativeTime(dateStr: string): string {
   const now = Date.now();
   const then = new Date(dateStr).getTime();
@@ -106,6 +155,7 @@ export default function DashboardPage() {
   const [lastBackup, setLastBackup] = useState<string | null>(null);
   const [backupLoaded, setBackupLoaded] = useState(false);
   const [showAllActivity, setShowAllActivity] = useState(false);
+  const [focusItems, setFocusItems] = useState<FocusItem[]>([]);
 
   const [weeklySummary, setWeeklySummary] = useState<{
     tasksCompleted: Task[];
@@ -248,6 +298,53 @@ export default function DashboardPage() {
         };
       })
     );
+
+    const computedFocus: FocusItem[] = [];
+    const openTasksSorted = tasks
+      .filter((t) => t.status !== "done")
+      .sort((a, b) => (PRIORITY_RANK[a.priority] ?? 99) - (PRIORITY_RANK[b.priority] ?? 99));
+    if (openTasksSorted.length > 0) {
+      const t = openTasksSorted[0];
+      computedFocus.push({
+        type: "task",
+        title: t.title,
+        subtitle: `${t.priority} priority \u00b7 ${projectMap[t.projectId] || "Unknown"}`,
+        href: `/dashboard/projects/${t.projectId}/tasks`,
+        color: getPriorityColor(t.priority),
+        icon: ListTodo,
+      });
+    }
+    const openBugsSorted = bugs
+      .filter((b) => b.status !== "closed")
+      .sort((a, b) => (SEVERITY_RANK[a.severity] ?? 99) - (SEVERITY_RANK[b.severity] ?? 99));
+    if (openBugsSorted.length > 0) {
+      const b = openBugsSorted[0];
+      computedFocus.push({
+        type: "bug",
+        title: b.title,
+        subtitle: `${b.severity} \u00b7 ${projectMap[b.projectId] || "Unknown"}`,
+        href: `/dashboard/projects/${b.projectId}/bugs`,
+        color: getSeverityColor(b.severity),
+        icon: Bug,
+      });
+    }
+    const activeProj = projects.find((p) => p.status !== "concept" && p.status !== "released") || projects[0];
+    if (activeProj) {
+      const launchRaw = localStorage.getItem(`gameforge_launch_${activeProj.id}`);
+      const launchChecked: Record<string, boolean> = launchRaw ? JSON.parse(launchRaw) : {};
+      const firstUnchecked = LAUNCH_ITEMS.find((item) => !launchChecked[item.id]);
+      if (firstUnchecked) {
+        computedFocus.push({
+          type: "launch",
+          title: firstUnchecked.label,
+          subtitle: `Launch checklist \u00b7 ${activeProj.name}`,
+          href: `/dashboard/projects/${activeProj.id}/launch`,
+          color: "#F59E0B",
+          icon: Rocket,
+        });
+      }
+    }
+    setFocusItems(computedFocus);
 
     const weeklyTasksCompleted = tasks.filter(
       (t) => t.status === "done" && new Date(t.created_at) >= weekAgo
@@ -502,6 +599,46 @@ export default function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      {/* Today's Focus */}
+      {focusItems.length > 0 && (
+        <div className="rounded-2xl border border-[#F59E0B]/20 bg-gradient-to-br from-[#F59E0B]/5 via-[#1A1A1A] to-[#1A1A1A] p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+              <Target className="h-4 w-4 text-[#F59E0B]" />
+            </div>
+            <h2 className="font-semibold">
+              Today&apos;s <span className="text-[#F59E0B]">Focus</span>
+            </h2>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {focusItems.map((item, i) => {
+              const FocusIcon = item.icon;
+              return (
+                <Link
+                  key={i}
+                  href={item.href}
+                  className="group flex items-start gap-3 rounded-xl border border-[#2A2A2A] bg-[#0F0F0F]/60 p-4 transition-all hover:border-[#F59E0B]/30 hover:bg-[#1F1F1F]"
+                >
+                  <div
+                    className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                    style={{ backgroundColor: `${item.color}15` }}
+                  >
+                    <FocusIcon className="h-4 w-4" style={{ color: item.color }} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-[#F5F5F5] transition-colors group-hover:text-[#F59E0B]">
+                      {item.title}
+                    </p>
+                    <p className="mt-0.5 text-xs text-[#6B7280]">{item.subtitle}</p>
+                  </div>
+                  <ChevronRight className="mt-1 h-3.5 w-3.5 shrink-0 text-[#6B7280] transition-transform group-hover:translate-x-0.5 group-hover:text-[#F59E0B]" />
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* This Week Summary */}
       <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
