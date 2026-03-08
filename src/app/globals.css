@@ -110,6 +110,23 @@ a {
   transition: color 150ms ease;
 }
 
+.nav-link {
+  position: relative;
+}
+.nav-link::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: #F59E0B;
+  width: 0;
+  transition: width 0.25s ease;
+}
+.nav-link:hover::after {
+  width: 100%;
+}
+
 button {
   transition: all 150ms ease;
 }

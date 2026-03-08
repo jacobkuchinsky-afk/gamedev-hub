@@ -238,19 +238,19 @@ export default function LandingPage() {
           <div className="hidden items-center gap-3 md:flex">
             <a
               href="#tools"
-              className="rounded-lg px-4 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
+              className="nav-link rounded-lg px-4 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
             >
               Tools
             </a>
             <a
               href="#ai"
-              className="rounded-lg px-4 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
+              className="nav-link rounded-lg px-4 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
             >
               AI Features
             </a>
             <a
               href="#pricing"
-              className="rounded-lg px-4 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
+              className="nav-link rounded-lg px-4 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
             >
               Pricing
             </a>
