@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Gamepad2,
@@ -23,6 +23,7 @@ import {
   Github,
   MessageCircle,
   Heart,
+  ChevronDown,
 } from "lucide-react";
 
 const features = [
@@ -109,7 +110,32 @@ const aiFeatures = [
   },
 ];
 
+const faqs = [
+  {
+    q: "Is GameForge free?",
+    a: "Yes, GameForge is completely free to use. All tools, AI features, and project management capabilities are included.",
+  },
+  {
+    q: "Do I need to install anything?",
+    a: "No, GameForge runs entirely in your browser. Just sign up and start building.",
+  },
+  {
+    q: "How does the AI work?",
+    a: "GameForge uses advanced AI to help with every aspect of game development - from generating ideas to writing code to planning launches. All AI features work in real-time.",
+  },
+  {
+    q: "Can I export my data?",
+    a: "Yes, every part of GameForge can be exported as JSON, Markdown, CSV, or PDF. Your data is always yours.",
+  },
+  {
+    q: "What game engines are supported?",
+    a: "GameForge is engine-agnostic. It works with Unity, Godot, Unreal, Love2D, Phaser, or any custom engine.",
+  },
+];
+
 export default function LandingPage() {
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+
   useEffect(() => {
     console.log("[LandingPage] rendered");
   }, []);
@@ -359,6 +385,43 @@ export default function LandingPage() {
                   <p className="text-sm font-semibold text-[#F5F5F5]">{t.name}</p>
                   <p className="text-xs text-[#9CA3AF]">{t.role}</p>
                   <p className="mt-1 text-xs text-[#F59E0B]">Working on {t.game}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="border-t border-[#2A2A2A] py-24">
+        <div className="mx-auto max-w-3xl px-6">
+          <h2 className="mb-12 text-center text-3xl font-bold md:text-4xl">
+            Frequently Asked Questions
+          </h2>
+          <div className="space-y-3">
+            {faqs.map((faq, i) => (
+              <div
+                key={faq.q}
+                className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] transition-colors hover:border-[#F59E0B]/30"
+              >
+                <button
+                  type="button"
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                  className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left font-medium text-[#F5F5F5]"
+                >
+                  {faq.q}
+                  <ChevronDown
+                    className={`h-5 w-5 shrink-0 text-[#F59E0B] transition-transform ${openFaq === i ? "rotate-180" : ""}`}
+                  />
+                </button>
+                <div
+                  className={`overflow-hidden transition-all duration-200 ${
+                    openFaq === i ? "max-h-48 opacity-100" : "max-h-0 opacity-0"
+                  }`}
+                >
+                  <p className="border-t border-[#2A2A2A] px-5 py-4 text-[#9CA3AF]">
+                    {faq.a}
+                  </p>
                 </div>
               </div>
             ))}
