@@ -15,6 +15,11 @@ import {
   Clock,
   CheckCircle2,
   FileText,
+  Rocket,
+  Hammer,
+  PenLine,
+  Sparkles,
+  X,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
 import {
@@ -85,6 +90,18 @@ export default function DashboardPage() {
   const [recentBugs, setRecentBugs] = useState<BugType[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [projectHealth, setProjectHealth] = useState<ProjectHealth[]>([]);
+  const [totalProjects, setTotalProjects] = useState(0);
+  const [welcomeDismissed, setWelcomeDismissed] = useState(true);
+
+  useEffect(() => {
+    const dismissed = localStorage.getItem("gameforge_welcome_dismissed") === "true";
+    setWelcomeDismissed(dismissed);
+  }, []);
+
+  const handleDismissWelcome = () => {
+    setWelcomeDismissed(true);
+    localStorage.setItem("gameforge_welcome_dismissed", "true");
+  };
 
   useEffect(() => {
     const projects = getProjects();
@@ -92,6 +109,7 @@ export default function DashboardPage() {
     const bugs = getBugs();
     const devlog = getDevlog();
 
+    setTotalProjects(projects.length);
     const projectMap = Object.fromEntries(projects.map((p) => [p.id, p.name]));
 
     const now = new Date();
@@ -276,18 +294,102 @@ export default function DashboardPage() {
     }
   };
 
+  const onboardingCards = [
+    {
+      label: "Create Your First Project",
+      desc: "Set up your game, define the genre, pick an engine, and start building.",
+      icon: Rocket,
+      color: "#F59E0B",
+      href: "/dashboard/projects/new",
+    },
+    {
+      label: "Explore Tools",
+      desc: "Sprite generators, sound design, color palettes — all the tools you need.",
+      icon: Hammer,
+      color: "#8B5CF6",
+      href: "/dashboard/tools",
+    },
+    {
+      label: "Write a Devlog",
+      desc: "Track your progress, mood, and wins. Your future self will thank you.",
+      icon: PenLine,
+      color: "#10B981",
+      href: "/dashboard/devlog",
+    },
+    {
+      label: "Generate Game Ideas",
+      desc: "Stuck on what to make? Let AI brainstorm wild concepts for you.",
+      icon: Sparkles,
+      color: "#F97316",
+      href: "/dashboard/tools/ideas",
+    },
+  ];
+
+  const showWelcomeBanner = totalProjects === 0 && !welcomeDismissed;
+
   return (
     <div className="mx-auto max-w-5xl space-y-8">
-      {/* Welcome */}
-      <div>
-        <h1 className="text-2xl font-bold">
-          Welcome back,{" "}
-          <span className="text-[#F59E0B]">{user?.username}</span>
-        </h1>
-        <p className="mt-1 text-[#9CA3AF]">
-          Here&apos;s what&apos;s happening with your games.
-        </p>
-      </div>
+      {showWelcomeBanner ? (
+        <div className="space-y-6">
+          <div className="relative overflow-hidden rounded-2xl border border-[#F59E0B]/20 bg-gradient-to-br from-[#F59E0B]/5 via-[#1A1A1A] to-[#1A1A1A] p-8">
+            <button
+              onClick={handleDismissWelcome}
+              className="absolute right-4 top-4 rounded-lg p-1.5 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F59E0B]/10">
+                <Rocket className="h-5 w-5 text-[#F59E0B]" />
+              </div>
+              <h1 className="text-2xl font-bold">
+                Welcome to <span className="text-[#F59E0B]">GameForge</span>!
+              </h1>
+            </div>
+            <p className="text-[#9CA3AF] max-w-lg">
+              Your all-in-one game development hub. Create projects, track bugs, write devlogs, and use AI-powered tools to ship your game faster.
+            </p>
+          </div>
+
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-[#6B7280] mb-3">Get Started</h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {onboardingCards.map((card) => (
+                <Link
+                  key={card.label}
+                  href={card.href}
+                  className="group flex items-start gap-4 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 transition-all hover:border-[#F59E0B]/30 hover:bg-[#1F1F1F]"
+                >
+                  <div
+                    className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                    style={{ backgroundColor: `${card.color}15` }}
+                  >
+                    <card.icon className="h-5 w-5" style={{ color: card.color }} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-sm group-hover:text-[#F59E0B] transition-colors">{card.label}</p>
+                    <p className="mt-1 text-xs text-[#6B7280] leading-relaxed">{card.desc}</p>
+                  </div>
+                  <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-[#6B7280] transition-transform group-hover:translate-x-0.5 group-hover:text-[#F59E0B]" />
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Welcome */}
+          <div>
+            <h1 className="text-2xl font-bold">
+              Welcome back,{" "}
+              <span className="text-[#F59E0B]">{user?.username}</span>
+            </h1>
+            <p className="mt-1 text-[#9CA3AF]">
+              Here&apos;s what&apos;s happening with your games.
+            </p>
+          </div>
+        </>
+      )}
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

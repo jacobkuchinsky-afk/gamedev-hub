@@ -21,6 +21,8 @@ import {
   CheckCircle2,
   Circle,
   Wand2,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 
@@ -257,6 +259,8 @@ export default function GDDPage() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [aiLoading, setAiLoading] = useState<Record<string, boolean>>({});
+  const [toast, setToast] = useState<{ message: string; type: "error" | "success" } | null>(null);
 
   useEffect(() => {
     console.log("[GDDPage] rendered, id:", projectId);
@@ -354,6 +358,78 @@ export default function GDDPage() {
     setDirty(true);
     setSaved(false);
   }, []);
+
+  useEffect(() => {
+    if (toast) {
+      const t = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [toast]);
+
+  const handleAIWrite = useCallback(
+    async (section: GDDSection) => {
+      if (!project) return;
+      setAiLoading((prev) => ({ ...prev, [section.id]: true }));
+
+      const fieldLabels = section.fields.map((f) => f.label).join(", ");
+      const prompt = `Write a "${section.title}" section for a game design document. Game: ${project.name}. Genre: ${project.genre || "unspecified"}. Engine: ${project.engine || "unspecified"}. Description: ${project.description || "No description provided"}. The section should cover these fields: ${fieldLabels}. Be specific and practical. For each field, write 3-5 bullet points or 2-3 short paragraphs. Return ONLY a JSON object where each key is one of these exact field keys: ${section.fields.map((f) => f.key).join(", ")}. The value for each key should be a string with the content. Do not wrap in markdown code blocks. Return raw JSON only.`;
+
+      try {
+        const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "moonshotai/Kimi-K2.5-TEE",
+            messages: [{ role: "user", content: prompt }],
+            stream: false,
+            max_tokens: 1024,
+            temperature: 0.7,
+          }),
+        });
+
+        if (!response.ok) throw new Error(`API returned ${response.status}`);
+
+        const apiData = await response.json();
+        const content = apiData.choices?.[0]?.message?.content || apiData.choices?.[0]?.message?.reasoning || "";
+
+        let parsed: Record<string, string> = {};
+        try {
+          const cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+          parsed = JSON.parse(cleaned);
+        } catch {
+          const singleFieldContent = content.trim();
+          for (const field of section.fields) {
+            if (!data[field.key]?.trim()) {
+              parsed[field.key] = singleFieldContent;
+              break;
+            }
+          }
+        }
+
+        setData((prev) => {
+          const next = { ...prev };
+          for (const field of section.fields) {
+            if (parsed[field.key]) {
+              next[field.key] = parsed[field.key];
+            }
+          }
+          return next;
+        });
+        setDirty(true);
+        setSaved(false);
+        setToast({ message: `AI filled "${section.title}" section`, type: "success" });
+      } catch (err) {
+        console.error("[GDD AI Write]", err);
+        setToast({ message: `Failed to generate "${section.title}" — try again`, type: "error" });
+      } finally {
+        setAiLoading((prev) => ({ ...prev, [section.id]: false }));
+      }
+    },
+    [project, data]
+  );
 
   const filledFields = Object.values(data).filter((v) => v.trim().length > 0).length;
   const totalFields = GDD_SECTIONS.reduce((acc, s) => acc + s.fields.length, 0);
@@ -546,15 +622,29 @@ export default function GDDPage() {
 
                 {isOpen && (
                   <div className="space-y-4 border-t border-[#2A2A2A] px-5 py-5">
-                    {hasEmptyFields && (
+                    <div className="flex flex-wrap gap-2">
+                      {hasEmptyFields && (
+                        <button
+                          onClick={() => quickFillSection(section.id)}
+                          className="flex items-center gap-2 rounded-lg border border-dashed border-[#F59E0B]/30 bg-[#F59E0B]/5 px-4 py-2.5 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10"
+                        >
+                          <Wand2 className="h-4 w-4" />
+                          Quick Fill Empty Fields
+                        </button>
+                      )}
                       <button
-                        onClick={() => quickFillSection(section.id)}
-                        className="flex items-center gap-2 rounded-lg border border-dashed border-[#F59E0B]/30 bg-[#F59E0B]/5 px-4 py-2.5 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10"
+                        onClick={() => handleAIWrite(section)}
+                        disabled={!!aiLoading[section.id]}
+                        className="flex items-center gap-2 rounded-lg border border-dashed border-[#8B5CF6]/30 bg-[#8B5CF6]/5 px-4 py-2.5 text-sm text-[#8B5CF6] transition-colors hover:border-[#8B5CF6]/50 hover:bg-[#8B5CF6]/10 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Wand2 className="h-4 w-4" />
-                        Quick Fill Empty Fields
+                        {aiLoading[section.id] ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-4 w-4" />
+                        )}
+                        {aiLoading[section.id] ? "Writing..." : "AI Write"}
                       </button>
-                    )}
+                    </div>
                     {section.fields.map((field) => (
                       <div key={field.key}>
                         <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-[#D1D5DB]">
@@ -606,6 +696,25 @@ export default function GDDPage() {
           })}
         </div>
       </div>
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
+          <div
+            className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium shadow-lg ${
+              toast.type === "error"
+                ? "border-red-500/30 bg-red-500/10 text-red-400"
+                : "border-[#10B981]/30 bg-[#10B981]/10 text-[#10B981]"
+            }`}
+          >
+            {toast.type === "error" ? (
+              <Circle className="h-4 w-4" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4" />
+            )}
+            {toast.message}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
