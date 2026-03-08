@@ -926,7 +926,7 @@ export default function SpriteEditorPage() {
   };
 
   return (
-    <div className="-m-6 flex flex-col overflow-hidden" style={{ height: "calc(100vh - 4rem)" }}>
+    <div className="-m-6 flex flex-col overflow-hidden animate-slide-up" style={{ height: "calc(100vh - 4rem)" }}>
       {/* Header */}
       <div className="flex h-11 shrink-0 items-center gap-3 border-b border-[#2A2A2A] bg-[#141414] px-4">
         <Link

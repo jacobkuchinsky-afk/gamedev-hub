@@ -768,7 +768,7 @@ export default function TilemapPage() {
   const mapSizeKey = `${gridW}x${gridH}`;
 
   return (
-    <div className="mx-auto max-w-[1400px] space-y-4">
+    <div className="mx-auto max-w-[1400px] space-y-4 animate-slide-up">
       <div className="flex items-center gap-3">
         <Link
           href="/dashboard/tools"

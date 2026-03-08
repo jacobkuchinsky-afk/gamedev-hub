@@ -530,7 +530,7 @@ export default function EasingPage() {
   }, [current, duration, showCustom, customBezier]);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6 animate-slide-up">
       <div className="flex items-center gap-3">
         <Link href="/dashboard/tools" className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] text-[#9CA3AF] hover:text-[#F5F5F5] transition-colors">
           <ArrowLeft className="h-4 w-4" />

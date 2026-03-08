@@ -241,7 +241,7 @@ export default function ResolutionGuidePage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
+    <div className="mx-auto max-w-6xl space-y-8 animate-slide-up">
       <div className="flex items-center gap-3">
         <Link
           href="/dashboard/tools"

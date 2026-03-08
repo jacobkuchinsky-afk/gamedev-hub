@@ -450,7 +450,7 @@ TWIST 2: [A moral dilemma or surprise revelation, 2 sentences]`;
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-16">
+    <div className="mx-auto max-w-4xl space-y-6 pb-16 animate-slide-up">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link

@@ -282,7 +282,7 @@ export default function FontPreviewPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6 animate-slide-up">
       <div className="flex items-center gap-3">
         <Link
           href="/dashboard/tools"

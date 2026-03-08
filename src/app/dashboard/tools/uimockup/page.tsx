@@ -1136,7 +1136,7 @@ export default function UIMockupPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-5rem)] flex-col">
+    <div className="flex h-[calc(100vh-5rem)] flex-col animate-slide-up">
       {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b border-[#2A2A2A] px-4 py-3">
         <div className="flex items-center gap-3">

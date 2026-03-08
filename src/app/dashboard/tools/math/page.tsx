@@ -617,7 +617,7 @@ function AiMathGameApp() {
 
 export default function GameMathPage() {
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6 animate-slide-up">
       <div className="flex items-center gap-4">
         <Link
           href="/dashboard/tools"

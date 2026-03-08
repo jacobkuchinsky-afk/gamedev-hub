@@ -465,7 +465,7 @@ export default function ParticlesPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-4">
+    <div className="mx-auto max-w-7xl space-y-4 animate-slide-up">
       <div className="flex items-center gap-3">
         <Link
           href="/dashboard/tools"

@@ -373,7 +373,7 @@ export default function NamesPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6 animate-slide-up">
       <style>{`
         @keyframes nameEnter {
           from { opacity: 0; transform: translateY(8px); }

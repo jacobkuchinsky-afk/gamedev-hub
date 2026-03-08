@@ -702,7 +702,7 @@ Keep state names short (1-2 words). Include 4-8 states and relevant transitions 
   // ── Render ─────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-screen bg-[#0F0F0F] text-white overflow-hidden">
+    <div className="flex flex-col h-screen bg-[#0F0F0F] text-white overflow-hidden animate-slide-up">
       {/* Header */}
       <div className="h-14 flex items-center justify-between px-4 border-b border-[#2A2A2A] shrink-0 bg-[#0F0F0F]">
         <div className="flex items-center gap-3">

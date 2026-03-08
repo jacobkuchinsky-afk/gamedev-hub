@@ -480,7 +480,7 @@ export default function EffectsPage() {
   const showCrt = activeEffects.has("crt");
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
+    <div className="mx-auto max-w-6xl space-y-4 animate-slide-up">
       <div className="flex items-center gap-3">
         <Link
           href="/dashboard/tools"
