@@ -192,6 +192,37 @@ label {
   animation: slideUp 200ms ease;
 }
 
+/* Dropdown / Popover utility */
+.dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: #1A1A1A;
+  border: 1px solid #2A2A2A;
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 200px;
+  z-index: 40;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  animation: slideUp 150ms ease;
+}
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #D1D5DB;
+  cursor: pointer;
+  transition: all 100ms ease;
+}
+.dropdown-item:hover {
+  background: rgba(245, 158, 11, 0.1);
+  color: #F59E0B;
+}
+
 /* Amber glow utility */
 .glow-amber {
   box-shadow: 0 0 20px rgba(245, 158, 11, 0.15);
