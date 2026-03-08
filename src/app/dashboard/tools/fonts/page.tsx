@@ -26,6 +26,12 @@ interface FontDef {
   category: "Serif" | "Sans-Serif" | "Monospace" | "Display";
 }
 
+interface FontPairing {
+  heading: FontDef;
+  body: FontDef;
+  reason: string;
+}
+
 const FONTS: FontDef[] = [
   { name: "Georgia", family: "Georgia, serif", category: "Serif" },
   { name: "Times New Roman", family: "'Times New Roman', Times, serif", category: "Serif" },
@@ -102,6 +108,10 @@ export default function FontPreviewPage() {
   const [aiQuery, setAiQuery] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState<{ fontName: string; reason: string } | null>(null);
+  const [pairingGameType, setPairingGameType] = useState("");
+  const [pairingLoading, setPairingLoading] = useState(false);
+  const [pairingResults, setPairingResults] = useState<FontPairing[]>([]);
+  const [pairingError, setPairingError] = useState("");
 
   const previewBg = darkBg ? "#0F0F0F" : "#F0F0F0";
   const previewText = text || "Your Game Title";
@@ -197,6 +207,62 @@ export default function FontPreviewPage() {
     } finally {
       setAiLoading(false);
     }
+  };
+
+  const handleAiPairFonts = async () => {
+    if (!pairingGameType.trim() || pairingLoading) return;
+    setPairingLoading(true);
+    setPairingResults([]);
+    setPairingError("");
+    try {
+      const fontNames = "Georgia, Times New Roman, Palatino, Arial, Verdana, Trebuchet MS, Impact, Courier New, Lucida Console";
+      const prompt = `Suggest 3 font pairings for a ${pairingGameType.trim()} game UI. For each pair: pick a heading font and a body font from ONLY these fonts: ${fontNames}. Explain why they pair well. Format each on its own line exactly as:\nPair 1: [HeadingFont] + [BodyFont] - reason\nPair 2: [HeadingFont] + [BodyFont] - reason\nPair 3: [HeadingFont] + [BodyFont] - reason`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content =
+        data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const pairs: FontPairing[] = [];
+      const lines = content.split("\n");
+      for (const line of lines) {
+        if (!line.includes("+")) continue;
+        const m = line.match(/([A-Za-z\s]+?)\s*\+\s*([A-Za-z\s]+?)\s*[—\-–]\s*(.+)/);
+        if (!m) continue;
+        const hName = m[1].replace(/[\[\]"'*]/g, "").trim();
+        const bName = m[2].replace(/[\[\]"'*]/g, "").trim();
+        const reason = m[3].trim();
+        const hFont = FONTS.find((f) => f.name.toLowerCase() === hName.toLowerCase());
+        const bFont = FONTS.find((f) => f.name.toLowerCase() === bName.toLowerCase());
+        if (hFont && bFont) {
+          pairs.push({ heading: hFont, body: bFont, reason });
+        }
+      }
+      if (pairs.length === 0) {
+        setPairingError("Could not parse pairings. Try a different game type.");
+      } else {
+        setPairingResults(pairs);
+      }
+    } catch {
+      setPairingError("Failed to get pairings. Check your API key.");
+    } finally {
+      setPairingLoading(false);
+    }
+  };
+
+  const applyPairing = (pair: FontPairing) => {
+    setPinned([pair.heading.name, pair.body.name]);
   };
 
   const filtered = useMemo(
@@ -479,6 +545,114 @@ export default function FontPreviewPage() {
         {aiResult && !aiResult.fontName && (
           <div className="mt-3 rounded-lg border border-[#EF4444]/20 bg-[#EF4444]/5 p-3">
             <p className="text-xs text-[#EF4444]">{aiResult.reason}</p>
+          </div>
+        )}
+      </div>
+
+      {/* AI Font Pairing */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+        <div className="mb-3 flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+          <h2 className="text-sm font-semibold text-[#F5F5F5]">AI Pair Fonts</h2>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={pairingGameType}
+            onChange={(e) => setPairingGameType(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAiPairFonts()}
+            placeholder='Game type or style — e.g. "dark fantasy RPG", "pixel platformer"'
+            className="flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+          />
+          <button
+            onClick={handleAiPairFonts}
+            disabled={pairingLoading || !pairingGameType.trim()}
+            className="flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-[#D97706] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {pairingLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            Pair Fonts
+          </button>
+        </div>
+
+        {pairingLoading && (
+          <div className="mt-4 flex items-center justify-center gap-2 py-6 text-sm text-[#6B7280]">
+            <Loader2 className="h-4 w-4 animate-spin text-[#F59E0B]" />
+            Finding perfect pairings...
+          </div>
+        )}
+
+        {pairingError && !pairingLoading && (
+          <div className="mt-3 rounded-lg border border-[#EF4444]/20 bg-[#EF4444]/5 p-3">
+            <p className="text-xs text-[#EF4444]">{pairingError}</p>
+          </div>
+        )}
+
+        {pairingResults.length > 0 && !pairingLoading && (
+          <div className="mt-4 space-y-4">
+            {pairingResults.map((pair, idx) => (
+              <div
+                key={idx}
+                className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4"
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#F59E0B]/15 text-[10px] font-bold text-[#F59E0B]">
+                      {idx + 1}
+                    </span>
+                    <span className="text-xs font-semibold text-[#F5F5F5]">
+                      {pair.heading.name}{" "}
+                      <span className="text-[#6B7280]">+</span>{" "}
+                      {pair.body.name}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => applyPairing(pair)}
+                    className="rounded-md bg-[#F59E0B]/10 px-2.5 py-1 text-[11px] font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20"
+                  >
+                    Apply &amp; Compare
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg p-3" style={{ backgroundColor: previewBg }}>
+                    <p className="mb-1 text-[9px] uppercase tracking-wider text-[#6B7280]">Heading</p>
+                    <p
+                      style={{
+                        fontFamily: pair.heading.family,
+                        fontSize: Math.min(fontSize, 36),
+                        color: textColor,
+                        lineHeight: 1.2,
+                        ...textStyle,
+                        wordBreak: "break-word" as const,
+                      }}
+                    >
+                      {previewText}
+                    </p>
+                  </div>
+                  <div className="rounded-lg p-3" style={{ backgroundColor: previewBg }}>
+                    <p className="mb-1 text-[9px] uppercase tracking-wider text-[#6B7280]">Body</p>
+                    <p
+                      style={{
+                        fontFamily: pair.body.family,
+                        fontSize: Math.min(fontSize * 0.45, 16),
+                        color: textColor,
+                        lineHeight: 1.5,
+                        ...textStyle,
+                        wordBreak: "break-word" as const,
+                      }}
+                    >
+                      The quick brown fox jumps over the lazy dog. Press START to continue your adventure.
+                    </p>
+                  </div>
+                </div>
+
+                <p className="mt-2 text-xs text-[#9CA3AF]">{pair.reason}</p>
+              </div>
+            ))}
           </div>
         )}
       </div>

@@ -36,6 +36,7 @@ interface Layer {
 const MAX_UNDO = 20;
 const MAX_LAYERS = 4;
 const GRID_SIZES: GridSize[] = [8, 16, 32, 64];
+const EXPORT_SCALES = [1, 2, 4, 8] as const;
 const DEFAULT_ZOOM: Record<GridSize, number> = { 8: 32, 16: 20, 32: 16, 64: 8 };
 const MINIMAP_TARGET = 64;
 
@@ -165,6 +166,109 @@ function getRectPixels(x0: number, y0: number, x1: number, y1: number): [number,
   return pixels;
 }
 
+function encodeGIF(w: number, h: number, imgData: ImageData): Uint8Array {
+  const px = imgData.data;
+  const colorMap = new Map<string, number>();
+  const palette: number[][] = [];
+
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i + 3] < 128) continue;
+    const k = `${px[i]},${px[i + 1]},${px[i + 2]}`;
+    if (!colorMap.has(k)) {
+      colorMap.set(k, palette.length);
+      palette.push([px[i], px[i + 1], px[i + 2]]);
+      if (palette.length >= 255) break;
+    }
+  }
+
+  const transIdx = palette.length;
+  palette.push([0, 0, 0]);
+
+  const bits = Math.max(2, Math.ceil(Math.log2(Math.max(palette.length, 4))));
+  const tblSize = 1 << bits;
+  while (palette.length < tblSize) palette.push([0, 0, 0]);
+
+  const idx = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    const p = i * 4;
+    if (px[p + 3] < 128) {
+      idx[i] = transIdx;
+    } else {
+      idx[i] = colorMap.get(`${px[p]},${px[p + 1]},${px[p + 2]}`) ?? transIdx;
+    }
+  }
+
+  const clearCode = 1 << bits;
+  const eoiCode = clearCode + 1;
+  let codeSize = bits + 1;
+  let nextCode = eoiCode + 1;
+
+  const lzw: number[] = [];
+  let bitBuf = 0,
+    bitCnt = 0;
+
+  const emit = (code: number, sz: number) => {
+    bitBuf |= code << bitCnt;
+    bitCnt += sz;
+    while (bitCnt >= 8) {
+      lzw.push(bitBuf & 0xff);
+      bitBuf >>= 8;
+      bitCnt -= 8;
+    }
+  };
+
+  let dict = new Map<string, number>();
+  const reset = () => {
+    dict = new Map();
+    for (let i = 0; i < clearCode; i++) dict.set(String(i), i);
+    nextCode = eoiCode + 1;
+    codeSize = bits + 1;
+  };
+
+  emit(clearCode, codeSize);
+  reset();
+
+  let cur = String(idx[0]);
+  for (let i = 1; i < idx.length; i++) {
+    const nxt = cur + "," + idx[i];
+    if (dict.has(nxt)) {
+      cur = nxt;
+    } else {
+      emit(dict.get(cur)!, codeSize);
+      if (nextCode < 4096) {
+        dict.set(nxt, nextCode++);
+        if (nextCode > (1 << codeSize) && codeSize < 12) codeSize++;
+      } else {
+        emit(clearCode, codeSize);
+        reset();
+      }
+      cur = String(idx[i]);
+    }
+  }
+  emit(dict.get(cur)!, codeSize);
+  emit(eoiCode, codeSize);
+  if (bitCnt > 0) lzw.push(bitBuf & 0xff);
+
+  const out: number[] = [];
+  out.push(0x47, 0x49, 0x46, 0x38, 0x39, 0x61);
+  out.push(w & 0xff, (w >> 8) & 0xff, h & 0xff, (h >> 8) & 0xff);
+  out.push(0x80 | ((bits - 1) & 7), transIdx, 0);
+  for (const c of palette) out.push(c[0], c[1], c[2]);
+  out.push(0x21, 0xf9, 0x04, 0x01, 0x00, 0x00, transIdx, 0x00);
+  out.push(0x2c, 0, 0, 0, 0, w & 0xff, (w >> 8) & 0xff, h & 0xff, (h >> 8) & 0xff, 0);
+  out.push(bits);
+  let o = 0;
+  while (o < lzw.length) {
+    const n = Math.min(255, lzw.length - o);
+    out.push(n);
+    for (let i = 0; i < n; i++) out.push(lzw[o + i]);
+    o += n;
+  }
+  out.push(0, 0x3b);
+
+  return new Uint8Array(out);
+}
+
 export default function SpriteEditorPage() {
   const [canvasSize, setCanvasSize] = useState<GridSize>(32);
   const [layers, setLayers] = useState<Layer[]>(() => [
@@ -190,6 +294,7 @@ export default function SpriteEditorPage() {
   const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 });
   const [canvasAreaMousePos, setCanvasAreaMousePos] = useState<{ x: number; y: number } | null>(null);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
+  const [exportScale, setExportScale] = useState(1);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const minimapRef = useRef<HTMLCanvasElement>(null);
@@ -644,17 +749,19 @@ export default function SpriteEditorPage() {
     setRedoStack([]);
   };
 
-  const createExportCanvas = (): HTMLCanvasElement => {
+  const createExportCanvas = (scale: number = 1): HTMLCanvasElement => {
+    const size = canvasSize * scale;
     const offscreen = document.createElement("canvas");
-    offscreen.width = canvasSize;
-    offscreen.height = canvasSize;
+    offscreen.width = size;
+    offscreen.height = size;
     const ctx = offscreen.getContext("2d")!;
+    ctx.imageSmoothingEnabled = false;
     for (let y = 0; y < canvasSize; y++) {
       for (let x = 0; x < canvasSize; x++) {
         const c = compositeData[y]?.[x];
         if (c) {
           ctx.fillStyle = c;
-          ctx.fillRect(x, y, 1, 1);
+          ctx.fillRect(x * scale, y * scale, scale, scale);
         }
       }
     }
@@ -662,21 +769,39 @@ export default function SpriteEditorPage() {
   };
 
   const downloadPNG = () => {
-    const c = createExportCanvas();
+    const s = canvasSize * exportScale;
+    const c = createExportCanvas(exportScale);
     const link = document.createElement("a");
-    link.download = `sprite-${canvasSize}x${canvasSize}.png`;
+    link.download = `sprite-${s}x${s}.png`;
     link.href = c.toDataURL("image/png");
     link.click();
-    notify("PNG downloaded");
+    notify(`PNG ${s}x${s} downloaded`);
+  };
+
+  const downloadGIF = () => {
+    const c = createExportCanvas(exportScale);
+    const ctx = c.getContext("2d")!;
+    const imgData = ctx.getImageData(0, 0, c.width, c.height);
+    const gifBytes = encodeGIF(c.width, c.height, imgData);
+    const blob = new Blob([gifBytes], { type: "image/gif" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const s = canvasSize * exportScale;
+    link.download = `sprite-${s}x${s}.gif`;
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+    notify(`GIF ${s}x${s} downloaded`);
   };
 
   const copyToClipboard = async () => {
     try {
-      const c = createExportCanvas();
+      const c = createExportCanvas(exportScale);
       const blob = await new Promise<Blob | null>((resolve) => c.toBlob(resolve, "image/png"));
       if (!blob) throw new Error("Failed to create blob");
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      notify("Copied to clipboard");
+      const s = canvasSize * exportScale;
+      notify(`Copied ${s}x${s} to clipboard`);
     } catch {
       notify("Copy failed");
     }
@@ -1219,20 +1344,51 @@ export default function SpriteEditorPage() {
               <h3 className="mb-2 text-[10px] font-bold uppercase tracking-widest text-[#F59E0B]/70">
                 Export
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-[11px] text-[#6B7280]">Scale</label>
+                  <div className="grid grid-cols-4 gap-1">
+                    {EXPORT_SCALES.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setExportScale(s)}
+                        className={`rounded border py-1 text-[11px] font-medium transition-colors ${
+                          exportScale === s
+                            ? "border-[#F59E0B]/50 bg-[#F59E0B]/10 text-[#F59E0B]"
+                            : "border-[#2A2A2A] bg-[#1A1A1A] text-[#6B7280] hover:border-[#F59E0B]/30 hover:text-[#9CA3AF]"
+                        }`}
+                      >
+                        {s}x
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-center text-[10px] text-[#4A4A4A]">
+                    {canvasSize * exportScale} &times; {canvasSize * exportScale}px
+                  </p>
+                </div>
+
                 <button
                   onClick={downloadPNG}
                   className="flex w-full items-center justify-center gap-1.5 rounded border border-[#2A2A2A] bg-[#1A1A1A] py-1.5 text-xs text-[#D1D5DB] transition-colors hover:border-[#F59E0B]/30 hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
                 >
                   <Download size={13} />
-                  Download PNG
+                  Download {canvasSize * exportScale}x{canvasSize * exportScale} PNG
+                  {exportScale > 1 && <span className="text-[#6B7280]">({exportScale}x)</span>}
+                </button>
+                <button
+                  onClick={downloadGIF}
+                  className="flex w-full items-center justify-center gap-1.5 rounded border border-[#2A2A2A] bg-[#1A1A1A] py-1.5 text-xs text-[#D1D5DB] transition-colors hover:border-[#F59E0B]/30 hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
+                >
+                  <Download size={13} />
+                  Download {canvasSize * exportScale}x{canvasSize * exportScale} GIF
+                  {exportScale > 1 && <span className="text-[#6B7280]">({exportScale}x)</span>}
                 </button>
                 <button
                   onClick={copyToClipboard}
                   className="flex w-full items-center justify-center gap-1.5 rounded border border-[#2A2A2A] bg-[#1A1A1A] py-1.5 text-xs text-[#D1D5DB] transition-colors hover:border-[#F59E0B]/30 hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
                 >
                   <ClipboardCopy size={13} />
-                  Copy to clipboard
+                  Copy to Clipboard
                 </button>
               </div>
             </section>
