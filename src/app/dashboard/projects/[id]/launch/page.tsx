@@ -26,6 +26,8 @@ import {
   Copy,
   Mic,
   Film,
+  FileText,
+  Download,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -219,6 +221,9 @@ export default function LaunchChecklistPage() {
   const [aiTrailer, setAiTrailer] = useState<string>("");
   const [aiTrailerLoading, setAiTrailerLoading] = useState(false);
   const [aiTrailerOpen, setAiTrailerOpen] = useState(false);
+  const [aiPressKit, setAiPressKit] = useState<string>("");
+  const [aiPressKitLoading, setAiPressKitLoading] = useState(false);
+  const [aiPressKitOpen, setAiPressKitOpen] = useState(false);
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -392,6 +397,50 @@ export default function LaunchChecklistPage() {
     }
   }, [project, aiTrailerLoading, projectId]);
 
+  const generatePressKit = useCallback(async () => {
+    if (!project || aiPressKitLoading) return;
+    setAiPressKitLoading(true);
+    setAiPressKitOpen(true);
+    setAiPressKit("");
+    try {
+      const prompt = `Write a press kit for indie game '${project.name}'. Genre: ${project.genre || "unknown"}. Description: ${project.description || "An indie game in development."}. Include: 1) Factsheet (developer, release date, platform, price point, press contact), 2) Game description (3 paragraphs), 3) Key Features (5 bullets), 4) Developer story (1 paragraph about the team/solo dev journey). Format with bold headers.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 1024,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "Could not generate a press kit. Please try again.";
+      setAiPressKit(content);
+    } catch {
+      setAiPressKit("Failed to generate press kit. Check your API key and try again.");
+    } finally {
+      setAiPressKitLoading(false);
+    }
+  }, [project, aiPressKitLoading]);
+
+  const exportPressKitAsMarkdown = useCallback(() => {
+    if (!aiPressKit || !project) return;
+    const blob = new Blob([`# ${project.name} — Press Kit\n\n${aiPressKit}`], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.name.toLowerCase().replace(/\s+/g, "-")}-press-kit.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [aiPressKit, project]);
+
   const copyToClipboard = useCallback((text: string, sectionTitle: string) => {
     navigator.clipboard.writeText(text);
     setCopiedSection(sectionTitle);
@@ -554,6 +603,18 @@ export default function LaunchChecklistPage() {
                 <Film className="h-3.5 w-3.5" />
               )}
               {aiTrailerLoading ? "Generating..." : "AI Trailer Script"}
+            </button>
+            <button
+              onClick={generatePressKit}
+              disabled={aiPressKitLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#8B5CF6]/40 bg-[#8B5CF6]/10 px-3 py-2 text-sm font-medium text-[#8B5CF6] transition-colors hover:bg-[#8B5CF6]/20 disabled:opacity-50"
+            >
+              {aiPressKitLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FileText className="h-3.5 w-3.5" />
+              )}
+              {aiPressKitLoading ? "Generating..." : "AI Press Kit"}
             </button>
             <button
               onClick={handleReset}
@@ -779,6 +840,80 @@ export default function LaunchChecklistPage() {
                     <span key={i}>{part}</span>
                   )
                 )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AI Press Kit Panel */}
+      {aiPressKitOpen && (
+        <div className="rounded-xl border border-[#8B5CF6]/30 bg-[#1A1A1A] overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-[#8B5CF6]" />
+              <h3 className="text-sm font-semibold text-[#8B5CF6]">AI Press Kit</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              {!aiPressKitLoading && aiPressKit && (
+                <>
+                  <button
+                    onClick={exportPressKitAsMarkdown}
+                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#9CA3AF] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                  >
+                    <Download className="h-3 w-3" />
+                    Export .md
+                  </button>
+                  <button
+                    onClick={() => copyToClipboard(aiPressKit, "__presskit_all__")}
+                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#9CA3AF] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                  >
+                    {copiedSection === "__presskit_all__" ? (
+                      <Check className="h-3 w-3 text-[#10B981]" />
+                    ) : (
+                      <Copy className="h-3 w-3" />
+                    )}
+                    {copiedSection === "__presskit_all__" ? "Copied!" : "Copy All"}
+                  </button>
+                </>
+              )}
+              <button
+                onClick={() => setAiPressKitOpen(false)}
+                className="rounded-md p-1 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          <div className="px-5 py-4">
+            {aiPressKitLoading ? (
+              <div className="flex items-center gap-3 py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-[#8B5CF6]" />
+                <p className="text-sm text-[#9CA3AF]">Generating press kit for {project.name}...</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {parseMarketingSections(aiPressKit).map((section) => (
+                  <div key={section.title} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-[#8B5CF6]">{section.title}</h4>
+                      <button
+                        onClick={() => copyToClipboard(section.content, `pk_${section.title}`)}
+                        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                      >
+                        {copiedSection === `pk_${section.title}` ? (
+                          <Check className="h-3 w-3 text-[#10B981]" />
+                        ) : (
+                          <Copy className="h-3 w-3" />
+                        )}
+                        {copiedSection === `pk_${section.title}` ? "Copied!" : "Copy"}
+                      </button>
+                    </div>
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">
+                      {section.content}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

@@ -23,6 +23,7 @@ import {
   Flame,
   ArrowUpDown,
   Code2,
+  BookOpen,
 } from "lucide-react";
 import { getToolUsage } from "./layout";
 
@@ -170,6 +171,15 @@ const TOOLS: {
       "Generate game dev code snippets with AI for any language and engine. Save, search, and reuse.",
     color: "#22D3EE",
     category: "AI-Powered",
+  },
+  {
+    href: "/dashboard/tools/cheatsheet",
+    icon: BookOpen,
+    name: "Cheat Sheet",
+    description:
+      "Quick-reference formulas and patterns for math, physics, AI, UI, audio, and optimization.",
+    color: "#F59E0B",
+    category: "Game Design",
   },
 ];
 
