@@ -12,6 +12,7 @@ import {
   Type,
   Sparkles,
   Loader2,
+  BarChart3,
 } from "lucide-react";
 import {
   getDevlog,
@@ -237,6 +238,45 @@ export default function DevlogPage() {
     return count;
   }, [entries]);
 
+  const longestStreak = useMemo(() => {
+    if (entries.length === 0) return 0;
+    const uniqueDates = [...new Set(entries.map((e) => e.date))].sort();
+    let maxStreak = 1;
+    let current = 1;
+    for (let i = 1; i < uniqueDates.length; i++) {
+      const prev = new Date(uniqueDates[i - 1] + "T00:00:00");
+      const curr = new Date(uniqueDates[i] + "T00:00:00");
+      if ((curr.getTime() - prev.getTime()) / 86400000 === 1) {
+        current++;
+        maxStreak = Math.max(maxStreak, current);
+      } else {
+        current = 1;
+      }
+    }
+    return maxStreak;
+  }, [entries]);
+
+  const totalWords = useMemo(
+    () => entries.reduce((sum, e) => sum + wordCount(e.content), 0),
+    [entries]
+  );
+
+  const avgEntryLength = useMemo(
+    () => (entries.length > 0 ? Math.round(totalWords / entries.length) : 0),
+    [entries, totalWords]
+  );
+
+  const mostProductiveDay = useMemo(() => {
+    if (entries.length === 0) return "\u2014";
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const counts: Record<string, number> = {};
+    entries.forEach((e) => {
+      const day = days[new Date(e.date + "T00:00:00").getDay()];
+      counts[day] = (counts[day] || 0) + 1;
+    });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+  }, [entries]);
+
   const filtered = useMemo(() => {
     let result = [...entries];
     if (search) {
@@ -316,48 +356,30 @@ export default function DevlogPage() {
 
       {/* Stats Row */}
       {entries.length > 0 && (
-        <div className="flex flex-wrap gap-3">
-          {/* Streak */}
-          <div className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-2.5">
-            <Flame
-              className="h-4 w-4"
-              style={{ color: streak > 0 ? "#F59E0B" : "#6B7280" }}
-            />
-            <span className="text-sm font-semibold text-[#F5F5F5]">
-              {streak}
-            </span>
-            <span className="text-xs text-[#6B7280]">
-              day{streak !== 1 ? "s" : ""} streak
-            </span>
-          </div>
-
-          {/* Mood Summary */}
-          {MOOD_OPTIONS.filter((m) => moodSummary[m]).map((mood) => (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {[
+            { label: "Total Entries", value: String(entries.length), icon: BookOpen, color: "#F59E0B" },
+            { label: "Words Written", value: totalWords.toLocaleString(), icon: Type, color: "#3B82F6" },
+            { label: "Longest Streak", value: `${longestStreak}d`, icon: Flame, color: "#EF4444" },
+            { label: "Best Day", value: mostProductiveDay, icon: Calendar, color: "#10B981" },
+            { label: "Avg. Length", value: `${avgEntryLength}w`, icon: BarChart3, color: "#8B5CF6" },
+          ].map((stat) => (
             <div
-              key={mood}
-              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5"
+              key={stat.label}
+              className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4"
             >
-              <span className="text-sm">{getMoodEmoji(mood)}</span>
-              <span className="text-xs text-[#9CA3AF]">{MOOD_LABELS[mood]}</span>
-              <span
-                className="ml-1 rounded-full px-1.5 py-0.5 text-xs font-bold"
-                style={{
-                  backgroundColor: `${MOOD_COLORS[mood]}15`,
-                  color: MOOD_COLORS[mood],
-                }}
-              >
-                {moodSummary[mood]}
-              </span>
+              <div className="flex items-center gap-2 mb-2">
+                <div
+                  className="flex h-8 w-8 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: `${stat.color}15` }}
+                >
+                  <stat.icon className="h-4 w-4" style={{ color: stat.color }} />
+                </div>
+              </div>
+              <p className="text-xl font-bold text-[#F5F5F5]">{stat.value}</p>
+              <p className="mt-0.5 text-xs text-[#6B7280]">{stat.label}</p>
             </div>
           ))}
-
-          {/* Total Entries */}
-          <div className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-2.5">
-            <Type className="h-4 w-4 text-[#6B7280]" />
-            <span className="text-xs text-[#6B7280]">
-              {entries.reduce((sum, e) => sum + wordCount(e.content), 0).toLocaleString()} words total
-            </span>
-          </div>
         </div>
       )}
 

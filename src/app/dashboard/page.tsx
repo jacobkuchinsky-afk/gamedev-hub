@@ -29,6 +29,7 @@ import {
   getTasks,
   getBugs,
   getDevlog,
+  getSprints,
   getStatusColor,
   getPriorityColor,
   getSeverityColor,
@@ -46,13 +47,16 @@ interface Stats {
   devlogThisWeek: number;
 }
 
+type ActivityType = "task-created" | "task-completed" | "bug-filed" | "bug-fixed" | "devlog" | "sprint-started" | "sprint-completed";
+
 interface ActivityEvent {
   id: string;
-  type: "task" | "bug" | "devlog";
+  type: ActivityType;
   title: string;
+  description: string;
   projectName: string;
+  projectColor: string;
   timestamp: string;
-  meta: string;
 }
 
 interface ProjectHealth {
@@ -97,6 +101,7 @@ export default function DashboardPage() {
   const [welcomeDismissed, setWelcomeDismissed] = useState(true);
   const [lastBackup, setLastBackup] = useState<string | null>(null);
   const [backupLoaded, setBackupLoaded] = useState(false);
+  const [showAllActivity, setShowAllActivity] = useState(false);
 
   useEffect(() => {
     const dismissed = localStorage.getItem("gameforge_welcome_dismissed") === "true";
@@ -159,30 +164,45 @@ export default function DashboardPage() {
         .slice(0, 3)
     );
 
+    const sprints = getSprints();
+    const projectColorMap = Object.fromEntries(projects.map((p) => [p.id, p.coverColor || "#F59E0B"]));
+
     const events: ActivityEvent[] = [
       ...tasks.map((t) => ({
-        id: t.id,
-        type: "task" as const,
+        id: `t-${t.id}`,
+        type: (t.status === "done" ? "task-completed" : "task-created") as ActivityType,
         title: t.title,
+        description: t.status === "done" ? "Completed task" : `Created task \u00b7 ${t.priority} priority`,
         projectName: projectMap[t.projectId] || "Unknown",
+        projectColor: projectColorMap[t.projectId] || "#F59E0B",
         timestamp: t.created_at,
-        meta: `${t.priority} priority · ${t.status}`,
       })),
       ...bugs.map((b) => ({
-        id: b.id,
-        type: "bug" as const,
+        id: `b-${b.id}`,
+        type: (b.status === "closed" ? "bug-fixed" : "bug-filed") as ActivityType,
         title: b.title,
+        description: b.status === "closed" ? "Fixed bug" : `Filed bug \u00b7 ${b.severity}`,
         projectName: projectMap[b.projectId] || "Unknown",
+        projectColor: projectColorMap[b.projectId] || "#F59E0B",
         timestamp: b.created_at,
-        meta: `${b.severity} · ${b.status}`,
       })),
       ...devlog.map((d) => ({
-        id: d.id,
-        type: "devlog" as const,
+        id: `d-${d.id}`,
+        type: "devlog" as ActivityType,
         title: d.title,
+        description: `Wrote devlog \u00b7 ${getMoodEmoji(d.mood)} ${d.mood}`,
         projectName: projectMap[d.projectId] || "Unknown",
+        projectColor: projectColorMap[d.projectId] || "#F59E0B",
         timestamp: new Date(d.date).toISOString(),
-        meta: `${getMoodEmoji(d.mood)} ${d.mood}`,
+      })),
+      ...sprints.map((s) => ({
+        id: `s-${s.id}`,
+        type: (s.status === "completed" ? "sprint-completed" : "sprint-started") as ActivityType,
+        title: s.name,
+        description: s.status === "completed" ? "Completed sprint" : s.status === "active" ? "Started sprint" : "Planned sprint",
+        projectName: projectMap[s.projectId] || "Unknown",
+        projectColor: projectColorMap[s.projectId] || "#F59E0B",
+        timestamp: s.created_at,
       })),
     ];
 
@@ -190,7 +210,7 @@ export default function DashboardPage() {
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
-    setActivity(events.slice(0, 10));
+    setActivity(events);
 
     setProjectHealth(
       projects.map((p) => {
@@ -288,26 +308,14 @@ export default function DashboardPage() {
     released: "bg-[#22C55E]/10 text-[#22C55E]",
   };
 
-  const activityIcon = (type: ActivityEvent["type"]) => {
-    switch (type) {
-      case "task":
-        return <ListTodo className="h-4 w-4 text-[#3B82F6]" />;
-      case "bug":
-        return <AlertTriangle className="h-4 w-4 text-[#EF4444]" />;
-      case "devlog":
-        return <BookOpen className="h-4 w-4 text-[#10B981]" />;
-    }
-  };
-
-  const activityLabel = (type: ActivityEvent["type"]) => {
-    switch (type) {
-      case "task":
-        return "Task";
-      case "bug":
-        return "Bug";
-      case "devlog":
-        return "Devlog";
-    }
+  const activityConfig: Record<ActivityType, { icon: typeof ListTodo; color: string }> = {
+    "task-created": { icon: ListTodo, color: "#3B82F6" },
+    "task-completed": { icon: CheckCircle2, color: "#10B981" },
+    "bug-filed": { icon: Bug, color: "#EF4444" },
+    "bug-fixed": { icon: CheckCircle2, color: "#10B981" },
+    "devlog": { icon: PenLine, color: "#F59E0B" },
+    "sprint-started": { icon: Rocket, color: "#3B82F6" },
+    "sprint-completed": { icon: CheckCircle2, color: "#10B981" },
   };
 
   const onboardingCards = [
@@ -633,43 +641,66 @@ export default function DashboardPage() {
       <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
         <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-4">
           <h2 className="font-semibold">Activity Feed</h2>
-          <span className="text-xs text-[#6B7280]">Latest 10 events</span>
+          <span className="text-xs text-[#6B7280]">
+            {activity.length} event{activity.length !== 1 ? "s" : ""}
+          </span>
         </div>
         <div className="divide-y divide-[#2A2A2A]">
-          {activity.map((event) => (
-            <div
-              key={event.id}
-              className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-[#1F1F1F]"
-            >
-              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1A1A1A] border border-[#2A2A2A]">
-                {activityIcon(event.type)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-[#F59E0B]">
-                    {activityLabel(event.type)}
-                  </span>
-                  <span className="text-xs text-[#6B7280]">
-                    in {event.projectName}
-                  </span>
+          {(showAllActivity ? activity : activity.slice(0, 8)).map((event) => {
+            const config = activityConfig[event.type];
+            const Icon = config.icon;
+            return (
+              <div
+                key={event.id}
+                className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-[#1F1F1F]"
+              >
+                <div
+                  className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#2A2A2A]"
+                  style={{ backgroundColor: `${config.color}10` }}
+                >
+                  <Icon className="h-3.5 w-3.5" style={{ color: config.color }} />
                 </div>
-                <p className="mt-0.5 truncate text-sm font-medium">
-                  {event.title}
-                </p>
-                <p className="mt-0.5 text-xs text-[#6B7280]">{event.meta}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-medium" style={{ color: config.color }}>
+                      {event.description}
+                    </span>
+                    <span
+                      className="rounded-md px-1.5 py-0.5 text-[10px] font-medium"
+                      style={{
+                        backgroundColor: `${event.projectColor}15`,
+                        color: event.projectColor,
+                      }}
+                    >
+                      {event.projectName}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 truncate text-sm font-medium text-[#F5F5F5]">
+                    {event.title}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1 text-xs text-[#6B7280] mt-0.5">
+                  <Clock className="h-3 w-3" />
+                  {relativeTime(event.timestamp)}
+                </div>
               </div>
-              <div className="flex shrink-0 items-center gap-1 text-xs text-[#6B7280]">
-                <Clock className="h-3 w-3" />
-                {relativeTime(event.timestamp)}
-              </div>
-            </div>
-          ))}
+            );
+          })}
           {activity.length === 0 && (
             <p className="px-5 py-8 text-center text-sm text-[#6B7280]">
               No activity yet.
             </p>
           )}
         </div>
+        {activity.length > 8 && (
+          <button
+            onClick={() => setShowAllActivity(!showAllActivity)}
+            className="flex w-full items-center justify-center gap-1.5 border-t border-[#2A2A2A] py-3 text-xs font-medium text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
+          >
+            {showAllActivity ? "Show less" : `View all ${activity.length} events`}
+            <ChevronRight className={`h-3 w-3 transition-transform ${showAllActivity ? "-rotate-90" : "rotate-90"}`} />
+          </button>
+        )}
       </div>
 
       {/* Project Health */}
