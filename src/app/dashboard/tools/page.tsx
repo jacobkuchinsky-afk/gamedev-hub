@@ -11,6 +11,8 @@ import {
   MessageSquare,
   Lightbulb,
   ArrowRight,
+  Map,
+  Sparkles,
 } from "lucide-react";
 
 const TOOLS = [
@@ -69,6 +71,22 @@ const TOOLS = [
     description:
       "Generate unique game concepts with AI — get titles, mechanics, hooks, and full pitches instantly.",
     color: "#F59E0B",
+  },
+  {
+    href: "/dashboard/tools/tilemap",
+    icon: Map,
+    name: "Tilemap Painter",
+    description:
+      "Paint game levels tile by tile with terrain types, multiple layers, fill tool, and JSON export.",
+    color: "#22C55E",
+  },
+  {
+    href: "/dashboard/tools/effects",
+    icon: Sparkles,
+    name: "Screen Effects",
+    description:
+      "Preview screen shake, flash, fade, chromatic aberration, vignette, and CRT effects in real time.",
+    color: "#A855F7",
   },
 ];
 
