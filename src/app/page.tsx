@@ -15,6 +15,9 @@ import {
   ArrowRight,
   Sparkles,
   Zap,
+  Lightbulb,
+  Globe,
+  Map,
 } from "lucide-react";
 
 const features = [
@@ -48,6 +51,33 @@ const tools = [
   { icon: Swords, name: "Name Generator", desc: "Characters, places, items", color: "#EF4444" },
   { icon: Calculator, name: "Balance Calculator", desc: "Stat & economy tuning", color: "#3B82F6" },
   { icon: MessageSquare, name: "Dialogue Trees", desc: "Branching conversations", color: "#10B981" },
+];
+
+const aiFeatures = [
+  {
+    icon: Lightbulb,
+    title: "AI Idea Generator",
+    description: "Generate unique game concepts with full pitches, mechanics, and hooks",
+    color: "#FBBF24",
+  },
+  {
+    icon: Globe,
+    title: "AI World Builder",
+    description: "Create rich game worlds with locations, factions, and plot hooks",
+    color: "#34D399",
+  },
+  {
+    icon: Map,
+    title: "AI Level Designer",
+    description: "Describe a level and let AI generate the tilemap for you",
+    color: "#60A5FA",
+  },
+  {
+    icon: Sparkles,
+    title: "AI Code Helper",
+    description: "Auto-generate bug reports, task descriptions, GDD sections, and more",
+    color: "#A78BFA",
+  },
 ];
 
 export default function LandingPage() {
@@ -170,6 +200,51 @@ export default function LandingPage() {
                   <p className="text-sm text-[#9CA3AF]">{tool.desc}</p>
                 </div>
               </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* AI-Powered Section */}
+      <section className="relative border-t border-[#2A2A2A] py-24 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(245,158,11,0.06)_0%,_transparent_70%)]" />
+        <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-[#F59E0B]/[0.03] blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-[#F59E0B]/[0.03] blur-3xl" />
+
+        <div className="relative mx-auto max-w-6xl px-6">
+          <div className="mb-14 text-center">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#F59E0B]/20 bg-[#F59E0B]/[0.06] px-4 py-1.5 text-sm font-medium text-[#F59E0B]">
+              <Sparkles className="h-3.5 w-3.5" />
+              24 AI features built in
+            </div>
+            <h2 className="text-3xl font-bold md:text-4xl">
+              <span className="text-[#F59E0B]">AI-Powered</span> Game Development
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl text-[#9CA3AF]">
+              24 AI features built into every tool. Generate ideas, write documentation, design levels, analyze balance, and more.
+            </p>
+          </div>
+
+          <div className="grid gap-5 sm:grid-cols-2">
+            {aiFeatures.map((feat) => (
+              <div
+                key={feat.title}
+                className="group relative rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-7 transition-all hover:border-[#F59E0B]/25 hover:bg-[#1F1F1F]"
+              >
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-transparent via-transparent to-[#F59E0B]/[0.02] opacity-0 transition-opacity group-hover:opacity-100" />
+                <div className="relative flex gap-5">
+                  <div
+                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
+                    style={{ backgroundColor: `${feat.color}15` }}
+                  >
+                    <feat.icon className="h-6 w-6" style={{ color: feat.color }} />
+                  </div>
+                  <div>
+                    <h3 className="mb-1.5 text-lg font-bold">{feat.title}</h3>
+                    <p className="text-sm leading-relaxed text-[#9CA3AF]">{feat.description}</p>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         </div>
