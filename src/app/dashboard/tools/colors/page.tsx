@@ -180,6 +180,8 @@ export default function ColorsPage() {
   const [colorStoryLoading, setColorStoryLoading] = useState(false);
   const [aiHarmonyScore, setAiHarmonyScore] = useState("");
   const [aiHarmonyLoading, setAiHarmonyLoading] = useState(false);
+  const [aiAccessibility, setAiAccessibility] = useState("");
+  const [aiAccessibilityLoading, setAiAccessibilityLoading] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -357,6 +359,39 @@ export default function ColorsPage() {
       setAiHarmonyScore("Failed to check harmony. Try again.");
     } finally {
       setAiHarmonyLoading(false);
+    }
+  };
+
+  const aiCheckAccessibility = async () => {
+    if (aiAccessibilityLoading) return;
+    setAiAccessibilityLoading(true);
+    setAiAccessibility("");
+    try {
+      const hexList = colors.map((c) => c.hex).join(", ");
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{
+            role: "user",
+            content: `Check this game color palette for colorblind accessibility: ${hexList}. Would someone with protanopia, deuteranopia, or tritanopia have difficulty? Suggest which colors to adjust. 2 sentences max.`,
+          }],
+          stream: false,
+          max_tokens: 128,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setAiAccessibility(content || "No response. Try again.");
+    } catch {
+      setAiAccessibility("Failed to check accessibility. Try again.");
+    } finally {
+      setAiAccessibilityLoading(false);
     }
   };
 
@@ -642,6 +677,39 @@ export default function ColorsPage() {
               <div className="mt-3 flex items-center gap-3 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-4 py-4">
                 <Loader2 className="h-4 w-4 animate-spin text-[#F59E0B]" />
                 <span className="text-xs text-[#9CA3AF]">Evaluating harmony...</span>
+              </div>
+            )}
+          </div>
+
+          {/* AI Accessibility Check */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+              AI Accessibility
+            </h2>
+            <p className="mb-3 text-xs text-[#6B7280]">
+              Check if your palette is accessible for colorblind players.
+            </p>
+            <button
+              onClick={aiCheckAccessibility}
+              disabled={aiAccessibilityLoading}
+              className="flex items-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-4 py-2.5 text-sm font-bold text-[#F59E0B] transition-all hover:bg-[#F59E0B]/20 active:scale-[0.97] disabled:opacity-50"
+            >
+              {aiAccessibilityLoading ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Checking...</>
+              ) : (
+                <><Sparkles className="h-4 w-4" /> Check Accessibility</>
+              )}
+            </button>
+            {aiAccessibility && !aiAccessibilityLoading && (
+              <div className="mt-3 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-4">
+                <p className="text-sm leading-relaxed text-[#D1D5DB]">{aiAccessibility}</p>
+              </div>
+            )}
+            {aiAccessibilityLoading && (
+              <div className="mt-3 flex items-center gap-3 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-4 py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-[#F59E0B]" />
+                <span className="text-xs text-[#9CA3AF]">Checking colorblind accessibility...</span>
               </div>
             )}
           </div>

@@ -203,6 +203,8 @@ export default function ParticlesPage() {
 
   const [aiDescription, setAiDescription] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiName, setAiName] = useState("");
+  const [aiNameLoading, setAiNameLoading] = useState(false);
 
   const updateConfig = useCallback(
     (key: keyof ParticleConfig, value: number | string) => {
@@ -426,6 +428,37 @@ export default function ParticlesPage() {
       // silently fail
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  const handleAIName = async () => {
+    if (aiNameLoading) return;
+    setAiNameLoading(true);
+    setAiName("");
+    try {
+      const c = config;
+      const prompt = `Name this particle effect: shape=${c.shape}, speed=${c.speed}, color=${c.startColor} to ${c.endColor}, gravity=${c.gravity}. Give a game VFX-style name like 'fire_burst' or 'healing_aura'. Just the name.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 128,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setAiName(content || "unnamed_effect");
+    } catch {
+      setAiName("naming_failed");
+    } finally {
+      setAiNameLoading(false);
     }
   };
 
@@ -709,7 +742,25 @@ export default function ParticlesPage() {
               )}
               {copied ? "Copied" : "Copy"}
             </button>
+            <button
+              onClick={handleAIName}
+              disabled={aiNameLoading}
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-3 py-2 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20 disabled:opacity-50"
+              title="AI Name"
+            >
+              {aiNameLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+            </button>
           </div>
+          {aiName && (
+            <div className="flex items-center gap-2 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-2">
+              <Sparkles className="h-3 w-3 shrink-0 text-[#F59E0B]" />
+              <span className="font-mono text-xs text-[#F59E0B]">{aiName}</span>
+            </div>
+          )}
         </div>
       </div>
     </div>
