@@ -45,6 +45,15 @@ body {
   background: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans);
+  line-height: 1.6;
+}
+
+h1, h2, h3 {
+  letter-spacing: -0.025em;
+}
+
+label {
+  letter-spacing: 0.05em;
 }
 
 /* Ambient card shadow - depth for dark UI */
