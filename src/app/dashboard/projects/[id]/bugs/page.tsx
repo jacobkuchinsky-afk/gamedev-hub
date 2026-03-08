@@ -16,6 +16,9 @@ import {
   Loader2,
   MessageSquare,
   Send,
+  RotateCcw,
+  Clock,
+  ArrowRight,
 } from "lucide-react";
 import {
   getProject,
@@ -26,6 +29,7 @@ import {
   type Project,
   type Bug,
   type BugComment,
+  type BugStatusEntry,
 } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
 
@@ -38,19 +42,35 @@ const SEVERITIES: Bug["severity"][] = [
 ];
 const STATUSES: Bug["status"][] = [
   "open",
-  "confirmed",
-  "fixing",
-  "testing",
+  "investigating",
+  "in-progress",
+  "fixed",
   "closed",
 ];
 const PLATFORMS = ["All", "Windows", "macOS", "Linux", "Web", "Mobile"];
 
 const BUG_STATUS_STYLES: Record<Bug["status"], string> = {
   open: "bg-[#EF4444]/10 text-[#EF4444]",
-  confirmed: "bg-[#F97316]/10 text-[#F97316]",
-  fixing: "bg-[#F59E0B]/10 text-[#F59E0B]",
-  testing: "bg-[#8B5CF6]/10 text-[#8B5CF6]",
-  closed: "bg-[#10B981]/10 text-[#10B981]",
+  investigating: "bg-[#F59E0B]/10 text-[#F59E0B]",
+  "in-progress": "bg-[#3B82F6]/10 text-[#3B82F6]",
+  fixed: "bg-[#10B981]/10 text-[#10B981]",
+  closed: "bg-[#6B7280]/10 text-[#6B7280]",
+};
+
+const STATUS_LABELS: Record<Bug["status"], string> = {
+  open: "Open",
+  investigating: "Investigating",
+  "in-progress": "In Progress",
+  fixed: "Fixed",
+  closed: "Closed",
+};
+
+const NEXT_STATUS: Record<Bug["status"], { status: Bug["status"]; label: string } | null> = {
+  open: { status: "investigating", label: "Start Investigating" },
+  investigating: { status: "in-progress", label: "Start Fix" },
+  "in-progress": { status: "fixed", label: "Mark Fixed" },
+  fixed: { status: "closed", label: "Close Bug" },
+  closed: null,
 };
 
 function timeAgo(dateStr: string): string {
@@ -255,7 +275,13 @@ Be concise and professional. Fill in any missing sections based on the title and
   };
 
   const changeBugStatus = (bugId: string, newStatus: Bug["status"]) => {
-    updateBug(bugId, { status: newStatus });
+    const bug = bugs.find((b) => b.id === bugId);
+    const history: BugStatusEntry[] = bug?.statusHistory || [];
+    const entry: BugStatusEntry = {
+      status: newStatus,
+      timestamp: new Date().toISOString(),
+    };
+    updateBug(bugId, { status: newStatus, statusHistory: [...history, entry] });
     reload();
   };
 
@@ -375,7 +401,7 @@ Be concise and professional. Fill in any missing sections based on the title and
         <span
           className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${BUG_STATUS_STYLES[bug.status]}`}
         >
-          {bug.status}
+          {STATUS_LABELS[bug.status]}
         </span>
         {bug.comments && bug.comments.length > 0 && (
           <span className="flex shrink-0 items-center gap-1 rounded-md bg-[#2A2A2A] px-2 py-0.5 text-xs font-medium text-[#9CA3AF]">
@@ -471,22 +497,67 @@ Be concise and professional. Fill in any missing sections based on the title and
               </button>
             </div>
           </div>
-          <div>
-            <p className="text-xs font-medium text-[#6B7280] mb-2">
-              Change Status
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {STATUSES.filter((s) => s !== bug.status).map((s) => (
+          {/* Workflow Actions */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              {NEXT_STATUS[bug.status] && (
                 <button
-                  key={s}
-                  onClick={() => changeBugStatus(bug.id, s)}
-                  className={`rounded-lg border border-[#2A2A2A] px-3 py-1 text-xs font-medium transition-colors hover:border-[#F59E0B]/30 ${BUG_STATUS_STYLES[s]}`}
+                  onClick={() => changeBugStatus(bug.id, NEXT_STATUS[bug.status]!.status)}
+                  className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-xs font-semibold text-black transition-colors hover:bg-[#F59E0B]/90"
                 >
-                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                  <ArrowRight className="h-3.5 w-3.5" />
+                  {NEXT_STATUS[bug.status]!.label}
                 </button>
-              ))}
+              )}
+              {bug.status === "closed" && (
+                <button
+                  onClick={() => changeBugStatus(bug.id, "open")}
+                  className="flex items-center gap-1.5 rounded-lg border border-[#EF4444]/30 bg-[#EF4444]/10 px-4 py-2 text-xs font-semibold text-[#EF4444] transition-colors hover:bg-[#EF4444]/20"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reopen
+                </button>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-medium text-[#6B7280] mb-2">
+                Set Status
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {STATUSES.filter((s) => s !== bug.status).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => changeBugStatus(bug.id, s)}
+                    className={`rounded-lg border border-[#2A2A2A] px-3 py-1 text-xs font-medium transition-colors hover:border-[#F59E0B]/30 ${BUG_STATUS_STYLES[s]}`}
+                  >
+                    {STATUS_LABELS[s]}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
+          {/* Status History */}
+          {bug.statusHistory && bug.statusHistory.length > 0 && (
+            <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 space-y-2">
+              <div className="flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-[#F59E0B]" />
+                <span className="text-xs font-medium text-[#9CA3AF]">
+                  Status History
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {bug.statusHistory.map((entry, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#3A3A3A]" />
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${BUG_STATUS_STYLES[entry.status as Bug["status"]] || "bg-[#2A2A2A] text-[#9CA3AF]"}`}>
+                      {STATUS_LABELS[entry.status as Bug["status"]] || entry.status}
+                    </span>
+                    <span className="text-[10px] text-[#6B7280]">{timeAgo(entry.timestamp)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -637,7 +708,7 @@ Be concise and professional. Fill in any missing sections based on the title and
             <option value="all">All Statuses</option>
             {STATUSES.filter((s) => s !== "closed").map((s) => (
               <option key={s} value={s}>
-                {s.charAt(0).toUpperCase() + s.slice(1)}
+                {STATUS_LABELS[s]}
               </option>
             ))}
           </select>

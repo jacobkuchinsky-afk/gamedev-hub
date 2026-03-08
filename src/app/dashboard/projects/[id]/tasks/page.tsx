@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams } from "next/navigation";
 import {
   Plus,
@@ -27,6 +27,8 @@ import {
   Square,
   ArrowRight,
   Bug,
+  MoreVertical,
+  Copy,
 } from "lucide-react";
 import {
   getProject,
@@ -176,6 +178,11 @@ export default function TaskBoardPage() {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
   const [convertToBugId, setConvertToBugId] = useState<string | null>(null);
+
+  const [kebabMenuTask, setKebabMenuTask] = useState<string | null>(null);
+  const [kebabSubMenu, setKebabSubMenu] = useState<"priority" | "move" | null>(null);
+  const [kebabDeleteConfirm, setKebabDeleteConfirm] = useState(false);
+  const kebabRef = useRef<HTMLDivElement>(null);
 
   const handleConvertToBug = (taskId: string) => {
     const task = tasks.find((t) => t.id === taskId);
@@ -544,6 +551,51 @@ export default function TaskBoardPage() {
     setSelectedTasks(new Set());
     setBulkAssignInput("");
     setShowBulkAssign(false);
+    reload();
+  };
+
+  const closeKebab = useCallback(() => {
+    setKebabMenuTask(null);
+    setKebabSubMenu(null);
+    setKebabDeleteConfirm(false);
+  }, []);
+
+  useEffect(() => {
+    if (!kebabMenuTask) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (kebabRef.current && !kebabRef.current.contains(e.target as Node)) {
+        closeKebab();
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [kebabMenuTask, closeKebab]);
+
+  const duplicateTask = (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    addTask({
+      projectId: task.projectId,
+      title: `${task.title} (copy)`,
+      description: task.description,
+      status: task.status,
+      priority: task.priority,
+      sprint: task.sprint,
+      assignee: task.assignee,
+      tags: task.tags ? [...task.tags] : undefined,
+      blockedBy: undefined,
+      dueDate: task.dueDate,
+      estimatedHours: task.estimatedHours,
+      subtasks: task.subtasks?.map((st) => ({ ...st, id: `st_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, done: false })),
+    });
+    closeKebab();
+    reload();
+  };
+
+  const handleKebabDelete = (taskId: string) => {
+    deleteTask(taskId);
+    closeKebab();
+    setExpandedTask(null);
     reload();
   };
 
@@ -1785,6 +1837,205 @@ export default function TaskBoardPage() {
                               </div>
                             </div>
                           )}
+
+                          {/* Kebab Menu */}
+                          <div className="relative mt-0.5 shrink-0" ref={kebabMenuTask === task.id ? kebabRef : undefined}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (kebabMenuTask === task.id) {
+                                  closeKebab();
+                                } else {
+                                  setKebabMenuTask(task.id);
+                                  setKebabSubMenu(null);
+                                  setKebabDeleteConfirm(false);
+                                }
+                              }}
+                              className={`rounded p-1 transition-all ${
+                                kebabMenuTask === task.id
+                                  ? "bg-[#F59E0B]/10 text-[#F59E0B]"
+                                  : "text-[#6B7280] opacity-0 group-hover:opacity-100 hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
+                              }`}
+                            >
+                              <MoreVertical className="h-3.5 w-3.5" />
+                            </button>
+                            {kebabMenuTask === task.id && (
+                              <div className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] shadow-xl shadow-black/40">
+                                {kebabSubMenu === null && !kebabDeleteConfirm && (
+                                  <>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        startEdit(task);
+                                        setExpandedTask(task.id);
+                                        closeKebab();
+                                      }}
+                                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#D1D5DB] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5 text-[#9CA3AF]" />
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setKebabSubMenu("priority");
+                                      }}
+                                      className="flex w-full items-center justify-between px-3 py-2 text-left text-xs text-[#D1D5DB] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                                    >
+                                      <span className="flex items-center gap-2.5">
+                                        <Target className="h-3.5 w-3.5 text-[#9CA3AF]" />
+                                        Change Priority
+                                      </span>
+                                      <ChevronRight className="h-3 w-3 text-[#6B7280]" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setKebabSubMenu("move");
+                                      }}
+                                      className="flex w-full items-center justify-between px-3 py-2 text-left text-xs text-[#D1D5DB] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                                    >
+                                      <span className="flex items-center gap-2.5">
+                                        <ArrowRight className="h-3.5 w-3.5 text-[#9CA3AF]" />
+                                        Move to...
+                                      </span>
+                                      <ChevronRight className="h-3 w-3 text-[#6B7280]" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        duplicateTask(task.id);
+                                      }}
+                                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#D1D5DB] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                                    >
+                                      <Copy className="h-3.5 w-3.5 text-[#9CA3AF]" />
+                                      Duplicate
+                                    </button>
+                                    <div className="mx-2 my-0.5 border-t border-[#2A2A2A]" />
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setConvertToBugId(task.id);
+                                        setExpandedTask(task.id);
+                                        closeKebab();
+                                      }}
+                                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#D1D5DB] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                                    >
+                                      <Bug className="h-3.5 w-3.5 text-[#9CA3AF]" />
+                                      Convert to Bug
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setKebabDeleteConfirm(true);
+                                      }}
+                                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#EF4444] transition-colors hover:bg-[#EF4444]/10"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                      Delete
+                                    </button>
+                                  </>
+                                )}
+                                {kebabSubMenu === "priority" && (
+                                  <>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setKebabSubMenu(null);
+                                      }}
+                                      className="flex w-full items-center gap-2 border-b border-[#2A2A2A] px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] transition-colors hover:text-[#9CA3AF]"
+                                    >
+                                      <ChevronLeft className="h-3 w-3" />
+                                      Priority
+                                    </button>
+                                    {PRIORITIES.map((p) => (
+                                      <button
+                                        key={p}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          updateTask(task.id, { priority: p });
+                                          closeKebab();
+                                          reload();
+                                        }}
+                                        className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors hover:bg-[#2A2A2A] ${
+                                          task.priority === p ? "text-[#F59E0B] font-medium" : "text-[#D1D5DB]"
+                                        }`}
+                                      >
+                                        <span
+                                          className="h-2 w-2 rounded-full"
+                                          style={{ backgroundColor: getPriorityColor(p) }}
+                                        />
+                                        <span className="capitalize">{p}</span>
+                                        {task.priority === p && <Check className="ml-auto h-3 w-3" />}
+                                      </button>
+                                    ))}
+                                  </>
+                                )}
+                                {kebabSubMenu === "move" && (
+                                  <>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setKebabSubMenu(null);
+                                      }}
+                                      className="flex w-full items-center gap-2 border-b border-[#2A2A2A] px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] transition-colors hover:text-[#9CA3AF]"
+                                    >
+                                      <ChevronLeft className="h-3 w-3" />
+                                      Move to
+                                    </button>
+                                    {COLUMNS.map((c) => (
+                                      <button
+                                        key={c.key}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          moveTask(task.id, c.key);
+                                          closeKebab();
+                                        }}
+                                        className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors hover:bg-[#2A2A2A] ${
+                                          task.status === c.key ? "text-[#F59E0B] font-medium" : "text-[#D1D5DB]"
+                                        }`}
+                                      >
+                                        <span
+                                          className="h-2 w-2 rounded-full"
+                                          style={{ backgroundColor: c.color }}
+                                        />
+                                        {c.label}
+                                        {task.status === c.key && <Check className="ml-auto h-3 w-3" />}
+                                      </button>
+                                    ))}
+                                  </>
+                                )}
+                                {kebabDeleteConfirm && (
+                                  <div className="p-3 space-y-2">
+                                    <p className="text-xs font-medium text-[#EF4444]">Delete this task?</p>
+                                    <p className="text-[10px] leading-relaxed text-[#9CA3AF]">This action cannot be undone.</p>
+                                    <div className="flex gap-2 pt-1">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleKebabDelete(task.id);
+                                        }}
+                                        className="flex items-center gap-1 rounded-lg bg-[#EF4444] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#DC2626]"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                        Delete
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setKebabDeleteConfirm(false);
+                                          setKebabSubMenu(null);
+                                        }}
+                                        className="rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs text-[#9CA3AF] transition-colors hover:text-[#F5F5F5]"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
 

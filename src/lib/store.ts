@@ -58,18 +58,24 @@ export interface BugComment {
   timestamp: string;
 }
 
+export interface BugStatusEntry {
+  status: string;
+  timestamp: string;
+}
+
 export interface Bug {
   id: string;
   projectId: string;
   title: string;
   description: string;
   severity: "blocker" | "critical" | "major" | "minor" | "trivial";
-  status: "open" | "confirmed" | "fixing" | "testing" | "closed";
+  status: "open" | "investigating" | "in-progress" | "fixed" | "closed";
   platform: string;
   reproSteps: string;
   expectedBehavior?: string;
   actualBehavior?: string;
   comments?: BugComment[];
+  statusHistory?: BugStatusEntry[];
   created_at: string;
 }
 
@@ -302,7 +308,7 @@ const SEED_BUGS: Bug[] = [
     title: "Player clips through station walls",
     description: "When boosting into docking bay at high speed, collision detection fails and player passes through geometry.",
     severity: "critical",
-    status: "confirmed",
+    status: "investigating",
     platform: "Windows",
     reproSteps: "1. Approach station at max speed\n2. Boost into docking bay entrance\n3. Player passes through wall",
     expectedBehavior: "Player should collide with station walls and be stopped or deflected regardless of speed.",
@@ -319,7 +325,7 @@ const SEED_BUGS: Bug[] = [
     title: "Inventory duplication glitch",
     description: "Rapidly clicking transfer button duplicates items between ship cargo and station storage.",
     severity: "major",
-    status: "fixing",
+    status: "in-progress",
     platform: "All",
     reproSteps: "1. Open station storage\n2. Click transfer rapidly on any item\n3. Item count increases in both inventories",
     expectedBehavior: "Item should transfer from one inventory to the other with correct counts on both sides.",
