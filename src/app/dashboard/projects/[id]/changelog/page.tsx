@@ -39,6 +39,30 @@ const CHANGE_CATEGORIES: ChangeCategory[] = ["Added", "Changed", "Fixed", "Remov
 
 const SEMVER_REGEX = /^\d+\.\d+\.\d+(-[a-zA-Z0-9._-]+)?(\+[a-zA-Z0-9._-]+)?$/;
 
+function getNextVersion(lastVersion: string, type: VersionType): string {
+  const baseMatch = lastVersion.match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!baseMatch) return "0.1.0";
+  const major = parseInt(baseMatch[1]);
+  const minor = parseInt(baseMatch[2]);
+  const patch = parseInt(baseMatch[3]);
+  switch (type) {
+    case "Major":
+      return `${major + 1}.0.0`;
+    case "Minor":
+      return `${major}.${minor + 1}.0`;
+    case "Patch":
+      return `${major}.${minor}.${patch + 1}`;
+    case "Hotfix": {
+      const hotfixMatch = lastVersion.match(/-hotfix\.(\d+)$/);
+      if (hotfixMatch)
+        return `${major}.${minor}.${patch}-hotfix.${parseInt(hotfixMatch[1]) + 1}`;
+      return `${major}.${minor}.${patch}-hotfix.1`;
+    }
+    default:
+      return `${major}.${minor}.${patch + 1}`;
+  }
+}
+
 function formatVersionMarkdown(entry: ChangelogEntry): string {
   const lines: string[] = [];
   lines.push(`## [${entry.version}] — ${entry.date}`);
@@ -81,6 +105,31 @@ export default function ChangelogPage() {
   const [versionError, setVersionError] = useState("");
   const [formAttempted, setFormAttempted] = useState(false);
   const [aiWriting, setAiWriting] = useState(false);
+
+  function getLatestVersion(): string | null {
+    if (entries.length === 0) return null;
+    const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+    return sorted[0].version;
+  }
+
+  function suggestVersion(type: VersionType): string {
+    const latest = getLatestVersion();
+    if (!latest) return "0.1.0";
+    return getNextVersion(latest, type);
+  }
+
+  function openForm() {
+    const suggested = suggestVersion(formType);
+    setFormVersion(suggested);
+    setVersionError("");
+    setShowForm(true);
+  }
+
+  function handleTypeChange(type: VersionType) {
+    setFormType(type);
+    setFormVersion(suggestVersion(type));
+    setVersionError("");
+  }
 
   const handleAiWriteNotes = async () => {
     if (aiWriting) return;
@@ -326,7 +375,7 @@ Be specific and brief. Only include sections that have items.`;
               Export .md
             </button>
             <button
-              onClick={() => setShowForm(true)}
+              onClick={openForm}
               className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-[#0F0F0F] transition-colors hover:bg-[#F59E0B]/90"
             >
               <Plus className="h-4 w-4" />
@@ -380,10 +429,14 @@ Be specific and brief. Only include sections that have items.`;
                         : "border-[#2A2A2A]"
                     }`}
                   />
-                  {versionError && (
+                  {versionError ? (
                     <p className="mt-1 flex items-center gap-1 text-xs text-[#EF4444]">
                       <AlertCircle className="h-3 w-3" />
                       {versionError}
+                    </p>
+                  ) : getLatestVersion() && (
+                    <p className="mt-1 text-xs text-[#6B7280]">
+                      Next {formType.toLowerCase()} after <span className="font-mono text-[#F59E0B]/70">v{getLatestVersion()}</span>
                     </p>
                   )}
                 </div>
@@ -415,7 +468,7 @@ Be specific and brief. Only include sections that have items.`;
                   {VERSION_TYPES.map((t) => (
                     <button
                       key={t}
-                      onClick={() => setFormType(t)}
+                      onClick={() => handleTypeChange(t)}
                       className="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
                       style={{
                         backgroundColor: formType === t ? `${VERSION_TYPE_COLORS[t]}20` : "#0F0F0F",
@@ -481,7 +534,7 @@ Be specific and brief. Only include sections that have items.`;
           <FileText className="mx-auto h-10 w-10 text-[#6B7280]" />
           <p className="mt-3 text-sm text-[#6B7280]">No changelog entries yet</p>
           <button
-            onClick={() => setShowForm(true)}
+            onClick={openForm}
             className="mt-3 inline-flex items-center gap-1 text-xs text-[#F59E0B] hover:underline"
           >
             <Plus className="h-3 w-3" />

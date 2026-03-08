@@ -46,14 +46,17 @@ const STATUS_ORDER: Record<Project["status"], number> = {
 
 type SortKey = "name" | "status" | "updated";
 type ViewMode = "grid" | "list";
+type FilterMode = "active" | "all" | "archived";
 
 interface ProjectData {
   project: Project;
   taskCount: number;
   completedTaskCount: number;
   bugCount: number;
+  allBugCount: number;
   overdueBugCount: number;
   devlogCount: number;
+  loggedHours: number;
 }
 
 function relativeTime(dateStr: string): string {
@@ -77,7 +80,7 @@ export default function ProjectsPage() {
   const [view, setView] = useState<ViewMode>("grid");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("updated");
-  const [showArchived, setShowArchived] = useState(false);
+  const [filter, setFilter] = useState<FilterMode>("active");
 
   const loadData = useCallback(() => {
     const allProjects = getProjects();
@@ -90,12 +93,14 @@ export default function ProjectsPage() {
         taskCount: allTasks.length,
         completedTaskCount: allTasks.filter((t) => t.status === "done").length,
         bugCount: allBugs.filter((b) => b.status !== "closed").length,
+        allBugCount: allBugs.length,
         overdueBugCount: allBugs.filter(
           (b) =>
             b.status !== "closed" &&
             new Date(b.created_at).getTime() < sevenDaysAgo
         ).length,
         devlogCount: getDevlog(p.id).length,
+        loggedHours: allTasks.reduce((s, t) => s + (t.loggedHours || 0), 0),
       };
     });
     setProjectData(data);
@@ -110,16 +115,21 @@ export default function ProjectsPage() {
     loadData();
   };
 
-  const archivedCount = useMemo(
-    () => projectData.filter((d) => d.project.archived).length,
-    [projectData]
-  );
+  const stats = useMemo(() => ({
+    activeCount: projectData.filter((d) => !d.project.archived).length,
+    archivedCount: projectData.filter((d) => d.project.archived).length,
+    totalTasks: projectData.reduce((s, d) => s + d.taskCount, 0),
+    totalBugs: projectData.reduce((s, d) => s + d.allBugCount, 0),
+    totalLoggedHours: projectData.reduce((s, d) => s + d.loggedHours, 0),
+  }), [projectData]);
 
   const filtered = useMemo(() => {
     let items = [...projectData];
 
-    if (!showArchived) {
+    if (filter === "active") {
       items = items.filter((d) => !d.project.archived);
+    } else if (filter === "archived") {
+      items = items.filter((d) => d.project.archived);
     }
 
     if (search.trim()) {
@@ -146,7 +156,7 @@ export default function ProjectsPage() {
     });
 
     return items;
-  }, [projectData, search, sortBy, showArchived]);
+  }, [projectData, search, sortBy, filter]);
 
   const sortOptions: { key: SortKey; label: string }[] = [
     { key: "updated", label: "Last Updated" },
@@ -173,17 +183,60 @@ export default function ProjectsPage() {
         </Link>
       </div>
 
+      {/* Projects at a Glance */}
+      {projectData.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {([
+            { label: "Active", value: stats.activeCount, icon: FolderKanban, color: "#10B981" },
+            { label: "Archived", value: stats.archivedCount, icon: Archive, color: "#6B7280" },
+            { label: "Total Tasks", value: stats.totalTasks, icon: ListTodo, color: "#3B82F6" },
+            { label: "Total Bugs", value: stats.totalBugs, icon: Bug, color: "#EF4444" },
+            { label: "Time Logged", value: `${stats.totalLoggedHours % 1 === 0 ? stats.totalLoggedHours : stats.totalLoggedHours.toFixed(1)}h`, icon: Clock, color: "#F59E0B" },
+          ] as const).map((stat) => (
+            <div key={stat.label} className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+              <div className="flex items-center gap-2 text-xs text-[#6B7280]">
+                <stat.icon className="h-3.5 w-3.5" style={{ color: stat.color }} />
+                {stat.label}
+              </div>
+              <p className="mt-1 text-xl font-bold text-[#F5F5F5]">{stat.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Controls */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search projects..."
-            className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2 pl-9 pr-3 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none transition-colors focus:border-[#F59E0B]/40"
-          />
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 sm:min-w-[220px]">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search projects..."
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2 pl-9 pr-3 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none transition-colors focus:border-[#F59E0B]/40"
+            />
+          </div>
+          {/* Quick Filters */}
+          <div className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-1 py-1">
+            {([
+              { key: "active" as FilterMode, label: "Active Only" },
+              { key: "all" as FilterMode, label: "All" },
+              { key: "archived" as FilterMode, label: "Archived Only" },
+            ]).map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setFilter(opt.key)}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  filter === opt.key
+                    ? "bg-[#F59E0B]/10 text-[#F59E0B]"
+                    : "text-[#9CA3AF] hover:text-[#F5F5F5]"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {/* Sort */}
@@ -226,19 +279,6 @@ export default function ProjectsPage() {
               <List className="h-4 w-4" />
             </button>
           </div>
-          {archivedCount > 0 && (
-            <button
-              onClick={() => setShowArchived(!showArchived)}
-              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-medium transition-colors ${
-                showArchived
-                  ? "border-[#F59E0B]/40 bg-[#F59E0B]/10 text-[#F59E0B]"
-                  : "border-[#2A2A2A] text-[#6B7280] hover:text-[#9CA3AF]"
-              }`}
-            >
-              <Archive className="h-3.5 w-3.5" />
-              {showArchived ? "Hide" : "Show"} Archived ({archivedCount})
-            </button>
-          )}
         </div>
       </div>
 
