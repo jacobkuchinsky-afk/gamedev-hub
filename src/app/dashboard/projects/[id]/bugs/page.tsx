@@ -122,6 +122,12 @@ export default function BugTrackerPage() {
 
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
 
+  const similarBugs = useMemo(() => {
+    const q = newTitle.trim().toLowerCase();
+    if (q.length < 3) return [];
+    return bugs.filter((b) => b.title.toLowerCase().includes(q) || q.includes(b.title.toLowerCase())).slice(0, 3);
+  }, [newTitle, bugs]);
+
   const reload = useCallback(() => {
     setBugsState(getBugs(projectId));
   }, [projectId]);
@@ -752,6 +758,33 @@ Be concise and professional. Fill in any missing sections based on the title and
                 autoFocus
                 className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
               />
+              {similarBugs.length > 0 && (
+                <div className="space-y-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 p-3">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-[#F59E0B]">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Similar bug{similarBugs.length > 1 ? "s" : ""} found
+                  </div>
+                  {similarBugs.map((b) => (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => {
+                        setShowAddForm(false);
+                        setExpandedBug(b.id);
+                      }}
+                      className="flex w-full items-center justify-between rounded-md bg-[#0F0F0F]/60 px-2.5 py-1.5 text-left transition-colors hover:bg-[#1F1F1F]"
+                    >
+                      <span className="min-w-0 truncate text-xs text-[#D1D5DB]">&ldquo;{b.title}&rdquo;</span>
+                      <span className={`ml-2 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${BUG_STATUS_STYLES[b.status]}`}>
+                        {STATUS_LABELS[b.status]}
+                      </span>
+                    </button>
+                  ))}
+                  <p className="text-[10px] text-[#6B7280]">
+                    Click to view. You can still file this bug if it&apos;s different.
+                  </p>
+                </div>
+              )}
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <label className="text-xs text-[#6B7280]">Description</label>

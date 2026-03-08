@@ -29,6 +29,7 @@ import {
   Bug,
   MoreVertical,
   Copy,
+  FileText,
 } from "lucide-react";
 import {
   getProject,
@@ -100,6 +101,50 @@ const SPRINT_STATUS_STYLES: Record<
   completed: { bg: "bg-[#10B981]/10", text: "text-[#10B981]" },
   planned: { bg: "bg-[#9CA3AF]/10", text: "text-[#9CA3AF]" },
 };
+
+const TASK_TEMPLATES: {
+  name: string;
+  icon: string;
+  priority: Task["priority"];
+  tags: TaskTag[];
+  description: string;
+}[] = [
+  {
+    name: "Bug Fix",
+    icon: "bug",
+    priority: "high",
+    tags: ["Bugfix"],
+    description: "Bug: [describe the issue]\nSteps to reproduce:\n1. \n2. \n3. \nExpected: \nActual: ",
+  },
+  {
+    name: "New Feature",
+    icon: "feature",
+    priority: "medium",
+    tags: ["Feature"],
+    description: "Feature: [describe the feature]\n\nAcceptance criteria:\n- \n- \n- ",
+  },
+  {
+    name: "UI Polish",
+    icon: "ui",
+    priority: "low",
+    tags: ["UI", "Polish"],
+    description: "Polish: [describe what needs improving]\n\nBefore: \nAfter: ",
+  },
+  {
+    name: "Audio Work",
+    icon: "audio",
+    priority: "medium",
+    tags: ["Audio"],
+    description: "Audio task: [describe the audio work]\n\nAssets needed:\n- \n\nIntegration notes: ",
+  },
+  {
+    name: "Art Asset",
+    icon: "art",
+    priority: "medium",
+    tags: ["Art"],
+    description: "Art asset: [describe the asset]\n\nSpecifications:\n- Resolution: \n- Format: \n- Style reference: ",
+  },
+];
 
 const AVATAR_COLORS = ["#F59E0B", "#10B981", "#3B82F6", "#8B5CF6", "#EC4899", "#EF4444", "#06B6D4", "#F97316"];
 
@@ -178,6 +223,7 @@ export default function TaskBoardPage() {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
   const [convertToBugId, setConvertToBugId] = useState<string | null>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
 
   const [kebabMenuTask, setKebabMenuTask] = useState<string | null>(null);
   const [kebabSubMenu, setKebabSubMenu] = useState<"priority" | "move" | null>(null);
@@ -361,6 +407,13 @@ export default function TaskBoardPage() {
     }
   };
 
+  const applyTemplate = (tpl: typeof TASK_TEMPLATES[number]) => {
+    setNewPriority(tpl.priority);
+    setNewTags(tpl.tags);
+    setNewDesc(tpl.description);
+    setShowTemplates(false);
+  };
+
   const handleAddTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
@@ -383,6 +436,7 @@ export default function TaskBoardPage() {
     setNewBlockedBy("");
     setNewDueDate("");
     setShowAddForm(false);
+    setShowTemplates(false);
     reload();
   };
 
@@ -1397,6 +1451,44 @@ export default function TaskBoardPage() {
               >
                 <X className="h-5 w-5" />
               </button>
+            </div>
+            {/* Template Picker */}
+            <div className="relative mb-4">
+              <button
+                type="button"
+                onClick={() => setShowTemplates(!showTemplates)}
+                className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-1.5 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Use Template
+                <ChevronDown className={`h-3 w-3 transition-transform ${showTemplates ? "rotate-180" : ""}`} />
+              </button>
+              {showTemplates && (
+                <div className="mt-2 grid grid-cols-1 gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-2">
+                  {TASK_TEMPLATES.map((tpl) => (
+                    <button
+                      key={tpl.name}
+                      type="button"
+                      onClick={() => applyTemplate(tpl)}
+                      className="flex items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-[#1A1A1A]"
+                    >
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#F59E0B]/10 text-[#F59E0B]">
+                        {tpl.icon === "bug" && <Bug className="h-3.5 w-3.5" />}
+                        {tpl.icon === "feature" && <Sparkles className="h-3.5 w-3.5" />}
+                        {tpl.icon === "ui" && <Target className="h-3.5 w-3.5" />}
+                        {tpl.icon === "audio" && <TrendingUp className="h-3.5 w-3.5" />}
+                        {tpl.icon === "art" && <Pencil className="h-3.5 w-3.5" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-[#F5F5F5]">{tpl.name}</p>
+                        <p className="text-[10px] text-[#6B7280]">
+                          {tpl.priority} priority &middot; {tpl.tags.join(", ")}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <form onSubmit={handleAddTask} className="space-y-4">
               <input
