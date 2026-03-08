@@ -816,6 +816,27 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const getPageTitle = (): string => {
+    const exact = CMD_ITEMS.find((i) => i.href === pathname)?.label;
+    if (exact) return exact;
+    const parts = pathname.split("/").filter(Boolean);
+    if (parts[0] === "dashboard" && parts[1] === "projects") {
+      if (parts[2] === "new") return "New Project";
+      const projectId = parts[2];
+      const project = projects.find((p) => p.id === projectId);
+      const projectName = project?.name ?? "Project";
+      if (parts[3] === "tasks") return `${projectName} > Tasks`;
+      if (parts[3] === "bugs") return `${projectName} > Bugs`;
+      if (parts[3] === "devlog") return `${projectName} > Devlog`;
+      return projectName;
+    }
+    const last = parts[parts.length - 1];
+    if (last) {
+      return last.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    }
+    return "Dashboard";
+  };
+
   const handleLogout = () => {
     logout();
     router.push("/login");
@@ -1124,6 +1145,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
             <span className="hamburger-bar" />
             <span className="hamburger-bar" />
           </button>
+          <span className="hidden truncate text-sm text-[#9CA3AF] md:block">
+            {getPageTitle()}
+          </span>
           <div className="ml-auto flex items-center gap-2">
             <FocusTimer />
             <NotificationCenter />
