@@ -279,6 +279,22 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   animation: bounce-down 1s ease-in-out infinite;
 }
 
+@keyframes notificationPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.5; }
+}
+.notification-dot {
+  animation: notificationPulse 2s infinite;
+}
+
+@keyframes badgeBounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+.badge-bounce {
+  animation: badgeBounce 1s ease infinite;
+}
+
 @keyframes slideInRight {
   from { opacity: 0; transform: translateX(100%); }
   to { opacity: 1; transform: translateX(0); }
