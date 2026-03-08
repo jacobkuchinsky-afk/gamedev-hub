@@ -169,6 +169,29 @@ label {
   border: 1px solid rgba(42, 42, 42, 0.5);
 }
 
+/* Modal backdrop utility */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-content {
+  background: #1A1A1A;
+  border: 1px solid #2A2A2A;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 480px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  animation: slideUp 200ms ease;
+}
+
 /* Amber glow utility */
 .glow-amber {
   box-shadow: 0 0 20px rgba(245, 158, 11, 0.15);
