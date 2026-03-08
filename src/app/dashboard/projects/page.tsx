@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -26,6 +26,8 @@ import {
   Check,
   Loader2,
   Target,
+  Upload,
+  FileJson,
 } from "lucide-react";
 import {
   getProjects,
@@ -40,6 +42,13 @@ import {
   addTask,
   addBug,
   addSprint,
+  addDevlogEntry,
+  addChangelogEntry,
+  addMilestone,
+  addAsset,
+  addReference,
+  addPlaytestResponse,
+  addSession,
   type Project,
   type Sprint,
   type Milestone,
@@ -315,6 +324,78 @@ const PROJECT_TEMPLATES: ProjectTemplate[] = [
   },
 ];
 
+interface ImportProjectPreview {
+  raw: Record<string, unknown>;
+  projectName: string;
+  projectDescription: string;
+  engine: string;
+  genre: string;
+  status: string;
+  taskCount: number;
+  bugCount: number;
+  sprintCount: number;
+  devlogCount: number;
+  changelogCount: number;
+  milestoneCount: number;
+  assetCount: number;
+  referenceCount: number;
+  playtestCount: number;
+  sessionCount: number;
+  gddFound: boolean;
+}
+
+function parseExportForProject(data: Record<string, unknown>): ImportProjectPreview | null {
+  const resolve = (key: string): unknown[] => {
+    const val = data[key];
+    if (Array.isArray(val)) return val;
+    if (typeof val === "string") {
+      try { const p = JSON.parse(val); if (Array.isArray(p)) return p; } catch {}
+    }
+    return [];
+  };
+
+  const projects = resolve("gameforge_projects") as Project[];
+  if (projects.length === 0) return null;
+
+  const proj = projects[0];
+  const tasks = resolve("gameforge_tasks");
+  const bugs = resolve("gameforge_bugs");
+  const sprints = resolve("gameforge_sprints");
+  const devlog = resolve("gameforge_devlog");
+  const changelog = resolve("gameforge_changelog");
+  const milestones = resolve("gameforge_milestones");
+  const assets = resolve("gameforge_assets");
+  const references = resolve("gameforge_references");
+  const playtest = resolve("gameforge_playtest");
+  const sessions = resolve("gameforge_sessions");
+
+  const projId = proj.id;
+  const filterById = (arr: unknown[]) =>
+    arr.filter((item) => (item as Record<string, unknown>).projectId === projId);
+
+  const gddKey = Object.keys(data).find((k) => k.startsWith("gameforge_gdd_"));
+
+  return {
+    raw: data,
+    projectName: proj.name || "Unnamed Project",
+    projectDescription: proj.description || "",
+    engine: proj.engine || "Unknown",
+    genre: proj.genre || "Unknown",
+    status: proj.status || "concept",
+    taskCount: filterById(tasks).length,
+    bugCount: filterById(bugs).length,
+    sprintCount: filterById(sprints).length,
+    devlogCount: filterById(devlog).length,
+    changelogCount: filterById(changelog).length,
+    milestoneCount: filterById(milestones).length,
+    assetCount: filterById(assets).length,
+    referenceCount: filterById(references).length,
+    playtestCount: filterById(playtest).length,
+    sessionCount: filterById(sessions).length,
+    gddFound: !!gddKey,
+  };
+}
+
 export default function ProjectsPage() {
   const router = useRouter();
   const [projectData, setProjectData] = useState<ProjectData[]>([]);
@@ -328,6 +409,11 @@ export default function ProjectsPage() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [confirmTemplate, setConfirmTemplate] = useState<string | null>(null);
   const [importingTemplate, setImportingTemplate] = useState(false);
+  const [showImportProject, setShowImportProject] = useState(false);
+  const [importProjectPreview, setImportProjectPreview] = useState<ImportProjectPreview | null>(null);
+  const [importingProject, setImportingProject] = useState(false);
+  const [importProjectError, setImportProjectError] = useState<string | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   const loadData = useCallback(() => {
     const allProjects = getProjects();
@@ -434,6 +520,121 @@ export default function ProjectsPage() {
     router.push(`/dashboard/projects/${newProject.id}`);
   }, [loadData, router]);
 
+  const handleImportFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportProjectError(null);
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string);
+        if (typeof data !== "object" || data === null || Array.isArray(data)) {
+          setImportProjectError("Invalid format. Expected a JSON export file.");
+          return;
+        }
+
+        const preview = parseExportForProject(data);
+        if (!preview) {
+          setImportProjectError("No project data found in this file.");
+          return;
+        }
+
+        setImportProjectPreview(preview);
+        setShowImportProject(true);
+      } catch {
+        setImportProjectError("Failed to parse JSON. Make sure the file is valid.");
+      }
+    };
+    reader.readAsText(file);
+    if (importFileRef.current) importFileRef.current.value = "";
+  }, []);
+
+  const handleConfirmImportProject = useCallback(() => {
+    if (!importProjectPreview) return;
+    setImportingProject(true);
+
+    const data = importProjectPreview.raw;
+    const resolve = (key: string): unknown[] => {
+      const val = data[key];
+      if (Array.isArray(val)) return val;
+      if (typeof val === "string") {
+        try { const p = JSON.parse(val); if (Array.isArray(p)) return p; } catch {}
+      }
+      return [];
+    };
+
+    const projects = resolve("gameforge_projects") as Project[];
+    if (projects.length === 0) {
+      setImportingProject(false);
+      return;
+    }
+
+    const oldProject = projects[0];
+    const oldId = oldProject.id;
+
+    const { id: _id, created_at: _ca, updated_at: _ua, ...projectData } = oldProject;
+    const newProject = addProject(projectData);
+    const newId = newProject.id;
+
+    type AnyRecord = Record<string, unknown>;
+    const filterById = (arr: unknown[]) =>
+      (arr as AnyRecord[]).filter((item) => item.projectId === oldId);
+
+    for (const t of filterById(resolve("gameforge_tasks"))) {
+      const { id: _, created_at: __, projectId: ___, ...rest } = t;
+      addTask({ ...rest, projectId: newId } as Parameters<typeof addTask>[0]);
+    }
+    for (const b of filterById(resolve("gameforge_bugs"))) {
+      const { id: _, created_at: __, projectId: ___, ...rest } = b;
+      addBug({ ...rest, projectId: newId } as Parameters<typeof addBug>[0]);
+    }
+    for (const s of filterById(resolve("gameforge_sprints"))) {
+      const { id: _, created_at: __, projectId: ___, ...rest } = s;
+      addSprint({ ...rest, projectId: newId } as Parameters<typeof addSprint>[0]);
+    }
+    for (const d of filterById(resolve("gameforge_devlog"))) {
+      const { id: _, projectId: __, ...rest } = d;
+      addDevlogEntry({ ...rest, projectId: newId } as Parameters<typeof addDevlogEntry>[0]);
+    }
+    for (const c of filterById(resolve("gameforge_changelog"))) {
+      const { id: _, projectId: __, ...rest } = c;
+      addChangelogEntry({ ...rest, projectId: newId } as Parameters<typeof addChangelogEntry>[0]);
+    }
+    for (const m of filterById(resolve("gameforge_milestones"))) {
+      const { id: _, created_at: __, projectId: ___, ...rest } = m;
+      addMilestone({ ...rest, projectId: newId } as Parameters<typeof addMilestone>[0]);
+    }
+    for (const a of filterById(resolve("gameforge_assets"))) {
+      const { id: _, created_at: __, projectId: ___, ...rest } = a;
+      addAsset({ ...rest, projectId: newId } as Parameters<typeof addAsset>[0]);
+    }
+    for (const r of filterById(resolve("gameforge_references"))) {
+      const { id: _, created_at: __, projectId: ___, ...rest } = r;
+      addReference({ ...rest, projectId: newId } as Parameters<typeof addReference>[0]);
+    }
+    for (const p of filterById(resolve("gameforge_playtest"))) {
+      const { id: _, submitted_at: __, projectId: ___, ...rest } = p;
+      addPlaytestResponse({ ...rest, projectId: newId } as Parameters<typeof addPlaytestResponse>[0]);
+    }
+    for (const s of filterById(resolve("gameforge_sessions"))) {
+      const { id: _, created_at: __, projectId: ___, ...rest } = s;
+      addSession({ ...rest, projectId: newId } as Parameters<typeof addSession>[0]);
+    }
+
+    const gddKey = Object.keys(data).find((k) => k.startsWith("gameforge_gdd_"));
+    if (gddKey) {
+      const gddData = data[gddKey];
+      localStorage.setItem(`gameforge_gdd_${newId}`, typeof gddData === "string" ? gddData : JSON.stringify(gddData));
+    }
+
+    setImportingProject(false);
+    setShowImportProject(false);
+    setImportProjectPreview(null);
+    loadData();
+    router.push(`/dashboard/projects/${newId}`);
+  }, [importProjectPreview, loadData, router]);
+
   const compareA = projectData.find((d) => d.project.id === compareSelection[0]);
   const compareB = projectData.find((d) => d.project.id === compareSelection[1]);
 
@@ -513,6 +714,20 @@ export default function ProjectsPage() {
           >
             <GitCompare className="h-4 w-4" />
             {compareMode ? "Cancel" : "Compare"}
+          </button>
+          <input
+            ref={importFileRef}
+            type="file"
+            accept=".json"
+            onChange={handleImportFileSelect}
+            className="hidden"
+          />
+          <button
+            onClick={() => { setImportProjectError(null); importFileRef.current?.click(); }}
+            className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] px-4 py-2.5 text-sm font-medium text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+          >
+            <Upload className="h-4 w-4" />
+            Import Project
           </button>
           <button
             onClick={() => { setShowTemplates(true); setConfirmTemplate(null); }}
@@ -876,6 +1091,117 @@ export default function ProjectsPage() {
                 );
               })()
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Import Project Error */}
+      {importProjectError && (
+        <div className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-5 py-3 text-sm text-red-400">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          {importProjectError}
+          <button onClick={() => setImportProjectError(null)} className="ml-auto text-[#6B7280] hover:text-[#F5F5F5]">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Import Project Preview Modal */}
+      {showImportProject && importProjectPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4">
+          <div className="w-full max-w-lg rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
+              <div className="flex items-center gap-3">
+                <FileJson className="h-5 w-5 text-[#F59E0B]" />
+                <h2 className="text-lg font-semibold text-[#F5F5F5]">Import Project</h2>
+              </div>
+              <button
+                onClick={() => { setShowImportProject(false); setImportProjectPreview(null); }}
+                className="rounded-lg p-1.5 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-5 flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F59E0B]/10">
+                  <FolderKanban className="h-6 w-6 text-[#F59E0B]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-base font-semibold text-[#F5F5F5]">
+                    {importProjectPreview.projectName}
+                  </h3>
+                  <p className="mt-0.5 truncate text-sm text-[#9CA3AF]">
+                    {importProjectPreview.engine} &middot; {importProjectPreview.genre}
+                  </p>
+                </div>
+                <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium capitalize ${
+                  STATUS_BADGE_STYLES[importProjectPreview.status as Project["status"]] || "bg-[#9CA3AF]/10 text-[#9CA3AF]"
+                }`}>
+                  {importProjectPreview.status}
+                </span>
+              </div>
+
+              {importProjectPreview.projectDescription && (
+                <p className="mb-5 line-clamp-2 text-sm text-[#6B7280]">
+                  {importProjectPreview.projectDescription}
+                </p>
+              )}
+
+              <div className="mb-5 grid grid-cols-3 gap-2">
+                {([
+                  { label: "Tasks", count: importProjectPreview.taskCount, color: "#3B82F6" },
+                  { label: "Bugs", count: importProjectPreview.bugCount, color: "#EF4444" },
+                  { label: "Sprints", count: importProjectPreview.sprintCount, color: "#F59E0B" },
+                  { label: "Devlog", count: importProjectPreview.devlogCount, color: "#8B5CF6" },
+                  { label: "Changelog", count: importProjectPreview.changelogCount, color: "#10B981" },
+                  { label: "Milestones", count: importProjectPreview.milestoneCount, color: "#06B6D4" },
+                ] as const).filter(s => s.count > 0).map((stat) => (
+                  <div key={stat.label} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 text-center">
+                    <p className="text-lg font-bold text-[#F5F5F5]">{stat.count}</p>
+                    <p className="text-[10px]" style={{ color: stat.color }}>{stat.label}</p>
+                  </div>
+                ))}
+                {importProjectPreview.assetCount > 0 && (
+                  <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 text-center">
+                    <p className="text-lg font-bold text-[#F5F5F5]">{importProjectPreview.assetCount}</p>
+                    <p className="text-[10px] text-[#EC4899]">Assets</p>
+                  </div>
+                )}
+                {importProjectPreview.gddFound && (
+                  <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 text-center">
+                    <p className="text-lg font-bold text-[#F5F5F5]">1</p>
+                    <p className="text-[10px] text-[#F97316]">GDD</p>
+                  </div>
+                )}
+              </div>
+
+              <p className="mb-5 text-sm text-[#9CA3AF]">
+                This will create a new project called <span className="font-medium text-[#F5F5F5]">&ldquo;{importProjectPreview.projectName}&rdquo;</span> with all associated data. Existing projects are not affected.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setShowImportProject(false); setImportProjectPreview(null); }}
+                  className="flex-1 rounded-lg border border-[#2A2A2A] py-2.5 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F5F5F5]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmImportProject}
+                  disabled={importingProject}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#F59E0B] py-2.5 text-sm font-medium text-black transition-colors hover:bg-[#F59E0B]/90 disabled:opacity-50"
+                >
+                  {importingProject ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  {importingProject ? "Importing..." : "Import Project"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

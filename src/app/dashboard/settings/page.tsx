@@ -270,6 +270,28 @@ export default function SettingsPage() {
     console.log("[Settings] exported data, keys:", Object.keys(allKeys).length);
   }, []);
 
+  const handleExportSettings = useCallback(() => {
+    const settingsKeys = [
+      SETTINGS_KEY,
+      AI_PREFS_KEY,
+      ACCENT_COLOR_KEY,
+    ];
+    const exported: Record<string, unknown> = { _type: "gameforge_settings_export", _exportedAt: new Date().toISOString() };
+    for (const key of settingsKeys) {
+      const val = localStorage.getItem(key);
+      if (val !== null) {
+        try { exported[key] = JSON.parse(val); } catch { exported[key] = val; }
+      }
+    }
+    const blob = new Blob([JSON.stringify(exported, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `gameforge-settings-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
   const handleSelectAccent = useCallback((hex: string) => {
     setAccentColor(hex);
     localStorage.setItem(ACCENT_COLOR_KEY, hex);
@@ -838,6 +860,17 @@ export default function SettingsPage() {
             <div>
               <p className="text-sm font-medium text-[#F5F5F5]">Export All Data</p>
               <p className="text-xs text-[#6B7280]">Download a JSON backup of all your GameForge data</p>
+            </div>
+          </button>
+
+          <button
+            onClick={handleExportSettings}
+            className="flex w-full items-center gap-3 rounded-lg border border-[#2A2A2A] px-4 py-3 text-left transition-colors hover:border-[#F59E0B]/30 hover:bg-[#1F1F1F]"
+          >
+            <Download className="h-4 w-4 shrink-0 text-[#F59E0B]" />
+            <div>
+              <p className="text-sm font-medium text-[#F5F5F5]">Export Settings Only</p>
+              <p className="text-xs text-[#6B7280]">Download your preferences, theme, and AI settings to share across devices</p>
             </div>
           </button>
 
