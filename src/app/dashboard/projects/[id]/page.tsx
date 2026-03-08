@@ -1718,6 +1718,7 @@ export default function ProjectDetailPage() {
   const [newFeatureTitle, setNewFeatureTitle] = useState("");
   const [newFeatureDesc, setNewFeatureDesc] = useState("");
   const [featureSortBy, setFeatureSortBy] = useState<"votes" | "newest">("votes");
+  const [aiFeatureImproveLoading, setAiFeatureImproveLoading] = useState<string | null>(null);
 
   const [taglineLoading, setTaglineLoading] = useState(false);
   const [taglineOptions, setTaglineOptions] = useState<string[] | null>(null);
@@ -2695,6 +2696,27 @@ export default function ProjectDetailPage() {
     },
     [featureIdeas, projectId]
   );
+
+  const handleAiFeatureImprove = useCallback(async (id: string) => {
+    const idea = featureIdeas.find((f) => f.id === id);
+    if (!idea || aiFeatureImproveLoading) return;
+    setAiFeatureImproveLoading(id);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Improve this game feature idea title: '${idea.title}'. Make it clearer. Just the improved title.` }], stream: false, max_tokens: 64, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim().replace(/^["']|["']$/g, "");
+      if (content) {
+        const updated = featureIdeas.map((f) => f.id === id ? { ...f, title: content } : f);
+        setFeatureIdeas(updated);
+        saveFeatureIdeas(projectId, updated);
+      }
+    } catch { /* silently fail */ }
+    finally { setAiFeatureImproveLoading(null); }
+  }, [featureIdeas, aiFeatureImproveLoading, projectId]);
 
   const sortedFeatures = useMemo(() => {
     const sorted = [...featureIdeas];
@@ -3889,6 +3911,14 @@ export default function ProjectDetailPage() {
                         </span>
                       </div>
                     </div>
+                    <button
+                      onClick={() => handleAiFeatureImprove(idea.id)}
+                      disabled={aiFeatureImproveLoading === idea.id}
+                      className="shrink-0 rounded p-1 text-[#6B7280] opacity-0 transition-all group-hover:opacity-100 hover:text-[#F59E0B] disabled:opacity-40"
+                      title="AI Improve Title"
+                    >
+                      {aiFeatureImproveLoading === idea.id ? <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F59E0B]" /> : <Sparkles className="h-3.5 w-3.5" />}
+                    </button>
                     <button
                       onClick={() => deleteFeature(idea.id)}
                       className="shrink-0 rounded p-1 text-[#6B7280] opacity-0 transition-all group-hover:opacity-100 hover:text-[#EF4444]"

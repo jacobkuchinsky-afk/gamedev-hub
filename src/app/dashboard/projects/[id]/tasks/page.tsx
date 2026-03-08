@@ -249,6 +249,12 @@ export default function TaskBoardPage() {
   const [aiRetroLoading, setAiRetroLoading] = useState(false);
   const [aiSprintNameLoading, setAiSprintNameLoading] = useState(false);
   const [aiSprintGoalLoading, setAiSprintGoalLoading] = useState(false);
+  const [aiPriorityReasonLoading, setAiPriorityReasonLoading] = useState(false);
+  const [aiPriorityReason, setAiPriorityReason] = useState("");
+  const [aiSprintThemeLoading, setAiSprintThemeLoading] = useState(false);
+  const [aiSprintTheme, setAiSprintTheme] = useState("");
+  const [aiTaskSummaryLoading, setAiTaskSummaryLoading] = useState(false);
+  const [aiTaskSummary, setAiTaskSummary] = useState("");
 
   const [taskExportOpen, setTaskExportOpen] = useState(false);
   const taskExportRef = useRef<HTMLDivElement>(null);
@@ -528,6 +534,58 @@ export default function TaskBoardPage() {
         "Could not match any tasks from the recommendation. Try reviewing manually."
       );
     }
+  };
+
+  const handleAiPriorityReason = async () => {
+    if (!newTitle.trim() || aiPriorityReasonLoading) return;
+    setAiPriorityReasonLoading(true);
+    setAiPriorityReason("");
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Why should '${newTitle.trim()}' be ${newPriority} priority? 1 sentence.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      setAiPriorityReason((data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim());
+    } catch { /* silently fail */ }
+    finally { setAiPriorityReasonLoading(false); }
+  };
+
+  const handleAiSprintTheme = async () => {
+    if (!currentSprintInfo || aiSprintThemeLoading) return;
+    setAiSprintThemeLoading(true);
+    setAiSprintTheme("");
+    try {
+      const sprintTasks = tasks.filter((t) => t.sprint === currentSprintInfo.name);
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Suggest a focus theme for sprint '${currentSprintInfo.name}' with ${sprintTasks.length} tasks. 1 sentence.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      setAiSprintTheme((data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim());
+    } catch { /* silently fail */ }
+    finally { setAiSprintThemeLoading(false); }
+  };
+
+  const handleAiTaskSummary = async () => {
+    if (!currentSprintInfo || aiTaskSummaryLoading) return;
+    setAiTaskSummaryLoading(true);
+    setAiTaskSummary("");
+    try {
+      const sprintTasks = tasks.filter((t) => t.sprint === currentSprintInfo.name);
+      const done = sprintTasks.filter((t) => t.status === "done").length;
+      const names = sprintTasks.map((t) => t.title).join(", ");
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Summarize sprint with ${done}/${sprintTasks.length} tasks: ${names}. 1 sentence.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      setAiTaskSummary((data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim());
+    } catch { /* silently fail */ }
+    finally { setAiTaskSummaryLoading(false); }
   };
 
   const applyTemplate = (tpl: typeof TASK_TEMPLATES[number]) => {
@@ -1541,6 +1599,18 @@ export default function TaskBoardPage() {
                       </span>
                     )}
                   </div>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <button onClick={handleAiSprintTheme} disabled={aiSprintThemeLoading} className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed">
+                      {aiSprintThemeLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      Theme
+                    </button>
+                    <button onClick={handleAiTaskSummary} disabled={aiTaskSummaryLoading} className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#10B981] transition-all hover:bg-[#10B981]/10 disabled:opacity-40 disabled:cursor-not-allowed">
+                      {aiTaskSummaryLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      Summary
+                    </button>
+                  </div>
+                  {aiSprintTheme && <p className="mt-1 text-xs text-[#F59E0B]/80">{aiSprintTheme}</p>}
+                  {aiTaskSummary && <p className="mt-1 text-xs text-[#10B981]/80">{aiTaskSummary}</p>}
                   {currentSprintInfo.goal && (
                     <p className="mt-1.5 text-sm font-medium text-[#D1D5DB]">
                       &ldquo;{currentSprintInfo.goal}&rdquo;
@@ -2237,9 +2307,13 @@ export default function TaskBoardPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs text-[#6B7280]">
-                    Priority
-                  </label>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="text-xs text-[#6B7280]">Priority</label>
+                    <button type="button" onClick={handleAiPriorityReason} disabled={!newTitle.trim() || aiPriorityReasonLoading} className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed">
+                      {aiPriorityReasonLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      Why?
+                    </button>
+                  </div>
                   <select
                     value={newPriority}
                     onChange={(e) =>
@@ -2253,6 +2327,7 @@ export default function TaskBoardPage() {
                       </option>
                     ))}
                   </select>
+                  {aiPriorityReason && <p className="mt-1 text-[10px] leading-snug text-[#F59E0B]/80">{aiPriorityReason}</p>}
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-[#6B7280]">

@@ -107,6 +107,8 @@ export default function AssetPipelinePage() {
   const [aiFileName, setAiFileName] = useState("");
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [bumpNotes, setBumpNotes] = useState("");
+  const [aiStatusLoading, setAiStatusLoading] = useState(false);
+  const [aiStatusResult, setAiStatusResult] = useState("");
 
   const reload = useCallback(() => {
     console.log("[AssetPipelinePage] reloading assets for", projectId);
@@ -269,6 +271,25 @@ export default function AssetPipelinePage() {
       if (content) setNewNotes(content.trim());
     } catch { /* silently fail */ }
     finally { setAiDescLoading(false); }
+  };
+
+  const handleAiStatusSuggest = async () => {
+    if (!newName.trim() || aiStatusLoading) return;
+    setAiStatusLoading(true);
+    setAiStatusResult("");
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `What status should asset '${newName.trim()}' (${ASSET_TYPE_LABELS[newType]}) be: concept/in-progress/review/approved/integrated? Just the status.` }], stream: false, max_tokens: 32, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim().toLowerCase();
+      const statusMap: Record<string, AssetStatus> = { concept: "concept", "in-progress": "wip", wip: "wip", review: "review", approved: "approved", integrated: "integrated" };
+      const matched = Object.entries(statusMap).find(([k]) => content.includes(k));
+      setAiStatusResult(matched ? `Suggested: ${ASSET_STATUS_LABELS[matched[1]]}` : content);
+    } catch { /* silently fail */ }
+    finally { setAiStatusLoading(false); }
   };
 
   const moveAsset = (assetId: string, newStatus: AssetStatus) => {
@@ -948,19 +969,31 @@ export default function AssetPipelinePage() {
               </div>
               {newName.trim() && (
                 <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={handleAiSuggest}
-                    disabled={aiSuggestLoading}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 py-2 text-sm text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50"
-                  >
-                    {aiSuggestLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="h-4 w-4" />
-                    )}
-                    {aiSuggestLoading ? "Thinking..." : "AI Suggest Details"}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAiSuggest}
+                      disabled={aiSuggestLoading}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 py-2 text-sm text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50"
+                    >
+                      {aiSuggestLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
+                      {aiSuggestLoading ? "Thinking..." : "AI Details"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAiStatusSuggest}
+                      disabled={aiStatusLoading}
+                      className="flex items-center gap-1.5 rounded-lg border border-[#10B981]/30 bg-[#10B981]/5 px-3 py-2 text-sm text-[#10B981] transition-colors hover:bg-[#10B981]/10 disabled:opacity-50"
+                    >
+                      {aiStatusLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      Status
+                    </button>
+                  </div>
+                  {aiStatusResult && <p className="text-[10px] text-[#10B981]/80">{aiStatusResult}</p>}
                   {aiSuggestion && (
                     <div className="rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-4 py-3 text-xs leading-relaxed text-[#D1D5DB] whitespace-pre-line">
                       {aiSuggestion}

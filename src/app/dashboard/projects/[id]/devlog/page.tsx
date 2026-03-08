@@ -191,6 +191,7 @@ export default function DevlogPage() {
   const [aiRatingLoading, setAiRatingLoading] = useState<string | null>(null);
   const [monthlyRecap, setMonthlyRecap] = useState("");
   const [monthlyRecapLoading, setMonthlyRecapLoading] = useState(false);
+  const [aiMoodLoading, setAiMoodLoading] = useState(false);
 
   const reload = useCallback(() => {
     const e = getDevlog(projectId);
@@ -267,6 +268,24 @@ export default function DevlogPage() {
     updateDevlogEntry(entryId, { notes: [...existing, newNote] } as Partial<Omit<DevlogEntry, "id" | "projectId">>);
     setNoteInputs((p) => ({ ...p, [entryId]: "" }));
     reload();
+  };
+
+  const handleAiMoodSuggest = async () => {
+    if (!newContent.trim() || aiMoodLoading) return;
+    setAiMoodLoading(true);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Based on this devlog: '${newContent.trim().slice(0, 200)}'. What mood? (productive/struggling/breakthrough/grinding). Just the mood.` }], stream: false, max_tokens: 32, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim().toLowerCase();
+      const moodMap: Record<string, DevlogEntry["mood"]> = { productive: "productive", struggling: "struggling", breakthrough: "breakthrough", grinding: "grinding", creative: "breakthrough", stuck: "struggling", excited: "breakthrough" };
+      const matched = Object.entries(moodMap).find(([k]) => content.includes(k));
+      if (matched) setNewMood(matched[1]);
+    } catch { /* silently fail */ }
+    finally { setAiMoodLoading(false); }
   };
 
   const handleAiRating = async (entry: DevlogEntry) => {
@@ -518,9 +537,13 @@ export default function DevlogPage() {
 
               {/* Mood Selector */}
               <div>
-                <label className="mb-2 block text-xs text-[#6B7280]">
-                  How&apos;s it going?
-                </label>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-xs text-[#6B7280]">How&apos;s it going?</label>
+                  <button type="button" onClick={handleAiMoodSuggest} disabled={!newContent.trim() || aiMoodLoading} className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed">
+                    {aiMoodLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    AI Mood
+                  </button>
+                </div>
                 <div className="flex gap-2">
                   {MOODS.map((mood) => (
                     <button

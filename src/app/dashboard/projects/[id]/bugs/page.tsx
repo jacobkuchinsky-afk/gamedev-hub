@@ -134,6 +134,10 @@ export default function BugTrackerPage() {
   const [aiFixLoading, setAiFixLoading] = useState<string | null>(null);
   const [aiWorkarounds, setAiWorkarounds] = useState<Record<string, string>>({});
   const [aiWorkaroundLoading, setAiWorkaroundLoading] = useState<string | null>(null);
+  const [aiSeverityReasonLoading, setAiSeverityReasonLoading] = useState(false);
+  const [aiSeverityReason, setAiSeverityReason] = useState("");
+  const [aiBugSummaryLoading, setAiBugSummaryLoading] = useState(false);
+  const [aiBugSummary, setAiBugSummary] = useState("");
 
   const similarBugs = useMemo(() => {
     const q = newTitle.trim().toLowerCase();
@@ -372,6 +376,40 @@ Be concise and professional. Fill in any missing sections based on the title and
     } catch {
       setAiWorkarounds((prev) => ({ ...prev, [bug.id]: "Failed to get workaround." }));
     } finally { setAiWorkaroundLoading(null); }
+  };
+
+  const handleAiSeverityReason = async () => {
+    if (!newTitle.trim() || aiSeverityReasonLoading) return;
+    setAiSeverityReasonLoading(true);
+    setAiSeverityReason("");
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Why is '${newTitle.trim()}' a ${newSeverity} bug? 1 sentence.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      setAiSeverityReason((data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim());
+    } catch { /* silently fail */ }
+    finally { setAiSeverityReasonLoading(false); }
+  };
+
+  const handleAiBugSummary = async () => {
+    if (aiBugSummaryLoading) return;
+    setAiBugSummaryLoading(true);
+    setAiBugSummary("");
+    try {
+      const open = bugs.filter((b) => b.status !== "closed");
+      const titles = open.map((b) => b.title).join(", ");
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Summarize ${open.length} open bugs in 1 sentence: ${titles}.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      setAiBugSummary((data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim());
+    } catch { /* silently fail */ }
+    finally { setAiBugSummaryLoading(false); }
   };
 
   const changeBugStatus = (bugId: string, newStatus: Bug["status"]) => {
@@ -935,7 +973,20 @@ Be concise and professional. Fill in any missing sections based on the title and
               <span className="rounded-full bg-[#2A2A2A] px-3 py-1 text-xs font-medium text-[#6B7280]">
                 {bugs.length} total
               </span>
+              {openBugs.length > 0 && (
+                <button
+                  onClick={handleAiBugSummary}
+                  disabled={aiBugSummaryLoading}
+                  className="flex items-center gap-1 rounded-full border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-2.5 py-1 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {aiBugSummaryLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                  Summary
+                </button>
+              )}
             </div>
+            {aiBugSummary && (
+              <p className="mt-1 text-xs text-[#F59E0B]/80">{aiBugSummary}</p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -1326,19 +1377,30 @@ Be concise and professional. Fill in any missing sections based on the title and
                     <label className="block text-xs text-[#6B7280]">
                       Severity
                     </label>
-                    <button
-                      type="button"
-                      onClick={handleAiSuggestPriority}
-                      disabled={!newTitle.trim() || aiSuggestingPriority}
-                      className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {aiSuggestingPriority ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-3 w-3" />
-                      )}
-                      AI Suggest
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={handleAiSeverityReason}
+                        disabled={!newTitle.trim() || aiSeverityReasonLoading}
+                        className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#10B981] transition-all hover:bg-[#10B981]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {aiSeverityReasonLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                        Why?
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAiSuggestPriority}
+                        disabled={!newTitle.trim() || aiSuggestingPriority}
+                        className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {aiSuggestingPriority ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-3 w-3" />
+                        )}
+                        AI Suggest
+                      </button>
+                    </div>
                   </div>
                   <select
                     value={newSeverity}
@@ -1357,6 +1419,7 @@ Be concise and professional. Fill in any missing sections based on the title and
                       </option>
                     ))}
                   </select>
+                  {aiSeverityReason && <p className="mt-1 text-[10px] leading-snug text-[#10B981]/80">{aiSeverityReason}</p>}
                 </div>
                 <div>
                   <div className="mb-1 flex items-center justify-between">

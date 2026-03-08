@@ -93,6 +93,7 @@ export default function NewProjectPage() {
   const [nameSuggestions, setNameSuggestions] = useState<string[]>([]);
   const [suggestingNames, setSuggestingNames] = useState(false);
   const [aiDescLoading, setAiDescLoading] = useState(false);
+  const [aiColorLoading, setAiColorLoading] = useState(false);
 
   async function suggestNames() {
     setSuggestingNames(true);
@@ -161,6 +162,23 @@ export default function NewProjectPage() {
     } finally {
       setAiDescLoading(false);
     }
+  }
+
+  async function suggestColor() {
+    if (aiColorLoading) return;
+    setAiColorLoading(true);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Suggest a hex color for a ${genre} game project. Just the hex code.` }], stream: false, max_tokens: 32, temperature: 0.9 }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      const match = content.match(/#[0-9A-Fa-f]{6}/);
+      if (match) setCoverColor(match[0]);
+    } catch { /* silently fail */ }
+    finally { setAiColorLoading(false); }
   }
 
   function applyTemplate(tpl: QuickTemplate) {
@@ -368,9 +386,13 @@ export default function NewProjectPage() {
 
           {/* Cover Color */}
           <div>
-            <label className="block text-sm font-medium text-[#D1D5DB] mb-1.5">
-              Cover Color
-            </label>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="text-sm font-medium text-[#D1D5DB]">Cover Color</label>
+              <button type="button" onClick={suggestColor} disabled={aiColorLoading} className="flex items-center gap-1 rounded-md border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-2 py-0.5 text-[11px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-50">
+                {aiColorLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                AI Color
+              </button>
+            </div>
             <div className="flex flex-wrap gap-2">
               {COVER_COLORS.map((c) => (
                 <button

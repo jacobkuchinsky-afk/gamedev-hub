@@ -131,6 +131,8 @@ export default function ChangelogPage() {
   const [aiWriting, setAiWriting] = useState(false);
   const [aiCodename, setAiCodename] = useState(false);
   const [aiTitleLoading, setAiTitleLoading] = useState(false);
+  const [aiCategorySuggestion, setAiCategorySuggestion] = useState<Record<string, string>>({});
+  const [aiCategoryLoading, setAiCategoryLoading] = useState<string | null>(null);
 
   function getLatestVersion(): string | null {
     if (entries.length === 0) return null;
@@ -260,6 +262,25 @@ Be specific and brief. Only include sections that have items.`;
     } finally {
       setAiWriting(false);
     }
+  };
+
+  const handleAiCategorySuggest = async (cat: ChangeCategory) => {
+    const text = formChanges[cat]?.trim();
+    if (!text || aiCategoryLoading) return;
+    setAiCategoryLoading(cat);
+    try {
+      const lastLine = text.split("\n").filter(Boolean).pop() || text;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Is this change Added, Changed, Fixed, or Removed: '${lastLine}'. Just the category.` }], stream: false, max_tokens: 32, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setAiCategorySuggestion((prev) => ({ ...prev, [cat]: content }));
+      setTimeout(() => setAiCategorySuggestion((prev) => { const n = { ...prev }; delete n[cat]; return n; }), 4000);
+    } catch { /* silently fail */ }
+    finally { setAiCategoryLoading(null); }
   };
 
   const generateReleaseNotes = async () => {
@@ -1104,10 +1125,18 @@ Be specific and brief. Only include sections that have items.`;
                 </div>
                 {CHANGE_CATEGORIES.map((cat) => (
                   <div key={cat}>
-                    <label className="mb-1 flex items-center gap-2 text-xs font-medium" style={{ color: CHANGE_CATEGORY_COLORS[cat] }}>
-                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: CHANGE_CATEGORY_COLORS[cat] }} />
-                      {cat}
-                    </label>
+                    <div className="mb-1 flex items-center justify-between">
+                      <label className="flex items-center gap-2 text-xs font-medium" style={{ color: CHANGE_CATEGORY_COLORS[cat] }}>
+                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: CHANGE_CATEGORY_COLORS[cat] }} />
+                        {cat}
+                      </label>
+                      {formChanges[cat]?.trim() && (
+                        <button type="button" onClick={() => handleAiCategorySuggest(cat)} disabled={aiCategoryLoading === cat} className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed">
+                          {aiCategoryLoading === cat ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                          Check
+                        </button>
+                      )}
+                    </div>
                     <textarea
                       value={formChanges[cat]}
                       onChange={(e) => setFormChanges((prev) => ({ ...prev, [cat]: e.target.value }))}
@@ -1115,6 +1144,7 @@ Be specific and brief. Only include sections that have items.`;
                       rows={2}
                       className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
                     />
+                    {aiCategorySuggestion[cat] && <p className="mt-0.5 text-[10px] text-[#F59E0B]/80">AI says: {aiCategorySuggestion[cat]}</p>}
                   </div>
                 ))}
               </div>
