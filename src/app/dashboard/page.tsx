@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   FolderKanban,
   ListTodo,
@@ -26,6 +27,8 @@ import {
   Flame,
   CalendarDays,
   Target,
+  Loader2,
+  ExternalLink,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
 import {
@@ -38,6 +41,7 @@ import {
   getPriorityColor,
   getSeverityColor,
   getMoodEmoji,
+  addProject,
   type Project,
   type Task,
   type Bug as BugType,
@@ -84,6 +88,10 @@ interface FocusItem {
 
 const PRIORITY_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 const SEVERITY_RANK: Record<string, number> = { blocker: 0, critical: 1, major: 2, minor: 3, trivial: 4 };
+
+const QC_ENGINES = ["Unity", "Unreal", "Godot", "GameMaker", "Custom"];
+const QC_GENRES = ["RPG", "Platformer", "FPS", "Puzzle", "Strategy", "Simulation", "Horror", "Racing", "Other"];
+const QC_COLORS = ["#EF4444", "#F97316", "#F59E0B", "#10B981", "#3B82F6", "#6366F1", "#8B5CF6", "#EC4899"];
 
 const GAME_DEV_TIPS = [
   "Playtest early and often — don't wait until it's \"ready.\"",
@@ -178,6 +186,29 @@ function relativeTime(dateStr: string): string {
 
 export default function DashboardPage() {
   const { user } = useAuthContext();
+  const router = useRouter();
+
+  const [showQuickCreate, setShowQuickCreate] = useState(false);
+  const [qcName, setQcName] = useState("");
+  const [qcGenre, setQcGenre] = useState(QC_GENRES[0]);
+  const [qcEngine, setQcEngine] = useState(QC_ENGINES[0]);
+  const [qcCreating, setQcCreating] = useState(false);
+
+  const handleQuickCreate = useCallback(() => {
+    if (!qcName.trim()) return;
+    setQcCreating(true);
+    const color = QC_COLORS[Math.floor(Math.random() * QC_COLORS.length)];
+    const created = addProject({
+      name: qcName.trim(),
+      description: "",
+      engine: qcEngine,
+      genre: qcGenre,
+      status: "concept",
+      coverColor: color,
+    });
+    router.push(`/dashboard/projects/${created.id}`);
+  }, [qcName, qcEngine, qcGenre, router]);
+
   const [stats, setStats] = useState<Stats>({
     activeProjects: 0,
     openTasks: 0,
@@ -450,13 +481,6 @@ export default function DashboardPage() {
   ];
 
   const quickActions = [
-    {
-      label: "New Project",
-      desc: "Start a new game",
-      icon: Plus,
-      color: "#F59E0B",
-      href: "/dashboard/projects/new",
-    },
     {
       label: "Write Devlog",
       desc: "Log your progress",
@@ -805,6 +829,19 @@ export default function DashboardPage() {
 
       {/* Quick Actions */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <button
+          onClick={() => { setQcName(""); setQcGenre(QC_GENRES[0]); setQcEngine(QC_ENGINES[0]); setQcCreating(false); setShowQuickCreate(true); }}
+          className="group flex items-center gap-3 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 transition-all hover:border-[#F59E0B]/20 text-left"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+            <Plus className="h-4 w-4 text-[#F59E0B]" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">New Project</p>
+            <p className="text-xs text-[#6B7280]">Start a new game</p>
+          </div>
+          <ArrowRight className="ml-auto h-3.5 w-3.5 shrink-0 text-[#6B7280] transition-transform group-hover:translate-x-0.5" />
+        </button>
         {quickActions.map((action) => (
           <Link
             key={action.label}
@@ -828,6 +865,95 @@ export default function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      {/* Quick Create Modal */}
+      {showQuickCreate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowQuickCreate(false)} />
+          <div className="relative w-full max-w-md rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#F59E0B]/10">
+                  <Plus className="h-4 w-4 text-[#F59E0B]" />
+                </div>
+                <h2 className="text-lg font-bold">Quick Create</h2>
+              </div>
+              <button
+                onClick={() => setShowQuickCreate(false)}
+                className="rounded-lg p-1.5 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#9CA3AF]">Project Name</label>
+                <input
+                  type="text"
+                  value={qcName}
+                  onChange={(e) => setQcName(e.target.value)}
+                  placeholder="My Awesome Game"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === "Enter") handleQuickCreate(); }}
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3.5 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none transition-colors focus:border-[#F59E0B]/50"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-[#9CA3AF]">Genre</label>
+                  <select
+                    value={qcGenre}
+                    onChange={(e) => setQcGenre(e.target.value)}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] outline-none transition-colors focus:border-[#F59E0B]/50"
+                  >
+                    {QC_GENRES.map((g) => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-[#9CA3AF]">Engine</label>
+                  <select
+                    value={qcEngine}
+                    onChange={(e) => setQcEngine(e.target.value)}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] outline-none transition-colors focus:border-[#F59E0B]/50"
+                  >
+                    {QC_ENGINES.map((e) => (
+                      <option key={e} value={e}>{e}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-between">
+              <Link
+                href="/dashboard/projects/new"
+                className="flex items-center gap-1.5 text-xs text-[#6B7280] transition-colors hover:text-[#F59E0B]"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Full form
+              </Link>
+              <button
+                onClick={handleQuickCreate}
+                disabled={!qcName.trim() || qcCreating}
+                className="flex items-center gap-2 rounded-lg bg-[#F59E0B] px-5 py-2.5 text-sm font-semibold text-[#0F0F0F] transition-all hover:bg-[#F59E0B]/90 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {qcCreating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create Project"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Your Projects */}
       <div>

@@ -20,7 +20,10 @@ import {
   Monitor,
   Star,
   Globe,
+  Flame,
+  ArrowUpDown,
 } from "lucide-react";
+import { getToolUsage } from "./layout";
 
 type Category = "All" | "Art & Design" | "Audio" | "Game Design" | "AI-Powered" | "Level Design" | "Animation";
 
@@ -177,13 +180,18 @@ function saveFavorites(favs: string[]) {
   localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs));
 }
 
+type SortMode = "default" | "most-used";
+
 export default function ToolsPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<Category>("All");
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [sortMode, setSortMode] = useState<SortMode>("default");
+  const [toolUsage, setToolUsage] = useState<Record<string, number>>({});
 
   useEffect(() => {
     setFavorites(getFavorites());
+    setToolUsage(getToolUsage());
   }, []);
 
   const toggleFavorite = useCallback((href: string, e: React.MouseEvent) => {
@@ -203,8 +211,16 @@ export default function ToolsPage() {
     [favorites]
   );
 
+  const popularHrefs = useMemo(() => {
+    const sorted = TOOLS
+      .map((t) => ({ href: t.href, count: toolUsage[t.href] || 0 }))
+      .filter((t) => t.count > 0)
+      .sort((a, b) => b.count - a.count);
+    return new Set(sorted.slice(0, 3).map((t) => t.href));
+  }, [toolUsage]);
+
   const filtered = useMemo(() => {
-    return TOOLS.filter((t) => {
+    const result = TOOLS.filter((t) => {
       const matchesCategory = category === "All" || t.category === category;
       const matchesSearch =
         !search ||
@@ -212,7 +228,11 @@ export default function ToolsPage() {
         t.description.toLowerCase().includes(search.toLowerCase());
       return matchesCategory && matchesSearch;
     });
-  }, [search, category]);
+    if (sortMode === "most-used") {
+      result.sort((a, b) => (toolUsage[b.href] || 0) - (toolUsage[a.href] || 0));
+    }
+    return result;
+  }, [search, category, sortMode, toolUsage]);
 
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { All: TOOLS.length };
@@ -278,7 +298,7 @@ export default function ToolsPage() {
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {CATEGORIES.map((cat) => (
           <button
             key={cat}
@@ -293,6 +313,19 @@ export default function ToolsPage() {
             <span className="ml-1.5 text-[10px] opacity-60">{categoryCounts[cat] || 0}</span>
           </button>
         ))}
+        <div className="ml-auto">
+          <button
+            onClick={() => setSortMode((prev) => (prev === "default" ? "most-used" : "default"))}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              sortMode === "most-used"
+                ? "bg-[#F59E0B]/15 text-[#F59E0B]"
+                : "bg-[#1A1A1A] text-[#9CA3AF] hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+            }`}
+          >
+            <ArrowUpDown className="h-3 w-3" />
+            Most Used
+          </button>
+        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -306,6 +339,8 @@ export default function ToolsPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((tool) => {
             const isFav = favorites.includes(tool.href);
+            const usageCount = toolUsage[tool.href] || 0;
+            const isPopular = popularHrefs.has(tool.href);
             return (
               <Link
                 key={tool.href}
@@ -333,9 +368,17 @@ export default function ToolsPage() {
                       style={{ color: tool.color }}
                     />
                   </div>
-                  <span className="rounded-md bg-[#0F0F0F] px-2 py-0.5 text-[10px] font-medium text-[#6B7280]">
-                    {tool.category}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {isPopular && (
+                      <span className="flex items-center gap-1 rounded-md bg-[#F59E0B]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#F59E0B]">
+                        <Flame className="h-2.5 w-2.5" />
+                        Popular
+                      </span>
+                    )}
+                    <span className="rounded-md bg-[#0F0F0F] px-2 py-0.5 text-[10px] font-medium text-[#6B7280]">
+                      {tool.category}
+                    </span>
+                  </div>
                 </div>
                 <h3 className="mt-4 font-semibold text-[#F5F5F5] group-hover:text-[#F59E0B] transition-colors">
                   {tool.name}
@@ -343,9 +386,16 @@ export default function ToolsPage() {
                 <p className="mt-2 text-sm leading-relaxed text-[#9CA3AF]">
                   {tool.description}
                 </p>
-                <div className="mt-4 flex items-center gap-1.5 text-sm font-medium text-[#F59E0B] opacity-0 transition-opacity group-hover:opacity-100">
-                  Open
-                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                <div className="mt-4 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-sm font-medium text-[#F59E0B] opacity-0 transition-opacity group-hover:opacity-100">
+                    Open
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                  {usageCount > 0 && (
+                    <span className="text-[10px] text-[#6B7280]">
+                      Used {usageCount} {usageCount === 1 ? "time" : "times"}
+                    </span>
+                  )}
                 </div>
               </Link>
             );
