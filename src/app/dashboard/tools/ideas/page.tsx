@@ -12,6 +12,9 @@ import {
   Loader2,
   ChevronDown,
   Bookmark,
+  Star,
+  Wand2,
+  Clock,
 } from "lucide-react";
 
 const GENRES = [
@@ -59,9 +62,18 @@ interface GameIdea {
   raw: string;
   genre: string;
   timestamp: string;
+  rating?: number;
+}
+
+interface IdeaHistoryEntry {
+  id: string;
+  raw: string;
+  genre: string;
+  timestamp: string;
 }
 
 const SAVED_IDEAS_KEY = "gameforge_saved_ideas";
+const HISTORY_KEY = "gameforge_idea_history";
 
 function getSavedIdeas(): GameIdea[] {
   if (typeof window === "undefined") return [];
@@ -71,6 +83,16 @@ function getSavedIdeas(): GameIdea[] {
 
 function saveIdeas(ideas: GameIdea[]) {
   localStorage.setItem(SAVED_IDEAS_KEY, JSON.stringify(ideas));
+}
+
+function getHistory(): IdeaHistoryEntry[] {
+  if (typeof window === "undefined") return [];
+  const raw = localStorage.getItem(HISTORY_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+function saveHistory(entries: IdeaHistoryEntry[]) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(entries.slice(0, 5)));
 }
 
 const FALLBACK_TITLES = [
@@ -130,35 +152,52 @@ export default function IdeasPage() {
   const [savedIdeas, setSavedIdeas] = useState<GameIdea[]>([]);
   const [showSaved, setShowSaved] = useState(false);
   const [error, setError] = useState("");
+  const [currentRating, setCurrentRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [refining, setRefining] = useState(false);
+  const [history, setHistory] = useState<IdeaHistoryEntry[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
-    console.log("[IdeasPage] rendered");
     setSavedIdeas(getSavedIdeas());
+    setHistory(getHistory());
   }, []);
+
+  const addToHistory = (content: string) => {
+    const entry: IdeaHistoryEntry = {
+      id: `hist_${Date.now()}`,
+      raw: content,
+      genre: genre || "Mixed",
+      timestamp: new Date().toISOString(),
+    };
+    const updated = [entry, ...history].slice(0, 5);
+    setHistory(updated);
+    saveHistory(updated);
+  };
 
   const handleGenerate = async () => {
     setLoading(true);
     setError("");
     setResult("");
+    setCurrentRating(0);
 
     const prompt = `Generate a unique game idea. Genre: ${genre || "Any"}. Setting/Theme: ${theme || "Surprise me"}. Target: ${audience || "Everyone"}. Platform: ${platform || "Any"}. Keywords: ${keywords || "None"}. Include: game title, elevator pitch (2 sentences), core mechanic, unique hook, target playtime, and 3 key features. Format with markdown bold headers for each section.`;
 
     try {
-      console.log("[IdeasPage] calling Chutes AI");
       const response = await fetch(
         "https://llm.chutes.ai/v1/chat/completions",
         {
           method: "POST",
           headers: {
             Authorization:
-              "Bearer " + process.env.NEXT_PUBLIC_CHUTES_API_TOKEN,
+              "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
             model: "moonshotai/Kimi-K2.5-TEE",
             messages: [{ role: "user", content: prompt }],
             stream: false,
-            max_tokens: 512,
+            max_tokens: 1024,
             temperature: 0.8,
           }),
         }
@@ -169,17 +208,62 @@ export default function IdeasPage() {
         || data.choices?.[0]?.message?.reasoning;
 
       if (content) {
-        console.log("[IdeasPage] AI response received");
         setResult(content);
+        addToHistory(content);
       } else {
         throw new Error("No content in response");
       }
-    } catch (err) {
-      console.log("[IdeasPage] AI failed, using fallback generator");
+    } catch {
       setError("AI unavailable — generated a random idea instead!");
-      setResult(generateFallbackIdea(genre, theme));
+      const fallback = generateFallbackIdea(genre, theme);
+      setResult(fallback);
+      addToHistory(fallback);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefine = async () => {
+    if (!result) return;
+    setRefining(true);
+    setError("");
+
+    const prompt = `Here is a game idea:\n\n${result}\n\nImprove and refine this game idea. Make the concept more unique, the mechanics more interesting, and add more detail. Keep the same format with markdown bold headers. Make it feel like a real pitch document.`;
+
+    try {
+      const response = await fetch(
+        "https://llm.chutes.ai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization:
+              "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "moonshotai/Kimi-K2.5-TEE",
+            messages: [{ role: "user", content: prompt }],
+            stream: false,
+            max_tokens: 1024,
+            temperature: 0.7,
+          }),
+        }
+      );
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content
+        || data.choices?.[0]?.message?.reasoning;
+
+      if (content) {
+        setResult(content);
+        addToHistory(content);
+      } else {
+        throw new Error("No content in response");
+      }
+    } catch {
+      setError("AI unavailable — could not refine the idea");
+    } finally {
+      setRefining(false);
     }
   };
 
@@ -190,18 +274,17 @@ export default function IdeasPage() {
       raw: result,
       genre: genre || "Mixed",
       timestamp: new Date().toISOString(),
+      rating: currentRating || undefined,
     };
     const updated = [idea, ...savedIdeas];
     saveIdeas(updated);
     setSavedIdeas(updated);
-    console.log("[IdeasPage] saved idea:", idea.id);
   };
 
   const handleDelete = (id: string) => {
     const updated = savedIdeas.filter((i) => i.id !== id);
     saveIdeas(updated);
     setSavedIdeas(updated);
-    console.log("[IdeasPage] deleted idea:", id);
   };
 
   const renderMarkdown = (text: string) => {
@@ -389,6 +472,13 @@ export default function IdeasPage() {
                       <span className="text-xs text-[#6B7280]">
                         {new Date(idea.timestamp).toLocaleDateString()}
                       </span>
+                      {idea.rating && (
+                        <div className="flex items-center gap-0.5">
+                          {Array.from({ length: idea.rating }).map((_, i) => (
+                            <Star key={i} className="h-3 w-3 fill-[#F59E0B] text-[#F59E0B]" />
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <button
                       onClick={() => handleDelete(idea.id)}
@@ -406,6 +496,58 @@ export default function IdeasPage() {
                 </div>
               ))}
             </div>
+          )}
+
+          {/* History Section */}
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex w-full items-center justify-between rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-5 py-3.5 text-sm transition-colors hover:border-[#F59E0B]/30"
+          >
+            <div className="flex items-center gap-2 text-[#9CA3AF]">
+              <Clock className="h-4 w-4" />
+              Recent History
+              <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-xs">
+                {history.length}
+              </span>
+            </div>
+            <ChevronDown
+              className={`h-4 w-4 text-[#6B7280] transition-transform ${
+                showHistory ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+
+          {showHistory && history.length > 0 && (
+            <div className="space-y-2">
+              {history.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Clock className="h-3 w-3 text-[#6B7280]" />
+                    <span className="text-[10px] text-[#6B7280]">
+                      {new Date(entry.timestamp).toLocaleString()}
+                    </span>
+                    <span className="rounded-md bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] text-[#9CA3AF]">
+                      {entry.genre}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => { setResult(entry.raw); setCurrentRating(0); }}
+                    className="text-left text-xs text-[#9CA3AF] line-clamp-3 hover:text-[#D1D5DB] transition-colors"
+                  >
+                    {entry.raw.slice(0, 150)}...
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {showHistory && history.length === 0 && (
+            <p className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-5 py-4 text-center text-xs text-[#6B7280] italic">
+              No AI-generated ideas yet
+            </p>
           )}
         </div>
 
@@ -445,13 +587,52 @@ export default function IdeasPage() {
 
                 <div className="space-y-1">{renderMarkdown(result)}</div>
 
-                <div className="mt-6 flex gap-2 border-t border-[#2A2A2A] pt-4">
+                {/* Star Rating */}
+                <div className="mt-5 flex items-center gap-3 border-t border-[#2A2A2A] pt-4">
+                  <span className="text-xs font-medium text-[#9CA3AF]">Rate:</span>
+                  <div className="flex gap-0.5">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        onClick={() => setCurrentRating(star)}
+                        onMouseEnter={() => setHoverRating(star)}
+                        onMouseLeave={() => setHoverRating(0)}
+                        className="p-0.5 transition-transform hover:scale-110"
+                      >
+                        <Star
+                          className={`h-5 w-5 transition-colors ${
+                            star <= (hoverRating || currentRating)
+                              ? "fill-[#F59E0B] text-[#F59E0B]"
+                              : "text-[#4B5563]"
+                          }`}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                  {currentRating > 0 && (
+                    <span className="text-xs text-[#F59E0B]">{currentRating}/5</span>
+                  )}
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
                   <button
                     onClick={handleSave}
                     className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] px-4 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#10B981]/30 hover:text-[#10B981]"
                   >
                     <Save className="h-4 w-4" />
                     Save Idea
+                  </button>
+                  <button
+                    onClick={handleRefine}
+                    disabled={refining}
+                    className="flex items-center gap-2 rounded-lg border border-purple-500/30 px-4 py-2 text-sm text-purple-400 transition-colors hover:bg-purple-500/10 disabled:opacity-50"
+                  >
+                    {refining ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Wand2 className="h-4 w-4" />
+                    )}
+                    {refining ? "Refining..." : "Refine"}
                   </button>
                   <button
                     onClick={handleGenerate}

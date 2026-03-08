@@ -16,6 +16,9 @@ import {
   Bug,
   Shield,
   SlidersHorizontal,
+  Loader2,
+  Zap,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -234,6 +237,9 @@ export default function NamesPage() {
   const [batchSize, setBatchSize] = useState(12);
   const [totalGenerated, setTotalGenerated] = useState(0);
   const [genKey, setGenKey] = useState(0);
+  const [aiMode, setAiMode] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiFallbackNotice, setAiFallbackNotice] = useState("");
 
   useEffect(() => {
     try {
@@ -248,7 +254,7 @@ export default function NamesPage() {
     } catch {}
   }, [saved]);
 
-  const generate = useCallback(() => {
+  const generateLocal = useCallback(() => {
     const result: string[] = [];
     const seen = new Set<string>();
     let attempts = 0;
@@ -260,14 +266,68 @@ export default function NamesPage() {
       }
       attempts++;
     }
-    setNames(result);
-    setTotalGenerated((prev) => prev + result.length);
-    setGenKey((prev) => prev + 1);
+    return result;
   }, [category, style, minSyl, maxSyl, batchSize]);
 
+  const generateAI = useCallback(async () => {
+    setAiLoading(true);
+    setAiFallbackNotice("");
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: `Generate ${batchSize} ${category} names in the ${style} style for a game. Just list the names, one per line, no numbering or explanation.` }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const parsed = content.split("\n").map((l: string) => l.replace(/^\d+[\.\)\-]\s*/, "").trim()).filter((l: string) => l.length > 0 && l.length < 60);
+      if (parsed.length > 0) {
+        setNames(parsed.slice(0, batchSize));
+        setTotalGenerated((prev) => prev + parsed.length);
+        setGenKey((prev) => prev + 1);
+      } else {
+        throw new Error("Empty AI response");
+      }
+    } catch {
+      setAiFallbackNotice("AI unavailable — fell back to local generation");
+      const result = generateLocal();
+      setNames(result);
+      setTotalGenerated((prev) => prev + result.length);
+      setGenKey((prev) => prev + 1);
+    } finally {
+      setAiLoading(false);
+    }
+  }, [category, style, batchSize, generateLocal]);
+
+  const generate = useCallback(() => {
+    if (aiMode) {
+      generateAI();
+    } else {
+      const result = generateLocal();
+      setNames(result);
+      setTotalGenerated((prev) => prev + result.length);
+      setGenKey((prev) => prev + 1);
+    }
+  }, [aiMode, generateAI, generateLocal]);
+
   useEffect(() => {
-    generate();
-  }, [generate]);
+    if (!aiMode) {
+      const result = generateLocal();
+      setNames(result);
+      setTotalGenerated((prev) => prev + result.length);
+      setGenKey((prev) => prev + 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, style, minSyl, maxSyl, batchSize]);
 
   const copyName = (name: string) => {
     navigator.clipboard.writeText(name);
@@ -383,9 +443,27 @@ export default function NamesPage() {
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={generate}
-              className="flex items-center gap-2 rounded-xl bg-[#F59E0B] px-5 py-2.5 text-sm font-bold text-[#0F0F0F] transition-all hover:bg-[#D97706] active:scale-[0.97]"
+              disabled={aiLoading}
+              className="flex items-center gap-2 rounded-xl bg-[#F59E0B] px-5 py-2.5 text-sm font-bold text-[#0F0F0F] transition-all hover:bg-[#D97706] active:scale-[0.97] disabled:opacity-50"
             >
-              <RefreshCw className="h-4 w-4" /> Generate {batchSize}
+              {aiLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {aiLoading ? "Generating..." : `Generate ${batchSize}`}
+            </button>
+
+            <button
+              onClick={() => setAiMode(!aiMode)}
+              className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all ${
+                aiMode
+                  ? "border-purple-500/50 bg-purple-500/10 text-purple-400"
+                  : "border-[#2A2A2A] bg-[#1A1A1A] text-[#9CA3AF] hover:text-[#F5F5F5]"
+              }`}
+            >
+              <Zap className="h-4 w-4" />
+              AI {aiMode ? "On" : "Off"}
             </button>
 
             <div className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-1">
@@ -420,6 +498,13 @@ export default function NamesPage() {
               generated this session
             </div>
           </div>
+
+          {aiFallbackNotice && (
+            <div className="flex items-center gap-2 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-4 py-2 text-xs text-[#F59E0B]">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              {aiFallbackNotice}
+            </div>
+          )}
 
           {/* Settings panel */}
           {showSettings && (
@@ -463,7 +548,12 @@ export default function NamesPage() {
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[#9CA3AF]">
               Generated Names
             </h2>
-            {names.length === 0 ? (
+            {aiLoading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
+                <p className="mt-3 text-sm text-[#9CA3AF]">AI is crafting names...</p>
+              </div>
+            ) : names.length === 0 ? (
               <p className="py-8 text-center text-sm text-[#4B5563]">
                 Click Generate to create names
               </p>

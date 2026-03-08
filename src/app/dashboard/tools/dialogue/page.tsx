@@ -15,6 +15,9 @@ import {
   RotateCcw,
   X,
   FolderOpen,
+  Loader2,
+  Sparkles,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -256,6 +259,9 @@ export default function DialoguePage() {
   const [simFlags, setSimFlags] = useState<Record<string, boolean>>({});
   const [simInventory, setSimInventory] = useState<string[]>([]);
   const [simHistory, setSimHistory] = useState<SimEntry[]>([]);
+
+  const [aiWriteLoading, setAiWriteLoading] = useState(false);
+  const [aiWriteNotice, setAiWriteNotice] = useState("");
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const interRef = useRef<Interaction>({ type: "idle" });
@@ -667,6 +673,76 @@ export default function DialoguePage() {
     setSelectedId(null);
   }, []);
 
+  const aiWriteDialogue = useCallback(async () => {
+    setAiWriteLoading(true);
+    setAiWriteNotice("");
+
+    const npcNodes = nodes.filter((n) => n.type === "npc");
+    const treeContext = npcNodes.map((n) => `${n.character}: "${n.text}"`).join("\n");
+    const templateName = treeName || "general";
+
+    const prompt = `Given this dialogue tree for a ${templateName} scenario:\n${treeContext}\n\nWrite 3 more NPC dialogue lines that would naturally continue the conversation. Format as JSON array of strings.`;
+
+    let lines: string[] = [];
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const jsonMatch = content.match(/\[[\s\S]*?\]/);
+      if (jsonMatch) {
+        lines = JSON.parse(jsonMatch[0]);
+      } else {
+        lines = content.split("\n").map((l: string) => l.replace(/^\d+[\.\)\-]\s*/, "").replace(/^["']|["']$/g, "").trim()).filter((l: string) => l.length > 5);
+      }
+      if (lines.length === 0) throw new Error("No lines parsed");
+    } catch {
+      setAiWriteNotice("AI unavailable — added placeholder lines");
+      lines = [
+        "I've heard rumors about something strange in the forest...",
+        "You should be careful out there, adventurer.",
+        "Come back anytime if you need supplies.",
+      ];
+    }
+
+    const lastNpc = [...nodes].reverse().find((n) => n.type === "npc");
+    const baseX = lastNpc ? lastNpc.x : 340;
+    const baseY = lastNpc ? lastNpc.y + 160 : 200;
+    const speaker = lastNpc ? lastNpc.character : "NPC";
+
+    const newNodes: DialogueNode[] = [];
+    const newConns: Connection[] = [];
+
+    lines.slice(0, 3).forEach((line, i) => {
+      const n = makeNode("npc", baseX + (i - 1) * 280, baseY + 160 * (i + 1));
+      n.text = line;
+      n.character = speaker;
+      newNodes.push(n);
+
+      if (i === 0 && lastNpc) {
+        newConns.push({ id: `aic_${Date.now()}_${i}`, fromNodeId: lastNpc.id, fromPortIndex: 0, toNodeId: n.id });
+      } else if (i > 0) {
+        newConns.push({ id: `aic_${Date.now()}_${i}`, fromNodeId: newNodes[i - 1].id, fromPortIndex: 0, toNodeId: n.id });
+      }
+    });
+
+    setNodes((prev) => [...prev, ...newNodes]);
+    setConnections((prev) => [...prev, ...newConns]);
+    setAiWriteLoading(false);
+  }, [nodes, treeName]);
+
   // ── Simulator ───────────────────────────────────────────
 
   const findStartNode = useCallback((): DialogueNode | null => {
@@ -998,6 +1074,14 @@ export default function DialoguePage() {
             <Download className="w-3.5 h-3.5" /> Export
           </button>
           <button
+            onClick={aiWriteDialogue}
+            disabled={aiWriteLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/20 border border-purple-500/40 text-purple-400 rounded-lg text-sm hover:bg-purple-500/30 transition-colors disabled:opacity-50"
+          >
+            {aiWriteLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            {aiWriteLoading ? "Writing..." : "AI Write"}
+          </button>
+          <button
             onClick={startSim}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 border border-amber-500/40 text-amber-400 rounded-lg text-sm hover:bg-amber-500/30 transition-colors"
           >
@@ -1204,6 +1288,21 @@ export default function DialoguePage() {
               })()}
             </svg>
           </div>
+
+          {aiWriteNotice && (
+            <div className="absolute top-3 right-3 z-50 flex items-center gap-2 rounded-lg border border-[#F59E0B]/20 bg-[#1A1A1A]/95 px-3 py-2 text-xs text-[#F59E0B] shadow-lg backdrop-blur-sm">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              {aiWriteNotice}
+              <button onClick={() => setAiWriteNotice("")} className="ml-1 text-gray-500 hover:text-white"><X className="w-3 h-3" /></button>
+            </div>
+          )}
+
+          {aiWriteLoading && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-lg border border-purple-500/30 bg-[#1A1A1A]/95 px-4 py-2 text-xs text-purple-400 shadow-lg backdrop-blur-sm">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              AI is writing dialogue...
+            </div>
+          )}
 
           {/* Node count badge */}
           <div className="absolute bottom-3 left-3 px-2 py-1 bg-[#1A1A1A]/80 rounded text-[10px] text-gray-500">
