@@ -155,19 +155,13 @@ html {
     max-width: 100% !important;
   }
 
-  .print\\:block {
+  [data-print-show] {
     display: block !important;
   }
 
-  .print\\:bg-white {
+  [data-print-light] {
     background: #fff !important;
-  }
-
-  .print\\:text-black {
     color: #111 !important;
-  }
-
-  .print\\:border-gray-300 {
     border-color: #d1d5db !important;
   }
 
