@@ -1210,17 +1210,20 @@ export default function ProjectsPage() {
       {view === "grid" && filtered.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map(
-            ({
-              project,
-              taskCount,
-              completedTaskCount,
-              bugCount,
-              overdueBugCount,
-              devlogCount,
-              activeSprint,
-              nextMilestone,
-              health,
-            }) => {
+            (
+              {
+                project,
+                taskCount,
+                completedTaskCount,
+                bugCount,
+                overdueBugCount,
+                devlogCount,
+                activeSprint,
+                nextMilestone,
+                health,
+              },
+              index
+            ) => {
               const pct = taskCount
                 ? Math.round((completedTaskCount / taskCount) * 100)
                 : 0;
@@ -1239,21 +1242,23 @@ export default function ProjectsPage() {
               const cardProps = compareMode
                 ? {
                     onClick: () => toggleCompareSelect(project.id),
-                    className: `group cursor-pointer rounded-xl border bg-[#1A1A1A] transition-all ${
+                    className: `group cursor-pointer rounded-xl border bg-[#1A1A1A] transition-all animate-slide-up ${
                       isSelected
                         ? "border-[#F59E0B] ring-1 ring-[#F59E0B]/30"
                         : project.archived
                           ? "border-dashed border-[#2A2A2A] opacity-50 hover:opacity-70"
                           : "border-[#2A2A2A] hover:border-[#F59E0B]/30"
                     }`,
+                    style: { animationDelay: `${index * 50}ms` },
                   }
                 : {
                     href: `/dashboard/projects/${project.id}`,
-                    className: `group rounded-xl border bg-[#1A1A1A] transition-all ${
+                    className: `group rounded-xl border bg-[#1A1A1A] transition-all animate-slide-up ${
                       project.archived
                         ? "border-dashed border-[#2A2A2A] opacity-50 hover:opacity-70"
                         : "border-[#2A2A2A] hover:border-[#F59E0B]/30"
                     }`,
+                    style: { animationDelay: `${index * 50}ms` },
                   };
               return (
                 // @ts-expect-error dynamic element
