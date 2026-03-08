@@ -493,6 +493,83 @@ function DamageCalc() {
   );
 }
 
+// ── AI Formula Suggest ──
+
+function AiFormulaSuggest() {
+  const [description, setDescription] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState("");
+
+  const handleSuggest = async () => {
+    if (!description.trim() || loading) return;
+    setLoading(true);
+    setResult("");
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{
+            role: "user",
+            content: `Suggest a game math formula for: '${description.trim()}'. Give the formula, explain the variables, and show an example calculation. Be brief.`,
+          }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      setResult(content || "Could not generate a formula suggestion.");
+    } catch {
+      setResult("Failed to reach AI service.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-[#F59E0B]/20 bg-[#1A1A1A] p-5">
+      <div className="mb-3 flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+          <Sparkles className="h-4.5 w-4.5 text-[#F59E0B]" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-[#F5F5F5]">AI Formula Suggest</h3>
+          <p className="text-[11px] text-[#6B7280]">Describe what you need and get a formula</p>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSuggest()}
+          placeholder="e.g. XP curve for RPG leveling, enemy respawn timer..."
+          className="flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#4A4A4A] outline-none transition-colors focus:border-[#F59E0B]/50"
+        />
+        <button
+          onClick={handleSuggest}
+          disabled={loading || !description.trim()}
+          className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-[#D97706] disabled:opacity-50 disabled:hover:bg-[#F59E0B]"
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          {loading ? "Thinking..." : "Suggest"}
+        </button>
+      </div>
+      {result && (
+        <div className="mt-3 rounded-lg border border-[#F59E0B]/10 bg-[#F59E0B]/5 px-4 py-3">
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">{result}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ──
 
 export default function GameMathPage() {
@@ -512,6 +589,8 @@ export default function GameMathPage() {
           </p>
         </div>
       </div>
+
+      <AiFormulaSuggest />
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         <DistanceCalc />

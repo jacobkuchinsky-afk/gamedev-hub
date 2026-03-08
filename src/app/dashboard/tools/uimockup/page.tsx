@@ -496,6 +496,61 @@ const PRESETS = [
   },
 ];
 
+function AiDescribeElement({ elementType }: { elementType: ElementType }) {
+  const [loading, setLoading] = useState(false);
+  const [description, setDescription] = useState("");
+
+  const handleDescribe = async () => {
+    if (loading) return;
+    setLoading(true);
+    setDescription("");
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{
+            role: "user",
+            content: `Describe best UX practices for a game '${elementType}' UI element. Include: what info to show, visual hierarchy tips, and one common mistake. 3 bullets max.`,
+          }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      setDescription(content || "Could not generate description.");
+    } catch {
+      setDescription("Failed to reach AI service.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="mt-1">
+      <button
+        onClick={handleDescribe}
+        disabled={loading}
+        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-1.5 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50"
+      >
+        {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+        {loading ? "Analyzing..." : "AI Describe"}
+      </button>
+      {description && (
+        <div className="mt-2 rounded-lg border border-[#F59E0B]/10 bg-[#F59E0B]/5 px-3 py-2">
+          <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-[#D1D5DB]">{description}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 let _nid = 1;
 
 function makeEl(
@@ -1528,6 +1583,9 @@ export default function UIMockupPage() {
                   </label>
                 ))}
               </div>
+
+              <div className="my-3 h-px bg-[#2A2A2A]" />
+              <AiDescribeElement key={selected.id} elementType={selected.type} />
             </>
           ) : (
             <div className="flex h-full flex-col items-center justify-center text-center">
