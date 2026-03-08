@@ -119,6 +119,19 @@ label {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+/* Glassmorphism utility - reusable frosted glass effect */
+.glass {
+  background: rgba(26, 26, 26, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(42, 42, 42, 0.5);
+}
+
+/* Amber glow utility */
+.glow-amber {
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.15);
+}
+
 [class*="rounded-xl"][class*="1A1A1A"] {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
