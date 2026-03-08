@@ -629,6 +629,59 @@ export default function DevlogPage() {
         </div>
       )}
 
+      {/* Word Count Chart */}
+      {entries.length > 1 && (() => {
+        const last10 = [...entries]
+          .sort((a, b) => b.date.localeCompare(a.date))
+          .slice(0, 10)
+          .reverse();
+        const counts = last10.map((e) => wordCount(e.content));
+        const maxWc = Math.max(...counts, 1);
+        const avg = Math.round(counts.reduce((s, c) => s + c, 0) / counts.length);
+        const avgPct = (avg / maxWc) * 100;
+
+        return (
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-[#F59E0B]" />
+                <span className="text-sm font-semibold text-[#F5F5F5]">Words per Entry</span>
+              </div>
+              <span className="text-xs text-[#6B7280]">Last {last10.length} entries</span>
+            </div>
+            <div className="relative flex items-end gap-1.5" style={{ height: 120 }}>
+              <div
+                className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-[#F59E0B]/30"
+                style={{ bottom: `${avgPct}%` }}
+              >
+                <span className="absolute -top-4 right-0 text-[10px] font-medium text-[#F59E0B]">
+                  avg {avg}
+                </span>
+              </div>
+              {last10.map((entry, i) => {
+                const pct = (counts[i] / maxWc) * 100;
+                return (
+                  <div key={entry.id} className="group/bar flex flex-1 flex-col items-center gap-1" style={{ height: "100%" }}>
+                    <div className="relative flex w-full flex-1 items-end justify-center">
+                      <div
+                        className="w-full max-w-[32px] rounded-t-md bg-[#F59E0B]/20 transition-colors group-hover/bar:bg-[#F59E0B]/40"
+                        style={{ height: `${Math.max(pct, 4)}%` }}
+                      />
+                      <div className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 rounded bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] opacity-0 shadow transition-opacity group-hover/bar:opacity-100">
+                        {counts[i]}
+                      </div>
+                    </div>
+                    <span className="w-full truncate text-center text-[9px] text-[#6B7280]" title={entry.title}>
+                      {entry.title.length > 6 ? entry.title.slice(0, 6) + ".." : entry.title}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Search + Filter bar */}
       <div className="space-y-3">
         <div className="flex gap-2">

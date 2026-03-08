@@ -1296,6 +1296,40 @@ export default function TaskBoardPage() {
     return sorted;
   }, [sortedFilteredTasks, listSortField, listSortDir]);
 
+  const handleExportTasksCSV = useCallback(() => {
+    if (!project) return;
+    const esc = (v: string | number) => {
+      const s = String(v);
+      if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const header = ["Title","Status","Priority","Sprint","Assignee","Due Date","Estimated Hours","Logged Hours","Tags","Subtask Count","Comment Count"];
+    const rows = tasks.map((t) => [
+      esc(t.title),
+      esc(t.status),
+      esc(t.priority),
+      esc(t.sprint),
+      esc(t.assignee),
+      esc(t.dueDate || ""),
+      esc(t.estimatedHours ?? ""),
+      esc(t.loggedHours ?? 0),
+      esc((t.tags || []).join(", ")),
+      esc((t.subtasks || []).length),
+      esc((t.comments || []).length),
+    ]);
+    const csv = [header.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.name.replace(/\s+/g, "-").toLowerCase()}-tasks.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setTaskExportOpen(false);
+  }, [project, tasks]);
+
   const handleExportTasksJSON = useCallback(() => {
     if (!project) return;
     const exportData = tasks.map((t) => ({
@@ -1508,6 +1542,14 @@ export default function TaskBoardPage() {
                   >
                     <FileText className="h-4 w-4 text-[#F59E0B]" />
                     Export as JSON
+                  </button>
+                  <div className="mx-3 border-t border-[#2A2A2A]" />
+                  <button
+                    onClick={handleExportTasksCSV}
+                    className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm text-[#D1D5DB] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                  >
+                    <Download className="h-4 w-4 text-[#10B981]" />
+                    Export as CSV
                   </button>
                 </div>
               )}
