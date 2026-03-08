@@ -41,6 +41,15 @@
   background: #F59E0B;
 }
 
+/* Pixel art rendering - crisp sprites for sprite editor and tilemap */
+.pixel-art {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+canvas {
+  image-rendering: pixelated;
+}
+
 /* Tooltip utility - use data-tooltip="Text here" on any element */
 [data-tooltip] {
   position: relative;
