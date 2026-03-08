@@ -165,7 +165,8 @@ export default function IdeasPage() {
       );
 
       const data = await response.json();
-      const content = data.choices?.[0]?.message?.content;
+      const content = data.choices?.[0]?.message?.content
+        || data.choices?.[0]?.message?.reasoning;
 
       if (content) {
         console.log("[IdeasPage] AI response received");
