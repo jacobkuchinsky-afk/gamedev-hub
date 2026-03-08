@@ -109,6 +109,8 @@ export default function ChangelogPage() {
 
   const [historySummary, setHistorySummary] = useState<string | null>(null);
   const [historySummaryLoading, setHistorySummaryLoading] = useState(false);
+  const [aiSummaryLineLoading, setAiSummaryLineLoading] = useState<string | null>(null);
+  const [aiSummaryLines, setAiSummaryLines] = useState<Record<string, string>>({});
 
   const expandedIds = Object.entries(expanded).filter(([, v]) => v).map(([k]) => k);
   const canCompareVersions = expandedIds.length === 2;
@@ -346,6 +348,22 @@ Be specific and brief. Only include sections that have items.`;
     } finally {
       setReleaseNotesLoading(false);
     }
+  };
+
+  const handleAiSummaryLine = async (entry: typeof entries[0]) => {
+    if (aiSummaryLineLoading) return;
+    setAiSummaryLineLoading(entry.id);
+    try {
+      const allChanges = Object.entries(entry.changes || {}).map(([cat, items]) => `${cat}: ${(items as string[]).join(", ")}`).join("; ");
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Summarize version ${entry.version} in 1 sentence: ${allChanges}` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      setAiSummaryLines((prev) => ({ ...prev, [entry.id]: (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim() }));
+    } catch { /* silently fail */ }
+    finally { setAiSummaryLineLoading(null); }
   };
 
   const generateHistorySummary = async () => {
@@ -1304,6 +1322,15 @@ Be specific and brief. Only include sections that have items.`;
                           </div>
                         ))}
                       </div>
+                      <div className="mt-3 flex items-center gap-2">
+                        <button onClick={() => handleAiSummaryLine(entry)} disabled={aiSummaryLineLoading === entry.id} className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-1.5 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed">
+                          {aiSummaryLineLoading === entry.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                          AI Summary
+                        </button>
+                      </div>
+                      {aiSummaryLines[entry.id] && aiSummaryLineLoading !== entry.id && (
+                        <p className="mt-2 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-2.5 text-sm text-[#D1D5DB] italic">{aiSummaryLines[entry.id]}</p>
+                      )}
                     </div>
                   )}
                 </div>

@@ -192,6 +192,8 @@ export default function DevlogPage() {
   const [monthlyRecap, setMonthlyRecap] = useState("");
   const [monthlyRecapLoading, setMonthlyRecapLoading] = useState(false);
   const [aiMoodLoading, setAiMoodLoading] = useState(false);
+  const [aiTagLoading, setAiTagLoading] = useState<string | null>(null);
+  const [aiTags, setAiTags] = useState<Record<string, string>>({});
 
   const reload = useCallback(() => {
     const e = getDevlog(projectId);
@@ -333,6 +335,21 @@ export default function DevlogPage() {
     } finally {
       setAiReflectLoading(null);
     }
+  };
+
+  const handleAiTag = async (entry: DevlogEntry) => {
+    if (aiTagLoading === entry.id) return;
+    setAiTagLoading(entry.id);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Suggest a hashtag for devlog '${entry.title}'. Just the hashtag.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      setAiTags((prev) => ({ ...prev, [entry.id]: (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim() }));
+    } catch { /* silently fail */ }
+    finally { setAiTagLoading(null); }
   };
 
   const handleMonthlyRecap = async () => {
@@ -775,7 +792,20 @@ export default function DevlogPage() {
                         {aiRatingLoading === entry.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                         AI Rate
                       </button>
+                      <button
+                        onClick={() => handleAiTag(entry)}
+                        disabled={aiTagLoading === entry.id}
+                        className="flex items-center gap-1.5 rounded-lg border border-[#8B5CF6]/30 bg-[#8B5CF6]/5 px-3 py-1.5 text-xs font-medium text-[#8B5CF6] transition-colors hover:bg-[#8B5CF6]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {aiTagLoading === entry.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                        AI Tag
+                      </button>
                     </div>
+                    {aiTags[entry.id] && aiTagLoading !== entry.id && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-[#8B5CF6]/30 bg-[#8B5CF6]/10 px-2.5 py-0.5 text-[11px] font-medium text-[#8B5CF6]">
+                        {aiTags[entry.id]}
+                      </span>
+                    )}
                     {aiReflections[entry.id] && aiReflectLoading !== entry.id && (
                       <div className="mt-2 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-3">
                         <div className="flex items-center gap-1.5 mb-1">

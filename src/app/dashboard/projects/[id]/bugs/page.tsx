@@ -138,6 +138,8 @@ export default function BugTrackerPage() {
   const [aiSeverityReason, setAiSeverityReason] = useState("");
   const [aiBugSummaryLoading, setAiBugSummaryLoading] = useState(false);
   const [aiBugSummary, setAiBugSummary] = useState("");
+  const [aiBugLabelLoading, setAiBugLabelLoading] = useState<string | null>(null);
+  const [aiBugLabels, setAiBugLabels] = useState<Record<string, string>>({});
 
   const similarBugs = useMemo(() => {
     const q = newTitle.trim().toLowerCase();
@@ -392,6 +394,22 @@ Be concise and professional. Fill in any missing sections based on the title and
       setAiSeverityReason((data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim());
     } catch { /* silently fail */ }
     finally { setAiSeverityReasonLoading(false); }
+  };
+
+  const handleAiBugLabel = async (bug: typeof bugs[0]) => {
+    if (aiBugLabelLoading) return;
+    setAiBugLabelLoading(bug.id);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Suggest a label for bug '${bug.title}': UI, Gameplay, Physics, Audio, Network, Performance. Just the label.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      const label = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setAiBugLabels((prev) => ({ ...prev, [bug.id]: label }));
+    } catch { /* silently fail */ }
+    finally { setAiBugLabelLoading(null); }
   };
 
   const handleAiBugSummary = async () => {
@@ -840,6 +858,19 @@ Be concise and professional. Fill in any missing sections based on the title and
                 </div>
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">{aiWorkarounds[bug.id]}</p>
               </div>
+            )}
+            <button
+              onClick={() => handleAiBugLabel(bug)}
+              disabled={aiBugLabelLoading === bug.id}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-1.5 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {aiBugLabelLoading === bug.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              AI Label
+            </button>
+            {aiBugLabels[bug.id] && aiBugLabelLoading !== bug.id && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-2.5 py-0.5 text-[11px] font-medium text-[#F59E0B]">
+                <Sparkles className="h-3 w-3" /> {aiBugLabels[bug.id]}
+              </span>
             )}
           </div>
           {/* Comment Thread */}

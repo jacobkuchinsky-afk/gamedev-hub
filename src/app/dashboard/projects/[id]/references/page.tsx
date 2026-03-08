@@ -61,6 +61,8 @@ export default function ReferenceBoardPage() {
   const [aiStudyGuides, setAiStudyGuides] = useState<Record<string, string>>({});
   const [aiStudyLoading, setAiStudyLoading] = useState<string | null>(null);
   const [aiDescribeLoading, setAiDescribeLoading] = useState(false);
+  const [aiValidateLoading, setAiValidateLoading] = useState<string | null>(null);
+  const [aiValidateResults, setAiValidateResults] = useState<Record<string, string>>({});
 
   const fetchAiSuggestions = async () => {
     if (!project) return;
@@ -214,6 +216,21 @@ export default function ReferenceBoardPage() {
     });
     setReferences((prev) => [...prev, ref]);
     setSimilarGames((prev) => prev.filter((g) => g.title !== game.title));
+  };
+
+  const handleAiValidateUrl = async (ref: typeof refs[0]) => {
+    if (aiValidateLoading || !ref.url) return;
+    setAiValidateLoading(ref.id);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Is '${ref.url}' likely a useful game dev reference? Yes/No and why in 5 words.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      setAiValidateResults((prev) => ({ ...prev, [ref.id]: (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim() }));
+    } catch { /* silently fail */ }
+    finally { setAiValidateLoading(null); }
   };
 
   const aiDescribeReference = async () => {
@@ -790,6 +807,21 @@ export default function ReferenceBoardPage() {
                   {aiStudyGuides[ref.id] && aiStudyLoading !== ref.id && (
                     <div className="mt-1 rounded-md border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-2.5 py-1.5 text-[11px] leading-relaxed text-[#D1D5DB]">
                       <Sparkles className="mr-1 inline h-3 w-3 text-[#F59E0B]" />{aiStudyGuides[ref.id]}
+                    </div>
+                  )}
+                  {ref.url && (
+                    <button
+                      onClick={() => handleAiValidateUrl(ref)}
+                      disabled={aiValidateLoading === ref.id}
+                      className="mt-1 flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#10B981] transition-all hover:bg-[#10B981]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {aiValidateLoading === ref.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      Validate URL
+                    </button>
+                  )}
+                  {aiValidateResults[ref.id] && aiValidateLoading !== ref.id && (
+                    <div className="mt-1 rounded-md border border-[#10B981]/20 bg-[#10B981]/5 px-2.5 py-1.5 text-[11px] leading-relaxed text-[#D1D5DB]">
+                      <Sparkles className="mr-1 inline h-3 w-3 text-[#10B981]" />{aiValidateResults[ref.id]}
                     </div>
                   )}
                 </div>

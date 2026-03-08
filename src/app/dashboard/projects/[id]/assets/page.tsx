@@ -105,6 +105,8 @@ export default function AssetPipelinePage() {
   const [aiDescLoading, setAiDescLoading] = useState(false);
   const [aiFileNameLoading, setAiFileNameLoading] = useState(false);
   const [aiFileName, setAiFileName] = useState("");
+  const [aiPriorityLoading, setAiPriorityLoading] = useState<string | null>(null);
+  const [aiPriorities, setAiPriorities] = useState<Record<string, string>>({});
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [bumpNotes, setBumpNotes] = useState("");
   const [aiStatusLoading, setAiStatusLoading] = useState(false);
@@ -245,6 +247,21 @@ export default function AssetPipelinePage() {
     } finally {
       setAiSuggestLoading(false);
     }
+  };
+
+  const handleAiAssetPriority = async (asset: typeof assets[0]) => {
+    if (aiPriorityLoading) return;
+    setAiPriorityLoading(asset.id);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Should asset '${asset.name}' (${asset.type}) be priority: low/medium/high/critical? Just the word.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      setAiPriorities((prev) => ({ ...prev, [asset.id]: (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim() }));
+    } catch { /* silently fail */ }
+    finally { setAiPriorityLoading(null); }
   };
 
   const handleAiDescribe = async () => {
@@ -601,6 +618,13 @@ export default function AssetPipelinePage() {
                                 {asset.assignee}
                               </div>
                             )}
+                            <div className="mt-1.5 flex items-center gap-1.5">
+                              <button onClick={(e) => { e.stopPropagation(); handleAiAssetPriority(asset); }} disabled={aiPriorityLoading === asset.id} className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40">
+                                {aiPriorityLoading === asset.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                                Priority
+                              </button>
+                              {aiPriorities[asset.id] && <span className="text-[10px] text-[#F59E0B]/80">{aiPriorities[asset.id]}</span>}
+                            </div>
                           </div>
                         </div>
                       </div>

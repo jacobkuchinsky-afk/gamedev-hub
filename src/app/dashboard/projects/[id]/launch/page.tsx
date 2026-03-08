@@ -511,6 +511,8 @@ export default function LaunchChecklistPage() {
   const [aiReviewsOpen, setAiReviewsOpen] = useState(false);
   const [aiDayChecklist, setAiDayChecklist] = useState<string>("");
   const [aiDayChecklistLoading, setAiDayChecklistLoading] = useState(false);
+  const [aiCountdownLoading, setAiCountdownLoading] = useState(false);
+  const [aiCountdownResult, setAiCountdownResult] = useState("");
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -890,6 +892,25 @@ export default function LaunchChecklistPage() {
     }
   }, [project, aiReviewsLoading]);
 
+  const handleAiCountdown = useCallback(async () => {
+    if (aiCountdownLoading || !project) return;
+    setAiCountdownLoading(true);
+    setAiCountdownResult("");
+    try {
+      const totalItems = checklist.length + customItems.length;
+      const doneItems = checklist.filter((c) => checked[c.id]).length + customItems.filter((c) => checked[c.id]).length;
+      const completion = totalItems > 0 ? Math.round((doneItems / totalItems) * 100) : 0;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `How many days until ready to launch a ${project.genre || "indie"} game at ${completion}% complete? Just the number.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      setAiCountdownResult((data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim());
+    } catch { /* silently fail */ }
+    finally { setAiCountdownLoading(false); }
+  }, [project, aiCountdownLoading, checklist, customItems, checked]);
+
   const generateLaunchDayChecklist = useCallback(async () => {
     if (aiDayChecklistLoading) return;
     setAiDayChecklistLoading(true);
@@ -1033,6 +1054,15 @@ export default function LaunchChecklistPage() {
               )}
               {aiPlanLoading ? "Generating..." : "AI Launch Plan"}
             </button>
+            <button
+              onClick={handleAiCountdown}
+              disabled={aiCountdownLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#8B5CF6]/40 bg-[#8B5CF6]/10 px-3 py-2 text-sm font-medium text-[#8B5CF6] transition-colors hover:bg-[#8B5CF6]/20 disabled:opacity-50"
+            >
+              {aiCountdownLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {aiCountdownLoading ? "Predicting..." : "AI Countdown"}
+            </button>
+            {aiCountdownResult && <span className="flex items-center gap-1 self-center text-sm font-medium text-[#8B5CF6]"><Sparkles className="h-3.5 w-3.5" />~{aiCountdownResult} days to launch</span>}
             <button
               onClick={generatePitch}
               disabled={aiPitchLoading}

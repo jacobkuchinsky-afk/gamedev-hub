@@ -224,6 +224,8 @@ export default function WorldBuilderPage() {
   const [relType, setRelType] = useState<RelationshipType>("ally");
   const [charGenLoading, setCharGenLoading] = useState(false);
   const [factionGenLoading, setFactionGenLoading] = useState(false);
+  const [aiPopLoading, setAiPopLoading] = useState(false);
+  const [aiPopResult, setAiPopResult] = useState("");
 
   const [placeNames, setPlaceNames] = useState<{ name: string; desc: string }[]>([]);
   const [placeNamesLoading, setPlaceNamesLoading] = useState(false);
@@ -554,6 +556,22 @@ export default function WorldBuilderPage() {
       setCharGenLoading(false);
     }
   }, [setting, saveCharsToStorage, saveRelsToStorage]);
+
+  const handleAiPopulation = useCallback(async () => {
+    if (aiPopLoading || !name.trim()) return;
+    setAiPopLoading(true);
+    setAiPopResult("");
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `How many inhabitants should a ${setting} city named '${name.trim()}' have? Just the number and a brief reason.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      setAiPopResult((data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim());
+    } catch { /* silently fail */ }
+    finally { setAiPopLoading(false); }
+  }, [aiPopLoading, name, setting]);
 
   const generateWorld = useCallback(async () => {
     if (!name.trim() || loading) return;
@@ -985,6 +1003,20 @@ export default function WorldBuilderPage() {
                 </>
               )}
             </button>
+
+            <button
+              onClick={handleAiPopulation}
+              disabled={aiPopLoading || !name.trim()}
+              className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#8B5CF6]/30 bg-[#8B5CF6]/10 px-4 py-2.5 text-sm font-medium text-[#8B5CF6] transition-colors hover:bg-[#8B5CF6]/20 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {aiPopLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Estimating...</> : <><Sparkles className="h-4 w-4" /> AI Population</>}
+            </button>
+            {aiPopResult && (
+              <div className="rounded-lg border border-[#8B5CF6]/20 bg-[#8B5CF6]/5 p-3 text-sm text-[#D1D5DB]">
+                <div className="flex items-center gap-1.5 mb-1"><Sparkles className="h-3 w-3 text-[#8B5CF6]" /><span className="text-[10px] font-semibold text-[#8B5CF6]">Population</span></div>
+                {aiPopResult}
+              </div>
+            )}
 
             <button
               onClick={generatePlaceNames}

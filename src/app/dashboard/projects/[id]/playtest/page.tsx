@@ -219,6 +219,8 @@ export default function PlaytestPage() {
   const [newSessionNotes, setNewSessionNotes] = useState("");
   const [aiIntroLoading, setAiIntroLoading] = useState(false);
   const [aiIntro, setAiIntro] = useState("");
+  const [aiDurationLoading, setAiDurationLoading] = useState(false);
+  const [aiDurationResult, setAiDurationResult] = useState("");
 
   const handleAiSummary = async () => {
     if (responses.length === 0) return;
@@ -560,6 +562,22 @@ export default function PlaytestPage() {
     setPtSubmitted(false);
   };
 
+  const handleAiDuration = async () => {
+    if (aiDurationLoading || !project) return;
+    setAiDurationLoading(true);
+    setAiDurationResult("");
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `How long should a playtest session be for a ${project.genre || "indie"} game in ${project.status || "development"}? Just the minutes.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      setAiDurationResult((data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim());
+    } catch { /* silently fail */ }
+    finally { setAiDurationLoading(false); }
+  };
+
   const handleAiPlaytestIntro = async () => {
     if (aiIntroLoading) return;
     setAiIntroLoading(true);
@@ -696,6 +714,15 @@ export default function PlaytestPage() {
               )}
               AI Plan Session
             </button>
+            <button
+              onClick={handleAiDuration}
+              disabled={aiDurationLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#8B5CF6]/30 bg-[#8B5CF6]/5 px-3 py-2 text-sm font-medium text-[#8B5CF6] transition-colors hover:bg-[#8B5CF6]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {aiDurationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              AI Duration
+            </button>
+            {aiDurationResult && <span className="flex items-center gap-1 text-sm text-[#8B5CF6]/80"><Sparkles className="h-3 w-3" />{aiDurationResult} min recommended</span>}
             <button
               onClick={handleAiQuestions}
               disabled={aiQuestionsLoading}

@@ -255,6 +255,9 @@ export default function TaskBoardPage() {
   const [aiSprintTheme, setAiSprintTheme] = useState("");
   const [aiTaskSummaryLoading, setAiTaskSummaryLoading] = useState(false);
   const [aiTaskSummary, setAiTaskSummary] = useState("");
+  const [aiSubtaskSuggestLoading, setAiSubtaskSuggestLoading] = useState<Record<string, boolean>>({});
+  const [aiVelocityLoading, setAiVelocityLoading] = useState(false);
+  const [aiVelocityResult, setAiVelocityResult] = useState("");
 
   const [taskExportOpen, setTaskExportOpen] = useState(false);
   const taskExportRef = useRef<HTMLDivElement>(null);
@@ -858,6 +861,51 @@ export default function TaskBoardPage() {
     } finally {
       setAiBreakdownLoading((p) => ({ ...p, [taskId]: false }));
     }
+  };
+
+  const handleAiSubtaskSuggest = async (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || aiSubtaskSuggestLoading[taskId]) return;
+    setAiSubtaskSuggestLoading((p) => ({ ...p, [taskId]: true }));
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Suggest 3 subtasks for: '${task.title}'. Just list them.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const lines = content.split("\n").map((l: string) => l.replace(/^\d+[\.\)\-]\s*/, "").trim()).filter((l: string) => l.length > 0 && l.length < 200);
+      if (lines.length > 0) {
+        const existing: Subtask[] = task.subtasks || [];
+        const newSubs: Subtask[] = lines.slice(0, 3).map((title: string, i: number) => ({ id: `st_${Date.now()}_${i}`, title, done: false }));
+        updateTask(taskId, { subtasks: [...existing, ...newSubs] });
+        reload();
+      }
+    } catch { /* silently fail */ }
+    finally { setAiSubtaskSuggestLoading((p) => ({ ...p, [taskId]: false })); }
+  };
+
+  const handleAiVelocityPredict = async () => {
+    if (aiVelocityLoading) return;
+    setAiVelocityLoading(true);
+    setAiVelocityResult("");
+    try {
+      const completedSprints = sprints.filter((s) => s.status === "completed");
+      const velocities = completedSprints.map((s) => {
+        const sprintTasks = tasks.filter((t) => t.sprint === s.id && t.status === "done");
+        return sprintTasks.length;
+      });
+      const velStr = velocities.length > 0 ? velocities.join(", ") : "no data";
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Predict velocity for next sprint given ${velStr}. Just the number.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      setAiVelocityResult((data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim());
+    } catch { /* silently fail */ }
+    finally { setAiVelocityLoading(false); }
   };
 
   const addComment = (taskId: string) => {
@@ -1611,6 +1659,13 @@ export default function TaskBoardPage() {
                   </div>
                   {aiSprintTheme && <p className="mt-1 text-xs text-[#F59E0B]/80">{aiSprintTheme}</p>}
                   {aiTaskSummary && <p className="mt-1 text-xs text-[#10B981]/80">{aiTaskSummary}</p>}
+                  <div className="mt-1 flex items-center gap-2">
+                    <button onClick={handleAiVelocityPredict} disabled={aiVelocityLoading} className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed">
+                      {aiVelocityLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      Predict Velocity
+                    </button>
+                    {aiVelocityResult && <span className="text-[11px] text-[#F59E0B]/80">Next sprint: ~{aiVelocityResult} tasks</span>}
+                  </div>
                   {currentSprintInfo.goal && (
                     <p className="mt-1.5 text-sm font-medium text-[#D1D5DB]">
                       &ldquo;{currentSprintInfo.goal}&rdquo;
@@ -3649,6 +3704,14 @@ export default function TaskBoardPage() {
                                       <Sparkles className="h-3 w-3" />
                                     )}
                                     {aiBreakdownLoading[task.id] ? "Breaking down..." : "AI Break Down"}
+                                  </button>
+                                  <button
+                                    onClick={() => handleAiSubtaskSuggest(task.id)}
+                                    disabled={!!aiSubtaskSuggestLoading[task.id]}
+                                    className="flex w-full items-center justify-center gap-1.5 rounded-md border border-[#F59E0B]/20 bg-[#F59E0B]/5 py-1.5 text-[11px] font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50"
+                                  >
+                                    {aiSubtaskSuggestLoading[task.id] ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                                    {aiSubtaskSuggestLoading[task.id] ? "Suggesting..." : "AI Suggest Subtasks"}
                                   </button>
                                 </div>
                               )}
