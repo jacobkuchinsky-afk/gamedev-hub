@@ -16,12 +16,16 @@ import {
   AlertTriangle,
   Archive,
   ArchiveRestore,
+  GitCompare,
+  X,
 } from "lucide-react";
 import {
   getProjects,
   getTasks,
   getBugs,
   getDevlog,
+  getSprints,
+  getChangelog,
   updateProject,
   type Project,
 } from "@/lib/store";
@@ -52,11 +56,52 @@ interface ProjectData {
   project: Project;
   taskCount: number;
   completedTaskCount: number;
+  inProgressTaskCount: number;
   bugCount: number;
   allBugCount: number;
+  closedBugCount: number;
   overdueBugCount: number;
   devlogCount: number;
+  devlogWords: number;
   loggedHours: number;
+  sprintCount: number;
+  activeSprintCount: number;
+  completedSprintCount: number;
+  changelogCount: number;
+}
+
+interface CompareMetric {
+  label: string;
+  a: string | number;
+  b: string | number;
+  higherIsBetter: boolean;
+}
+
+function getCompareMetrics(a: ProjectData, b: ProjectData): CompareMetric[] {
+  return [
+    { label: "Total Tasks", a: a.taskCount, b: b.taskCount, higherIsBetter: true },
+    { label: "Completed Tasks", a: a.completedTaskCount, b: b.completedTaskCount, higherIsBetter: true },
+    { label: "In-Progress Tasks", a: a.inProgressTaskCount, b: b.inProgressTaskCount, higherIsBetter: true },
+    { label: "Completion %", a: a.taskCount ? Math.round((a.completedTaskCount / a.taskCount) * 100) : 0, b: b.taskCount ? Math.round((b.completedTaskCount / b.taskCount) * 100) : 0, higherIsBetter: true },
+    { label: "Total Bugs", a: a.allBugCount, b: b.allBugCount, higherIsBetter: false },
+    { label: "Open Bugs", a: a.bugCount, b: b.bugCount, higherIsBetter: false },
+    { label: "Fixed Bugs", a: a.closedBugCount, b: b.closedBugCount, higherIsBetter: true },
+    { label: "Devlog Entries", a: a.devlogCount, b: b.devlogCount, higherIsBetter: true },
+    { label: "Devlog Words", a: a.devlogWords, b: b.devlogWords, higherIsBetter: true },
+    { label: "Sprints", a: a.sprintCount, b: b.sprintCount, higherIsBetter: true },
+    { label: "Active Sprints", a: a.activeSprintCount, b: b.activeSprintCount, higherIsBetter: true },
+    { label: "Completed Sprints", a: a.completedSprintCount, b: b.completedSprintCount, higherIsBetter: true },
+    { label: "Hours Logged", a: a.loggedHours % 1 === 0 ? a.loggedHours : +a.loggedHours.toFixed(1), b: b.loggedHours % 1 === 0 ? b.loggedHours : +b.loggedHours.toFixed(1), higherIsBetter: true },
+    { label: "Changelog Versions", a: a.changelogCount, b: b.changelogCount, higherIsBetter: true },
+  ];
+}
+
+function metricColor(val: number | string, other: number | string, higherIsBetter: boolean): string {
+  const a = typeof val === "string" ? parseFloat(val) || 0 : val;
+  const b = typeof other === "string" ? parseFloat(other) || 0 : other;
+  if (a === b) return "text-[#9CA3AF]";
+  const aWins = higherIsBetter ? a > b : a < b;
+  return aWins ? "text-[#10B981]" : "text-[#EF4444]";
 }
 
 function relativeTime(dateStr: string): string {
@@ -81,6 +126,9 @@ export default function ProjectsPage() {
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("updated");
   const [filter, setFilter] = useState<FilterMode>("active");
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareSelection, setCompareSelection] = useState<string[]>([]);
+  const [showCompare, setShowCompare] = useState(false);
 
   const loadData = useCallback(() => {
     const allProjects = getProjects();
@@ -88,19 +136,29 @@ export default function ProjectsPage() {
     const data: ProjectData[] = allProjects.map((p) => {
       const allTasks = getTasks(p.id);
       const allBugs = getBugs(p.id);
+      const devlogEntries = getDevlog(p.id);
+      const sprints = getSprints(p.id);
+      const changelog = getChangelog(p.id);
       return {
         project: p,
         taskCount: allTasks.length,
         completedTaskCount: allTasks.filter((t) => t.status === "done").length,
+        inProgressTaskCount: allTasks.filter((t) => t.status === "in-progress").length,
         bugCount: allBugs.filter((b) => b.status !== "closed").length,
         allBugCount: allBugs.length,
+        closedBugCount: allBugs.filter((b) => b.status === "closed").length,
         overdueBugCount: allBugs.filter(
           (b) =>
             b.status !== "closed" &&
             new Date(b.created_at).getTime() < sevenDaysAgo
         ).length,
-        devlogCount: getDevlog(p.id).length,
+        devlogCount: devlogEntries.length,
+        devlogWords: devlogEntries.reduce((s, e) => s + e.content.split(/\s+/).filter(Boolean).length, 0),
         loggedHours: allTasks.reduce((s, t) => s + (t.loggedHours || 0), 0),
+        sprintCount: sprints.length,
+        activeSprintCount: sprints.filter((s) => s.status === "active").length,
+        completedSprintCount: sprints.filter((s) => s.status === "completed").length,
+        changelogCount: changelog.length,
       };
     });
     setProjectData(data);
@@ -114,6 +172,17 @@ export default function ProjectsPage() {
     updateProject(projectId, { archived: archive });
     loadData();
   };
+
+  const toggleCompareSelect = (projectId: string) => {
+    setCompareSelection((prev) => {
+      if (prev.includes(projectId)) return prev.filter((id) => id !== projectId);
+      if (prev.length >= 2) return [prev[1], projectId];
+      return [...prev, projectId];
+    });
+  };
+
+  const compareA = projectData.find((d) => d.project.id === compareSelection[0]);
+  const compareB = projectData.find((d) => d.project.id === compareSelection[1]);
 
   const stats = useMemo(() => ({
     activeCount: projectData.filter((d) => !d.project.archived).length,
@@ -174,13 +243,32 @@ export default function ProjectsPage() {
             Manage your game development projects
           </p>
         </div>
-        <Link
-          href="/dashboard/projects/new"
-          className="flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2.5 text-sm font-medium text-black transition-colors hover:bg-[#F59E0B]/90"
-        >
-          <Plus className="h-4 w-4" />
-          New Project
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setCompareMode((prev) => !prev);
+              if (compareMode) {
+                setCompareSelection([]);
+                setShowCompare(false);
+              }
+            }}
+            className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
+              compareMode
+                ? "border-[#F59E0B]/40 bg-[#F59E0B]/10 text-[#F59E0B]"
+                : "border-[#2A2A2A] text-[#9CA3AF] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+            }`}
+          >
+            <GitCompare className="h-4 w-4" />
+            {compareMode ? "Cancel" : "Compare"}
+          </button>
+          <Link
+            href="/dashboard/projects/new"
+            className="flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2.5 text-sm font-medium text-black transition-colors hover:bg-[#F59E0B]/90"
+          >
+            <Plus className="h-4 w-4" />
+            New Project
+          </Link>
+        </div>
       </div>
 
       {/* Projects at a Glance */}
@@ -312,6 +400,119 @@ export default function ProjectsPage() {
         </div>
       )}
 
+      {/* Compare selection bar */}
+      {compareMode && (
+        <div className="flex items-center justify-between rounded-xl border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-5 py-3">
+          <div className="flex items-center gap-3 text-sm">
+            <GitCompare className="h-4 w-4 text-[#F59E0B]" />
+            <span className="text-[#9CA3AF]">
+              {compareSelection.length === 0 && "Select 2 projects to compare"}
+              {compareSelection.length === 1 && "Select 1 more project"}
+              {compareSelection.length === 2 && "Ready to compare"}
+            </span>
+            {compareSelection.map((id) => {
+              const p = projectData.find((d) => d.project.id === id);
+              return p ? (
+                <span key={id} className="flex items-center gap-1.5 rounded-md bg-[#2A2A2A] px-2.5 py-1 text-xs text-[#F5F5F5]">
+                  <span className="h-2 w-2 rounded" style={{ backgroundColor: p.project.coverColor }} />
+                  {p.project.name}
+                  <button onClick={() => toggleCompareSelect(id)} className="ml-1 text-[#6B7280] hover:text-[#EF4444]">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ) : null;
+            })}
+          </div>
+          <button
+            onClick={() => setShowCompare(true)}
+            disabled={compareSelection.length !== 2}
+            className="rounded-lg bg-[#F59E0B] px-4 py-1.5 text-sm font-medium text-black transition-colors hover:bg-[#F59E0B]/90 disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            Compare
+          </button>
+        </div>
+      )}
+
+      {/* Comparison Modal */}
+      {showCompare && compareA && compareB && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4">
+          <div className="w-full max-w-3xl rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
+              <div className="flex items-center gap-3">
+                <GitCompare className="h-5 w-5 text-[#F59E0B]" />
+                <h2 className="text-lg font-semibold text-[#F5F5F5]">Project Comparison</h2>
+              </div>
+              <button
+                onClick={() => { setShowCompare(false); setCompareMode(false); setCompareSelection([]); }}
+                className="rounded-lg p-1.5 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto">
+              {/* Project headers */}
+              <div className="grid grid-cols-[180px_1fr_1fr] border-b border-[#2A2A2A] px-6 py-4">
+                <div />
+                {[compareA, compareB].map((d) => (
+                  <div key={d.project.id} className="flex items-center gap-3 px-3">
+                    <div className="h-4 w-4 rounded" style={{ backgroundColor: d.project.coverColor }} />
+                    <div>
+                      <p className="font-semibold text-[#F5F5F5]">{d.project.name}</p>
+                      <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-medium capitalize ${STATUS_BADGE_STYLES[d.project.status]}`}>
+                        {d.project.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Metrics rows */}
+              <div className="divide-y divide-[#2A2A2A]">
+                {(() => {
+                  const metrics = getCompareMetrics(compareA, compareB);
+                  const groups: { title: string; icon: React.ReactNode; rows: CompareMetric[] }[] = [
+                    { title: "Tasks", icon: <ListTodo className="h-3.5 w-3.5 text-[#3B82F6]" />, rows: metrics.slice(0, 4) },
+                    { title: "Bugs", icon: <Bug className="h-3.5 w-3.5 text-[#EF4444]" />, rows: metrics.slice(4, 7) },
+                    { title: "Devlog", icon: <BookOpen className="h-3.5 w-3.5 text-[#8B5CF6]" />, rows: metrics.slice(7, 9) },
+                    { title: "Sprints", icon: <Clock className="h-3.5 w-3.5 text-[#F59E0B]" />, rows: metrics.slice(9, 12) },
+                    { title: "Overall", icon: <FolderKanban className="h-3.5 w-3.5 text-[#10B981]" />, rows: metrics.slice(12) },
+                  ];
+                  return groups.map((group) => (
+                    <div key={group.title}>
+                      <div className="flex items-center gap-2 bg-[#0F0F0F] px-6 py-2 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
+                        {group.icon}
+                        {group.title}
+                      </div>
+                      {group.rows.map((m) => (
+                        <div key={m.label} className="grid grid-cols-[180px_1fr_1fr] px-6 py-2.5 text-sm hover:bg-[#1F1F1F]">
+                          <span className="text-[#9CA3AF]">{m.label}</span>
+                          <span className={`px-3 font-mono font-medium ${metricColor(m.a, m.b, m.higherIsBetter)}`}>
+                            {typeof m.a === "number" && m.label === "Completion %" ? `${m.a}%` : m.a}
+                          </span>
+                          <span className={`px-3 font-mono font-medium ${metricColor(m.b, m.a, m.higherIsBetter)}`}>
+                            {typeof m.b === "number" && m.label === "Completion %" ? `${m.b}%` : m.b}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+
+            <div className="border-t border-[#2A2A2A] px-6 py-3">
+              <button
+                onClick={() => { setShowCompare(false); setCompareMode(false); setCompareSelection([]); }}
+                className="w-full rounded-lg border border-[#2A2A2A] py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              >
+                Close Comparison
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Grid View */}
       {view === "grid" && filtered.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -327,20 +528,43 @@ export default function ProjectsPage() {
               const pct = taskCount
                 ? Math.round((completedTaskCount / taskCount) * 100)
                 : 0;
+              const isSelected = compareSelection.includes(project.id);
+              const CardWrapper = compareMode ? "div" : Link;
+              const cardProps = compareMode
+                ? {
+                    onClick: () => toggleCompareSelect(project.id),
+                    className: `group cursor-pointer rounded-xl border bg-[#1A1A1A] transition-all ${
+                      isSelected
+                        ? "border-[#F59E0B] ring-1 ring-[#F59E0B]/30"
+                        : project.archived
+                          ? "border-dashed border-[#2A2A2A] opacity-50 hover:opacity-70"
+                          : "border-[#2A2A2A] hover:border-[#F59E0B]/30"
+                    }`,
+                  }
+                : {
+                    href: `/dashboard/projects/${project.id}`,
+                    className: `group rounded-xl border bg-[#1A1A1A] transition-all ${
+                      project.archived
+                        ? "border-dashed border-[#2A2A2A] opacity-50 hover:opacity-70"
+                        : "border-[#2A2A2A] hover:border-[#F59E0B]/30"
+                    }`,
+                  };
               return (
-                <Link
-                  key={project.id}
-                  href={`/dashboard/projects/${project.id}`}
-                  className={`group rounded-xl border bg-[#1A1A1A] transition-all ${
-                    project.archived
-                      ? "border-dashed border-[#2A2A2A] opacity-50 hover:opacity-70"
-                      : "border-[#2A2A2A] hover:border-[#F59E0B]/30"
-                  }`}
-                >
-                  <div
-                    className="h-2 rounded-t-xl"
-                    style={{ backgroundColor: project.coverColor }}
-                  />
+                // @ts-expect-error dynamic element
+                <CardWrapper key={project.id} {...cardProps}>
+                  <div className="relative">
+                    <div
+                      className="h-2 rounded-t-xl"
+                      style={{ backgroundColor: project.coverColor }}
+                    />
+                    {compareMode && (
+                      <div className={`absolute right-2 top-4 flex h-5 w-5 items-center justify-center rounded border transition-colors ${
+                        isSelected ? "border-[#F59E0B] bg-[#F59E0B]" : "border-[#6B7280] bg-[#0F0F0F]"
+                      }`}>
+                        {isSelected && <span className="text-[10px] font-bold text-black">&#10003;</span>}
+                      </div>
+                    )}
+                  </div>
                   <div className="p-5">
                     <div className="flex items-start justify-between">
                       <h3 className="font-semibold text-[#F5F5F5] transition-colors group-hover:text-[#F59E0B]">
@@ -425,7 +649,7 @@ export default function ProjectsPage() {
                       </button>
                     </div>
                   </div>
-                </Link>
+                </CardWrapper>
               );
             }
           )}
@@ -436,7 +660,8 @@ export default function ProjectsPage() {
       {view === "list" && filtered.length > 0 && (
         <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
           {/* Table header */}
-          <div className="grid grid-cols-[1fr_100px_100px_70px_80px_110px] gap-2 border-b border-[#2A2A2A] px-5 py-3 text-xs font-medium text-[#6B7280]">
+          <div className={`grid gap-2 border-b border-[#2A2A2A] px-5 py-3 text-xs font-medium text-[#6B7280] ${compareMode ? "grid-cols-[28px_1fr_100px_100px_70px_80px_110px]" : "grid-cols-[1fr_100px_100px_70px_80px_110px]"}`}>
+            {compareMode && <span />}
             <span>Name</span>
             <span>Status</span>
             <span className="text-center">Progress</span>
@@ -457,14 +682,31 @@ export default function ProjectsPage() {
                 const pct = taskCount
                   ? Math.round((completedTaskCount / taskCount) * 100)
                   : 0;
+                const isSelected = compareSelection.includes(project.id);
+                const RowWrapper = compareMode ? "div" : Link;
+                const rowProps = compareMode
+                  ? {
+                      onClick: () => toggleCompareSelect(project.id),
+                      className: `group cursor-pointer grid items-center gap-2 px-5 py-3.5 transition-colors grid-cols-[28px_1fr_100px_100px_70px_80px_110px] ${
+                        isSelected ? "bg-[#F59E0B]/5" : project.archived ? "opacity-50" : "hover:bg-[#1F1F1F]"
+                      }`,
+                    }
+                  : {
+                      href: `/dashboard/projects/${project.id}`,
+                      className: `group grid grid-cols-[1fr_100px_100px_70px_80px_110px] items-center gap-2 px-5 py-3.5 transition-colors ${
+                        project.archived ? "opacity-50" : "hover:bg-[#1F1F1F]"
+                      }`,
+                    };
                 return (
-                  <Link
-                    key={project.id}
-                    href={`/dashboard/projects/${project.id}`}
-                    className={`group grid grid-cols-[1fr_100px_100px_70px_80px_110px] items-center gap-2 px-5 py-3.5 transition-colors ${
-                      project.archived ? "opacity-50" : "hover:bg-[#1F1F1F]"
-                    }`}
-                  >
+                  // @ts-expect-error dynamic element
+                  <RowWrapper key={project.id} {...rowProps}>
+                    {compareMode && (
+                      <div className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${
+                        isSelected ? "border-[#F59E0B] bg-[#F59E0B]" : "border-[#6B7280] bg-[#0F0F0F]"
+                      }`}>
+                        {isSelected && <span className="text-[9px] font-bold text-black">&#10003;</span>}
+                      </div>
+                    )}
                     <div className="flex min-w-0 items-center gap-3">
                       <div
                         className="h-3 w-3 shrink-0 rounded"
@@ -528,7 +770,7 @@ export default function ProjectsPage() {
                         )}
                       </button>
                     </div>
-                  </Link>
+                  </RowWrapper>
                 );
               }
             )}

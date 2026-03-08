@@ -17,6 +17,7 @@ import {
   AlertCircle,
   Sparkles,
   Loader2,
+  GitCompare,
 } from "lucide-react";
 import {
   getProject,
@@ -91,6 +92,13 @@ export default function ChangelogPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
+
+  const [showDiff, setShowDiff] = useState(false);
+
+  const expandedIds = Object.entries(expanded).filter(([, v]) => v).map(([k]) => k);
+  const canCompareVersions = expandedIds.length === 2;
+  const diffEntryA = canCompareVersions ? entries.find((e) => e.id === expandedIds[0]) : undefined;
+  const diffEntryB = canCompareVersions ? entries.find((e) => e.id === expandedIds[1]) : undefined;
 
   const [formVersion, setFormVersion] = useState("");
   const [formTitle, setFormTitle] = useState("");
@@ -420,22 +428,138 @@ Be specific and brief. Only include sections that have items.`;
 
       {/* Search/Filter */}
       {entries.length > 0 && (
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search versions, titles, or changes..."
-            className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2.5 pl-10 pr-4 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none transition-colors focus:border-[#F59E0B]/50"
-          />
-          {searchQuery && (
-            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-[#6B7280]">
-              {filteredEntries.length} result{filteredEntries.length !== 1 ? "s" : ""}
-            </span>
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search versions, titles, or changes..."
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2.5 pl-10 pr-4 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none transition-colors focus:border-[#F59E0B]/50"
+            />
+            {searchQuery && (
+              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-[#6B7280]">
+                {filteredEntries.length} result{filteredEntries.length !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+          {canCompareVersions && (
+            <button
+              onClick={() => setShowDiff(true)}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-4 py-2.5 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10"
+            >
+              <GitCompare className="h-4 w-4" />
+              Compare Versions
+            </button>
           )}
         </div>
       )}
+
+      {/* Version Diff Modal */}
+      {showDiff && diffEntryA && diffEntryB && (() => {
+        const older = diffEntryA.date <= diffEntryB.date ? diffEntryA : diffEntryB;
+        const newer = diffEntryA.date <= diffEntryB.date ? diffEntryB : diffEntryA;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4">
+            <div className="w-full max-w-3xl rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+              <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
+                <div className="flex items-center gap-3">
+                  <GitCompare className="h-5 w-5 text-[#F59E0B]" />
+                  <h2 className="text-lg font-semibold text-[#F5F5F5]">
+                    v{older.version} &rarr; v{newer.version}
+                  </h2>
+                </div>
+                <button
+                  onClick={() => setShowDiff(false)}
+                  className="rounded-lg p-1.5 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="max-h-[65vh] overflow-y-auto px-6 py-5 space-y-5">
+                {/* Version labels */}
+                <div className="flex items-center justify-between rounded-lg bg-[#0F0F0F] px-4 py-3">
+                  <div className="text-sm">
+                    <span className="font-mono font-medium text-[#9CA3AF]">v{older.version}</span>
+                    <span className="ml-2 text-xs text-[#6B7280]">{older.date}</span>
+                  </div>
+                  <span className="text-xs text-[#6B7280]">vs</span>
+                  <div className="text-sm text-right">
+                    <span className="font-mono font-medium text-[#F5F5F5]">v{newer.version}</span>
+                    <span className="ml-2 text-xs text-[#6B7280]">{newer.date}</span>
+                  </div>
+                </div>
+
+                {CHANGE_CATEGORIES.map((cat) => {
+                  const olderItems = new Set(older.changes[cat] || []);
+                  const newerItems = new Set(newer.changes[cat] || []);
+
+                  const added = [...newerItems].filter((item) => !olderItems.has(item));
+                  const removed = [...olderItems].filter((item) => !newerItems.has(item));
+                  const unchanged = [...newerItems].filter((item) => olderItems.has(item));
+
+                  if (added.length === 0 && removed.length === 0 && unchanged.length === 0) return null;
+
+                  return (
+                    <div key={cat}>
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: CHANGE_CATEGORY_COLORS[cat] }} />
+                        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: CHANGE_CATEGORY_COLORS[cat] }}>
+                          {cat}
+                        </span>
+                        {added.length > 0 && <span className="rounded bg-[#10B981]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#10B981]">+{added.length}</span>}
+                        {removed.length > 0 && <span className="rounded bg-[#EF4444]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#EF4444]">-{removed.length}</span>}
+                      </div>
+                      <div className="space-y-1 pl-4">
+                        {added.map((item, i) => (
+                          <div key={`a-${i}`} className="flex items-start gap-2 rounded-md bg-[#10B981]/5 px-3 py-1.5 text-sm text-[#10B981]">
+                            <span className="mt-0.5 shrink-0 font-mono text-xs">+</span>
+                            {item}
+                          </div>
+                        ))}
+                        {removed.map((item, i) => (
+                          <div key={`r-${i}`} className="flex items-start gap-2 rounded-md bg-[#EF4444]/5 px-3 py-1.5 text-sm text-[#EF4444]">
+                            <span className="mt-0.5 shrink-0 font-mono text-xs">-</span>
+                            {item}
+                          </div>
+                        ))}
+                        {unchanged.map((item, i) => (
+                          <div key={`u-${i}`} className="flex items-start gap-2 px-3 py-1.5 text-sm text-[#6B7280]">
+                            <span className="mt-0.5 shrink-0 font-mono text-xs">&nbsp;</span>
+                            {item}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {CHANGE_CATEGORIES.every((cat) => {
+                  const a = older.changes[cat] || [];
+                  const b = newer.changes[cat] || [];
+                  return a.length === 0 && b.length === 0;
+                }) && (
+                  <div className="py-8 text-center text-sm text-[#6B7280]">
+                    Both versions have no change entries to compare.
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-[#2A2A2A] px-6 py-3">
+                <button
+                  onClick={() => setShowDiff(false)}
+                  className="w-full rounded-lg border border-[#2A2A2A] py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Add Form Modal */}
       {showForm && (
