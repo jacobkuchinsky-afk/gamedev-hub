@@ -28,7 +28,7 @@ import {
   Command,
 } from "lucide-react";
 import { AuthProvider, useAuthContext } from "@/components/AuthProvider";
-import { getProjects, getStatusColor, type Project } from "@/lib/store";
+import { getProjects, getStatusColor, getTasks, getBugs, type Project } from "@/lib/store";
 import ShortcutsModal from "@/components/ShortcutsModal";
 import { ToastProvider } from "@/components/Toast";
 
@@ -182,6 +182,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     console.log("[DashboardLayout] rendered");
@@ -193,6 +194,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (user) {
       setProjects(getProjects());
+      const openTasks = getTasks().filter((t) => t.status !== "done").length;
+      const openBugs = getBugs().filter((b) => b.status !== "closed").length;
+      setPendingCount(openTasks + openBugs);
     }
   }, [user]);
 
@@ -289,6 +293,11 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                 >
                   <item.icon className="h-4 w-4" />
                   {item.label}
+                  {item.label === "Dashboard" && pendingCount > 0 && (
+                    <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#F59E0B] px-1 text-[10px] font-bold leading-none text-[#0F0F0F]">
+                      {pendingCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -323,6 +332,11 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                 );
               })}
             </div>
+            {projects.length > 0 && (
+              <p className="mt-2 px-3 text-[11px] text-[#6B7280]">
+                {projects.filter((p) => p.status !== "released").length} active
+              </p>
+            )}
           </div>
         </nav>
 

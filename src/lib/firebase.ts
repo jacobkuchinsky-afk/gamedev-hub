@@ -6,6 +6,9 @@ import {
   signOut,
   onAuthStateChanged,
   updateProfile,
+  updatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
   type User as FirebaseUser,
 } from "firebase/auth";
 
@@ -28,5 +31,8 @@ export {
   signOut,
   onAuthStateChanged,
   updateProfile,
+  updatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
 };
 export type { FirebaseUser };

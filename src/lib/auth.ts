@@ -4,6 +4,9 @@ import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   updateProfile,
+  updatePassword as firebaseUpdatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
 } from "./firebase";
 
 export interface User {
@@ -104,6 +107,58 @@ export function getCurrentUser(): User | null {
   const raw = localStorage.getItem(SESSION_KEY);
   if (!raw) return null;
   return JSON.parse(raw);
+}
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; error?: string }> {
+  const firebaseUser = auth.currentUser;
+  if (firebaseUser && firebaseUser.email) {
+    try {
+      const credential = EmailAuthProvider.credential(firebaseUser.email, currentPassword);
+      await reauthenticateWithCredential(firebaseUser, credential);
+      await firebaseUpdatePassword(firebaseUser, newPassword);
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Password change failed";
+      if (msg.includes("auth/wrong-password") || msg.includes("auth/invalid-credential")) {
+        return { success: false, error: "Current password is incorrect." };
+      }
+      if (msg.includes("auth/weak-password")) {
+        return { success: false, error: "New password must be at least 6 characters." };
+      }
+      if (msg.includes("auth/configuration-not-found") || msg.includes("auth/invalid-api-key")) {
+        return fallbackChangePassword(currentPassword, newPassword);
+      }
+      return { success: false, error: msg };
+    }
+  }
+  return fallbackChangePassword(currentPassword, newPassword);
+}
+
+function fallbackChangePassword(
+  currentPassword: string,
+  newPassword: string
+): { success: boolean; error?: string } {
+  const session = getCurrentUser();
+  if (!session) return { success: false, error: "Not logged in." };
+
+  const users = getStoredUsers();
+  const idx = users.findIndex((u) => u.id === session.id);
+  if (idx === -1) return { success: false, error: "User not found." };
+
+  if (users[idx].password !== currentPassword) {
+    return { success: false, error: "Current password is incorrect." };
+  }
+
+  if (newPassword.length < 6) {
+    return { success: false, error: "New password must be at least 6 characters." };
+  }
+
+  users[idx].password = newPassword;
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  return { success: true };
 }
 
 // --- localStorage fallback for when Firebase Auth is not configured ---

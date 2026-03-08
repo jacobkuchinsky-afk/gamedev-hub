@@ -12,9 +12,13 @@ import {
   Trash2,
   ExternalLink,
   Check,
+  Lock,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
 import { getProjects, getTasks, getDevlog } from "@/lib/store";
+import { changePassword } from "@/lib/auth";
 
 const SETTINGS_KEY = "gameforge_user_settings";
 const VERSION = "1.0.0";
@@ -77,6 +81,14 @@ export default function SettingsPage() {
   const [showClearModal, setShowClearModal] = useState(false);
   const [clearConfirmText, setClearConfirmText] = useState("");
   const [stats, setStats] = useState({ projects: 0, tasks: 0, devlogs: 0, storageKB: 0 });
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
 
   useEffect(() => {
     console.log("[SettingsPage] rendered");
@@ -199,6 +211,34 @@ export default function SettingsPage() {
     window.location.reload();
   }, []);
 
+  const handleChangePassword = useCallback(async () => {
+    setPasswordError(null);
+    setPasswordSuccess(false);
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords don't match.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError("New password must be at least 6 characters.");
+      return;
+    }
+
+    setChangingPassword(true);
+    const result = await changePassword(currentPassword, newPassword);
+    setChangingPassword(false);
+
+    if (result.success) {
+      setPasswordSuccess(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => setPasswordSuccess(false), 3000);
+    } else {
+      setPasswordError(result.error || "Failed to change password.");
+    }
+  }, [currentPassword, newPassword, confirmPassword]);
+
   if (!settings || !user) return null;
 
   const initials = settings.username.slice(0, 2).toUpperCase();
@@ -226,6 +266,28 @@ export default function SettingsPage() {
           {saved ? <Check className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
           {saved ? "Saved!" : dirty ? "Save Changes" : "Save"}
         </button>
+      </div>
+
+      {/* Profile Summary Card */}
+      <div className="flex items-center gap-5 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+        <div
+          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-xl font-bold text-[#0F0F0F]"
+          style={{ backgroundColor: settings.avatarColor }}
+        >
+          {initials}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-lg font-bold text-[#F5F5F5]">{settings.username}</h2>
+          <p className="truncate text-sm text-[#6B7280]">{user.email}</p>
+          <div className="mt-1.5 flex items-center gap-2">
+            <span className="rounded-md bg-[#F59E0B]/10 px-2 py-0.5 text-xs font-medium text-[#F59E0B]">
+              {settings.gameType} Developer
+            </span>
+            <span className="rounded-md bg-[#2A2A2A] px-2 py-0.5 text-xs text-[#6B7280]">
+              v{VERSION}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Profile Section */}
@@ -354,6 +416,20 @@ export default function SettingsPage() {
               </div>
               <span className="text-xs text-[#6B7280]">More themes coming soon</span>
             </div>
+            <div className="mt-3 flex items-center gap-4 rounded-lg border border-[#2A2A2A] p-3">
+              <div className="flex flex-col items-center gap-1.5">
+                <div className="h-8 w-8 rounded-md bg-[#0F0F0F] ring-1 ring-[#3A3A3A]" />
+                <span className="text-[10px] text-[#6B7280]">BG</span>
+              </div>
+              <div className="flex flex-col items-center gap-1.5">
+                <div className="h-8 w-8 rounded-md bg-[#1A1A1A] ring-1 ring-[#3A3A3A]" />
+                <span className="text-[10px] text-[#6B7280]">Cards</span>
+              </div>
+              <div className="flex flex-col items-center gap-1.5">
+                <div className="h-8 w-8 rounded-md bg-[#F59E0B]" />
+                <span className="text-[10px] text-[#6B7280]">Accent</span>
+              </div>
+            </div>
           </div>
 
           {/* Notifications */}
@@ -388,6 +464,88 @@ export default function SettingsPage() {
               ))}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Change Password */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+        <div className="flex items-center gap-2 border-b border-[#2A2A2A] px-5 py-4">
+          <Lock className="h-4 w-4 text-[#F59E0B]" />
+          <h2 className="font-semibold">Change Password</h2>
+        </div>
+        <div className="space-y-4 p-5">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-[#D1D5DB]">
+              Current Password
+            </label>
+            <div className="relative">
+              <input
+                type={showCurrentPw ? "text" : "password"}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 pr-10 text-sm text-[#F5F5F5] placeholder-[#6B7280] transition-colors focus:border-[#F59E0B]/50 focus:outline-none"
+                placeholder="Enter current password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrentPw(!showCurrentPw)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6B7280] hover:text-[#9CA3AF]"
+              >
+                {showCurrentPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-[#D1D5DB]">
+              New Password
+            </label>
+            <div className="relative">
+              <input
+                type={showNewPw ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 pr-10 text-sm text-[#F5F5F5] placeholder-[#6B7280] transition-colors focus:border-[#F59E0B]/50 focus:outline-none"
+                placeholder="Enter new password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPw(!showNewPw)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6B7280] hover:text-[#9CA3AF]"
+              >
+                {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-[#D1D5DB]">
+              Confirm New Password
+            </label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] transition-colors focus:border-[#F59E0B]/50 focus:outline-none"
+              placeholder="Confirm new password"
+            />
+          </div>
+          {passwordError && (
+            <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">
+              {passwordError}
+            </p>
+          )}
+          {passwordSuccess && (
+            <p className="rounded-lg bg-[#10B981]/10 px-3 py-2 text-sm text-[#10B981]">
+              Password updated successfully!
+            </p>
+          )}
+          <button
+            onClick={handleChangePassword}
+            disabled={!currentPassword || !newPassword || !confirmPassword || changingPassword}
+            className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B]/10 px-4 py-2.5 text-sm font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/20 disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            <Lock className="h-3.5 w-3.5" />
+            {changingPassword ? "Updating..." : "Update Password"}
+          </button>
         </div>
       </div>
 
