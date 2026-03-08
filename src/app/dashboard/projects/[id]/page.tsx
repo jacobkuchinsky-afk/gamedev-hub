@@ -27,6 +27,7 @@ import {
   Trash2,
   HeartPulse,
   Loader2,
+  Sparkles,
   BarChart3,
   Copy,
   Download,
@@ -673,6 +674,8 @@ export default function ProjectDetailPage() {
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -992,6 +995,59 @@ export default function ProjectDetailPage() {
     }
   }, [tasks, bugs, devlog, doneTasks, inProgressTasks, openBugs, criticalBugs, projectAgeDays, project?.status]);
 
+  const generateAiSummary = useCallback(async () => {
+    setAiSummaryLoading(true);
+    setAiSummary(null);
+
+    const completedSprints = sprints.filter((s) => s.status === "completed");
+    const velocity =
+      completedSprints.length > 0
+        ? Math.round(
+            completedSprints.reduce(
+              (sum, s) =>
+                sum + tasks.filter((t) => t.sprint === s.name && t.status === "done").length,
+              0
+            ) / completedSprints.length
+          )
+        : 0;
+
+    const prompt = `Write a brief project status update for '${project?.name}', a ${project?.genre} ${project?.status} game. Stats: ${doneTasks}/${tasks.length} tasks done, ${openBugs} open bugs, ${velocity} tasks/sprint velocity, ${devlog.length} devlog entries. Write 3-4 sentences summarizing the project's health, what's going well, and what needs attention. Be honest and actionable.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+
+      const result = await response.json();
+      const content =
+        result.choices?.[0]?.message?.content ||
+        result.choices?.[0]?.message?.reasoning ||
+        "";
+
+      if (!content) throw new Error("No response from AI");
+      setAiSummary(content);
+    } catch (err) {
+      setAiSummary(
+        err instanceof Error ? `Summary failed: ${err.message}` : "Failed to generate summary."
+      );
+    } finally {
+      setAiSummaryLoading(false);
+    }
+  }, [project?.name, project?.genre, project?.status, tasks, sprints, doneTasks, openBugs, devlog.length]);
+
   const handleProjectSave = (updated: Project) => {
     setProject(updated);
   };
@@ -1121,6 +1177,18 @@ export default function ProjectDetailPage() {
               )}
             </div>
             <button
+              onClick={generateAiSummary}
+              disabled={aiSummaryLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/40 hover:bg-[#F59E0B]/10 disabled:opacity-50"
+            >
+              {aiSummaryLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              AI Summary
+            </button>
+            <button
               onClick={runHealthReport}
               className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/40 hover:bg-[#F59E0B]/10"
             >
@@ -1166,6 +1234,32 @@ export default function ProjectDetailPage() {
               Updated {timeAgo(project.updated_at)}
             </span>
           </div>
+        </div>
+      )}
+
+      {/* AI Summary */}
+      {(aiSummaryLoading || aiSummary) && (
+        <div className="rounded-xl border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+            <h3 className="text-sm font-semibold text-[#F59E0B]">AI Summary</h3>
+            {!aiSummaryLoading && (
+              <button
+                onClick={() => setAiSummary(null)}
+                className="ml-auto rounded-lg p-1 text-[#6B7280] transition-colors hover:text-[#F5F5F5]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          {aiSummaryLoading ? (
+            <div className="flex items-center gap-2 py-2">
+              <Loader2 className="h-4 w-4 animate-spin text-[#F59E0B]" />
+              <span className="text-sm text-[#9CA3AF]">Generating project summary...</span>
+            </div>
+          ) : (
+            <p className="text-sm leading-relaxed text-[#D1D5DB]">{aiSummary}</p>
+          )}
         </div>
       )}
 

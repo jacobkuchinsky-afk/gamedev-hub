@@ -49,7 +49,31 @@ function wordCount(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
-function renderMarkdown(text: string): React.ReactNode[] {
+function highlightText(text: string, query: string): React.ReactNode {
+  if (!query.trim()) return text;
+  const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`(${escaped})`, "gi");
+  const parts = text.split(regex);
+  if (parts.length <= 1) return text;
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === query.trim().toLowerCase() ? (
+          <span
+            key={i}
+            className="rounded-sm bg-[#F59E0B]/25 px-0.5 text-[#F59E0B]"
+          >
+            {part}
+          </span>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+}
+
+function renderMarkdown(text: string, searchQuery?: string): React.ReactNode[] {
   const lines = text.split("\n");
   const elements: React.ReactNode[] = [];
 
@@ -84,25 +108,25 @@ function renderMarkdown(text: string): React.ReactNode[] {
         );
 
       if (matches.length === 0) {
-        parts.push(remaining);
+        parts.push(searchQuery ? highlightText(remaining, searchQuery) : remaining);
         break;
       }
 
       const first = matches[0]!;
       const idx = first.match!.index!;
-      if (idx > 0) parts.push(remaining.slice(0, idx));
+      if (idx > 0) parts.push(searchQuery ? highlightText(remaining.slice(0, idx), searchQuery) : remaining.slice(0, idx));
 
       const inner = first.match![1];
       if (first.type === "bold") {
         parts.push(
           <strong key={`${lineIdx}-${keyIdx++}`} className="font-semibold text-[#F5F5F5]">
-            {inner}
+            {searchQuery ? highlightText(inner, searchQuery) : inner}
           </strong>
         );
       } else if (first.type === "italic") {
         parts.push(
           <em key={`${lineIdx}-${keyIdx++}`} className="italic text-[#D1D5DB]">
-            {inner}
+            {searchQuery ? highlightText(inner, searchQuery) : inner}
           </em>
         );
       } else if (first.type === "code") {
@@ -284,7 +308,9 @@ export default function DevlogPage() {
       result = result.filter(
         (e) =>
           e.title.toLowerCase().includes(q) ||
-          e.content.toLowerCase().includes(q)
+          e.content.toLowerCase().includes(q) ||
+          e.mood.toLowerCase().includes(q) ||
+          MOOD_LABELS[e.mood].toLowerCase().includes(q)
       );
     }
     if (filterProject) result = result.filter((e) => e.projectId === filterProject);
@@ -575,10 +601,10 @@ export default function DevlogPage() {
                     </span>
                   </div>
                   <h3 className="mt-2 text-base font-semibold text-[#F5F5F5]">
-                    {entry.title}
+                    {highlightText(entry.title, search)}
                   </h3>
                   <div className="mt-2 text-sm leading-relaxed text-[#D1D5DB]">
-                    {renderMarkdown(entry.content)}
+                    {renderMarkdown(entry.content, search)}
                   </div>
                 </div>
               </div>
