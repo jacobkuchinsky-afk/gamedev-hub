@@ -242,6 +242,35 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
 }
 
+/* Input utilities */
+.input {
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #F5F5F5;
+  font-size: 14px;
+  width: 100%;
+}
+.input::placeholder {
+  color: #6B7280;
+}
+.input-sm {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.textarea {
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #F5F5F5;
+  font-size: 14px;
+  width: 100%;
+  resize: vertical;
+  min-height: 80px;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
