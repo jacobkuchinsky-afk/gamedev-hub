@@ -107,6 +107,9 @@ export default function ChangelogPage() {
   const [copiedNotes, setCopiedNotes] = useState(false);
   const [copiedSocial, setCopiedSocial] = useState(false);
 
+  const [historySummary, setHistorySummary] = useState<string | null>(null);
+  const [historySummaryLoading, setHistorySummaryLoading] = useState(false);
+
   const expandedIds = Object.entries(expanded).filter(([, v]) => v).map(([k]) => k);
   const canCompareVersions = expandedIds.length === 2;
   const diffEntryA = canCompareVersions ? entries.find((e) => e.id === expandedIds[0]) : undefined;
@@ -274,6 +277,50 @@ Be specific and brief. Only include sections that have items.`;
       );
     } finally {
       setReleaseNotesLoading(false);
+    }
+  };
+
+  const generateHistorySummary = async () => {
+    if (historySummaryLoading || entries.length === 0) return;
+    setHistorySummaryLoading(true);
+    setHistorySummary(null);
+    try {
+      const versionsText = entries
+        .map((e) => {
+          const changes: string[] = [];
+          for (const cat of CHANGE_CATEGORIES) {
+            const items = e.changes[cat];
+            if (items && items.length > 0) {
+              changes.push(`${cat}: ${items.join(", ")}`);
+            }
+          }
+          return `v${e.version} (${e.type}, ${e.date}) "${e.title}": ${changes.join("; ")}`;
+        })
+        .join("\n");
+
+      const prompt = `Summarize the entire development history of this game based on its changelog:\n${versionsText}\n\nIdentify: the biggest changes, the most active development area, and the overall trajectory. 3-4 sentences.`;
+
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setHistorySummary(content || "Could not generate summary.");
+    } catch {
+      setHistorySummary("Failed to generate summary. Try again.");
+    } finally {
+      setHistorySummaryLoading(false);
     }
   };
 
@@ -523,6 +570,18 @@ Be specific and brief. Only include sections that have items.`;
               Export JSON
             </button>
             <button
+              onClick={generateHistorySummary}
+              disabled={entries.length === 0 || historySummaryLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-40"
+            >
+              {historySummaryLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <TrendingUp className="h-4 w-4" />
+              )}
+              AI Summarize All
+            </button>
+            <button
               onClick={generateReleaseNotes}
               disabled={entries.length === 0}
               className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-40"
@@ -567,6 +626,34 @@ Be specific and brief. Only include sections that have items.`;
               <GitCompare className="h-4 w-4" />
               Compare Versions
             </button>
+          )}
+        </div>
+      )}
+
+      {/* AI History Summary */}
+      {(historySummaryLoading || historySummary) && (
+        <div className="rounded-xl border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-[#F59E0B]" />
+              <h3 className="text-sm font-semibold text-[#F59E0B]">Development History Summary</h3>
+            </div>
+            {!historySummaryLoading && (
+              <button
+                onClick={() => setHistorySummary(null)}
+                className="rounded-lg p-1 text-[#6B7280] transition-colors hover:text-[#F5F5F5]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          {historySummaryLoading ? (
+            <div className="flex items-center gap-3 py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-[#F59E0B]" />
+              <span className="text-sm text-[#9CA3AF]">Analyzing {entries.length} version{entries.length !== 1 ? "s" : ""} of development history...</span>
+            </div>
+          ) : (
+            <p className="text-sm leading-relaxed text-[#D1D5DB]">{historySummary}</p>
           )}
         </div>
       )}

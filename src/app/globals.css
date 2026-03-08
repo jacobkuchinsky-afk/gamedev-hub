@@ -133,3 +133,70 @@ html {
   outline: 2px solid #F59E0B;
   outline-offset: 2px;
 }
+
+@media print {
+  body {
+    background: #fff !important;
+    color: #111 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  aside[role="navigation"],
+  header[aria-label="Top bar"],
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .print\\:block {
+    display: block !important;
+  }
+
+  .print\\:bg-white {
+    background: #fff !important;
+  }
+
+  .print\\:text-black {
+    color: #111 !important;
+  }
+
+  .print\\:border-gray-300 {
+    border-color: #d1d5db !important;
+  }
+
+  a {
+    color: #111 !important;
+    text-decoration: none !important;
+  }
+
+  button, select, .fixed {
+    display: none !important;
+  }
+
+  [class*="rounded-xl"] {
+    border-color: #e5e7eb !important;
+    background: #fff !important;
+  }
+
+  [class*="bg-\\[\\#1A1A1A\\]"],
+  [class*="bg-\\[\\#0F0F0F\\]"] {
+    background: #fff !important;
+  }
+
+  [class*="text-\\[\\#F5F5F5\\]"],
+  [class*="text-\\[\\#D1D5DB\\]"],
+  [class*="text-\\[\\#9CA3AF\\]"] {
+    color: #333 !important;
+  }
+
+  [class*="border-\\[\\#2A2A2A\\]"] {
+    border-color: #e5e7eb !important;
+  }
+}

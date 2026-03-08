@@ -45,6 +45,7 @@ import {
   ThumbsUp,
   ThumbsDown,
   Lightbulb,
+  Printer,
 } from "lucide-react";
 import {
   getProject,
@@ -2776,6 +2777,14 @@ export default function ProjectDetailPage() {
                   >
                     <Package className="h-4 w-4 text-[#10B981]" />
                     Export Everything
+                  </button>
+                  <div className="mx-3 border-t border-[#2A2A2A]" />
+                  <button
+                    onClick={() => { setExportOpen(false); window.print(); }}
+                    className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm text-[#D1D5DB] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                  >
+                    <Printer className="h-4 w-4 text-[#8B5CF6]" />
+                    Print Overview
                   </button>
                 </div>
               )}
