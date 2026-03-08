@@ -30,6 +30,8 @@ import {
 } from "lucide-react";
 import { AuthProvider, useAuthContext } from "@/components/AuthProvider";
 import { getProjects, getStatusColor, type Project } from "@/lib/store";
+import ShortcutsModal from "@/components/ShortcutsModal";
+import { ToastProvider } from "@/components/Toast";
 
 const NAV_ITEMS = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -142,6 +144,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
 
   useEffect(() => {
@@ -165,8 +168,19 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     if ((e.metaKey || e.ctrlKey) && e.key === "k") {
       e.preventDefault();
       setCmdOpen((prev) => !prev);
+      return;
     }
-  }, []);
+    const target = e.target as HTMLElement;
+    const isTyping =
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.tagName === "SELECT" ||
+      target.isContentEditable;
+    if (e.key === "?" && !isTyping && !cmdOpen) {
+      e.preventDefault();
+      setShortcutsOpen((prev) => !prev);
+    }
+  }, [cmdOpen]);
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
@@ -329,6 +343,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         </header>
 
         <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
+        <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
@@ -340,7 +355,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
-      <DashboardShell>{children}</DashboardShell>
+      <ToastProvider>
+        <DashboardShell>{children}</DashboardShell>
+      </ToastProvider>
     </AuthProvider>
   );
 }

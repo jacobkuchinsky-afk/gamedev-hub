@@ -18,6 +18,7 @@ import {
   type DevlogEntry,
   type Project,
 } from "@/lib/store";
+import { useToast } from "@/components/Toast";
 
 const MOOD_OPTIONS: DevlogEntry["mood"][] = [
   "productive",
@@ -41,6 +42,7 @@ const MOOD_COLORS: Record<DevlogEntry["mood"], string> = {
 };
 
 export default function DevlogPage() {
+  const { toast } = useToast();
   const [entries, setEntries] = useState<DevlogEntry[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -111,6 +113,7 @@ export default function DevlogPage() {
     console.log("[DevlogPage] created entry:", entry.id);
 
     setEntries(getDevlog());
+    toast({ title: "Entry saved!", description: formTitle.trim(), type: "success" });
     setFormTitle("");
     setFormContent("");
     setFormMood("productive");

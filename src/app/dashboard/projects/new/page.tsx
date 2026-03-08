@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Gamepad2 } from "lucide-react";
 import Link from "next/link";
 import { addProject, type Project } from "@/lib/store";
+import { useToast } from "@/components/Toast";
 
 const ENGINES = ["Unity", "Unreal", "Godot", "GameMaker", "Custom"];
 const GENRES = [
@@ -33,6 +34,7 @@ const COVER_COLORS = [
 
 export default function NewProjectPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [engine, setEngine] = useState("Godot");
@@ -56,6 +58,7 @@ export default function NewProjectPage() {
       coverColor,
     });
     console.log("[NewProjectPage] created project:", project.id);
+    toast({ title: "Project created!", description: `${name.trim()} is ready to go`, type: "success" });
     router.push(`/dashboard/projects/${project.id}`);
   };
 
