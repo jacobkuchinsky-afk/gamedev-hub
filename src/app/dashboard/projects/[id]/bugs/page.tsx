@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams } from "next/navigation";
 import {
   Plus,
@@ -78,6 +78,8 @@ export default function BugTrackerPage() {
   const [filterStatus, setFilterStatus] = useState<Bug["status"] | "all">("all");
   const [filterPlatform, setFilterPlatform] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [quickTitle, setQuickTitle] = useState("");
   const [quickSeverity, setQuickSeverity] = useState<Bug["severity"]>("major");
@@ -102,6 +104,16 @@ export default function BugTrackerPage() {
     if (p) setProject(p);
     reload();
   }, [projectId, reload]);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [searchQuery]);
 
   const handleAddBug = (e: React.FormEvent) => {
     e.preventDefault();
@@ -221,8 +233,8 @@ export default function BugTrackerPage() {
       .filter((b) => filterStatus === "all" || b.status === filterStatus)
       .filter((b) => filterPlatform === "all" || b.platform === filterPlatform)
       .filter((b) => {
-        if (!searchQuery) return true;
-        const q = searchQuery.toLowerCase();
+        if (!debouncedSearch) return true;
+        const q = debouncedSearch.toLowerCase();
         return (
           b.title.toLowerCase().includes(q) ||
           b.description.toLowerCase().includes(q)
@@ -232,13 +244,13 @@ export default function BugTrackerPage() {
         (a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
-  }, [bugs, filterSeverity, filterStatus, filterPlatform, searchQuery]);
+  }, [bugs, filterSeverity, filterStatus, filterPlatform, debouncedSearch]);
 
   const filteredResolved = useMemo(() => {
     return closedBugs
       .filter((b) => {
-        if (!searchQuery) return true;
-        const q = searchQuery.toLowerCase();
+        if (!debouncedSearch) return true;
+        const q = debouncedSearch.toLowerCase();
         return (
           b.title.toLowerCase().includes(q) ||
           b.description.toLowerCase().includes(q)
@@ -248,7 +260,7 @@ export default function BugTrackerPage() {
         (a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
-  }, [closedBugs, searchQuery]);
+  }, [closedBugs, debouncedSearch]);
 
   const uniquePlatforms = useMemo(() => {
     const set = new Set(bugs.map((b) => b.platform));
@@ -256,6 +268,21 @@ export default function BugTrackerPage() {
   }, [bugs]);
 
   if (!project) return null;
+
+  const highlightText = (text: string, query: string): React.ReactNode => {
+    if (!query.trim()) return text;
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const parts = text.split(new RegExp(`(${escaped})`, "gi"));
+    if (parts.length <= 1) return text;
+    const lowerQ = query.toLowerCase();
+    return parts.map((part, i) =>
+      part.toLowerCase() === lowerQ ? (
+        <mark key={i} className="rounded-sm bg-[#F59E0B]/25 px-0.5 text-[#F59E0B]">{part}</mark>
+      ) : (
+        <span key={i}>{part}</span>
+      )
+    );
+  };
 
   const renderBugRow = (bug: Bug, isResolved: boolean) => (
     <div key={bug.id}>
@@ -275,7 +302,7 @@ export default function BugTrackerPage() {
               isResolved ? "line-through text-[#6B7280]" : ""
             }`}
           >
-            {bug.title}
+            {highlightText(bug.title, debouncedSearch)}
           </p>
           <div className="mt-1 flex items-center gap-2 text-xs text-[#6B7280]">
             <Monitor className="h-3 w-3" />
@@ -307,7 +334,7 @@ export default function BugTrackerPage() {
               <p className="text-xs font-medium text-[#6B7280] mb-1">
                 Description
               </p>
-              <p className="text-sm text-[#D1D5DB]">{bug.description}</p>
+              <p className="text-sm text-[#D1D5DB]">{highlightText(bug.description, debouncedSearch)}</p>
             </div>
           )}
           {bug.reproSteps && (
@@ -451,8 +478,16 @@ export default function BugTrackerPage() {
             placeholder="Search bugs by title or description..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2 pl-10 pr-4 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+            className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2 pl-10 pr-9 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6B7280] transition-colors hover:text-[#F5F5F5]"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
         <div className="relative">
           <select
@@ -631,22 +666,40 @@ export default function BugTrackerPage() {
       <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
-            <AlertTriangle className="h-10 w-10 text-[#6B7280]" />
-            <p className="mt-3 text-sm text-[#9CA3AF]">
-              {bugs.length === 0
-                ? "No bugs reported yet"
-                : openBugs.length === 0
-                ? "All bugs resolved — nice work!"
-                : "No bugs match your filters"}
-            </p>
-            {bugs.length === 0 && (
-              <button
-                onClick={() => setShowAddForm(true)}
-                className="mt-4 flex items-center gap-1.5 text-sm text-[#F59E0B] hover:underline"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Report first bug
-              </button>
+            {debouncedSearch ? (
+              <>
+                <Search className="h-10 w-10 text-[#6B7280]" />
+                <p className="mt-3 text-sm text-[#9CA3AF]">
+                  No bugs match &ldquo;{debouncedSearch}&rdquo;
+                </p>
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="mt-3 flex items-center gap-1.5 text-sm text-[#F59E0B] hover:underline"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Clear search
+                </button>
+              </>
+            ) : (
+              <>
+                <AlertTriangle className="h-10 w-10 text-[#6B7280]" />
+                <p className="mt-3 text-sm text-[#9CA3AF]">
+                  {bugs.length === 0
+                    ? "No bugs reported yet"
+                    : openBugs.length === 0
+                    ? "All bugs resolved — nice work!"
+                    : "No bugs match your filters"}
+                </p>
+                {bugs.length === 0 && (
+                  <button
+                    onClick={() => setShowAddForm(true)}
+                    className="mt-4 flex items-center gap-1.5 text-sm text-[#F59E0B] hover:underline"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Report first bug
+                  </button>
+                )}
+              </>
             )}
           </div>
         ) : (

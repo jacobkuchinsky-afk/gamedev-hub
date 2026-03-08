@@ -75,6 +75,7 @@ export default function TaskBoardPage() {
     {}
   );
   const [editingTask, setEditingTask] = useState<string | null>(null);
+  const [flashingTask, setFlashingTask] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [editPriority, setEditPriority] = useState<Task["priority"]>("medium");
@@ -211,6 +212,8 @@ export default function TaskBoardPage() {
 
   const moveTask = (taskId: string, newStatus: Task["status"]) => {
     updateTask(taskId, { status: newStatus });
+    setFlashingTask(taskId);
+    setTimeout(() => setFlashingTask(null), 700);
     reload();
   };
 
@@ -716,7 +719,13 @@ export default function TaskBoardPage() {
                     style={{ backgroundColor: column.color }}
                   />
                   <span className="text-sm font-semibold">{column.label}</span>
-                  <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-xs text-[#9CA3AF]">
+                  <span
+                    className="rounded-full px-2 py-0.5 text-xs font-semibold"
+                    style={{
+                      backgroundColor: `${column.color}15`,
+                      color: column.color,
+                    }}
+                  >
                     {columnTasks.length}
                   </span>
                 </div>
@@ -765,24 +774,31 @@ export default function TaskBoardPage() {
                   return (
                     <div key={task.id} className="group">
                       <div
-                        className={`rounded-lg border bg-[#1A1A1A] p-3 transition-all ${
-                          isExpanded
-                            ? "border-[#F59E0B]/30"
-                            : "border-[#2A2A2A] hover:border-[#F59E0B]/20"
+                        className={`rounded-lg border bg-[#1A1A1A] p-3 transition-all duration-500 ${
+                          flashingTask === task.id
+                            ? "border-[#F59E0B] ring-2 ring-[#F59E0B]/20 bg-[#F59E0B]/5"
+                            : isExpanded
+                              ? "border-[#F59E0B]/30"
+                              : "border-[#2A2A2A] hover:border-[#F59E0B]/20"
                         }`}
                       >
                         <div className="flex items-start gap-1.5">
                           {prevCol && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                moveTask(task.id, prevCol.key);
-                              }}
-                              title={`Move to ${prevCol.label}`}
-                              className="mt-0.5 shrink-0 rounded p-0.5 text-[#4B5563] opacity-0 transition-all group-hover:opacity-100 hover:!text-[#F59E0B]"
-                            >
-                              <ChevronLeft className="h-3.5 w-3.5" />
-                            </button>
+                            <div className="group/left relative mt-0.5 shrink-0">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  moveTask(task.id, prevCol.key);
+                                }}
+                                className="rounded p-1 text-[#6B7280] transition-all hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
+                              >
+                                <ChevronLeft className="h-3.5 w-3.5" />
+                              </button>
+                              <div className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-[#3A3A3A] bg-[#2A2A2A] px-2 py-1 text-[10px] font-medium text-[#F5F5F5] opacity-0 shadow-lg transition-opacity group-hover/left:opacity-100">
+                                Move to {prevCol.label}
+                                <div className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-[#2A2A2A]" />
+                              </div>
+                            </div>
                           )}
 
                           <div
@@ -822,16 +838,21 @@ export default function TaskBoardPage() {
                           </div>
 
                           {nextCol && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                moveTask(task.id, nextCol.key);
-                              }}
-                              title={`Move to ${nextCol.label}`}
-                              className="mt-0.5 shrink-0 rounded p-0.5 text-[#4B5563] opacity-0 transition-all group-hover:opacity-100 hover:!text-[#F59E0B]"
-                            >
-                              <ChevronRight className="h-3.5 w-3.5" />
-                            </button>
+                            <div className="group/right relative mt-0.5 shrink-0">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  moveTask(task.id, nextCol.key);
+                                }}
+                                className="rounded p-1 text-[#6B7280] transition-all hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
+                              >
+                                <ChevronRight className="h-3.5 w-3.5" />
+                              </button>
+                              <div className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-[#3A3A3A] bg-[#2A2A2A] px-2 py-1 text-[10px] font-medium text-[#F5F5F5] opacity-0 shadow-lg transition-opacity group-hover/right:opacity-100">
+                                Move to {nextCol.label}
+                                <div className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-[#2A2A2A]" />
+                              </div>
+                            </div>
                           )}
                         </div>
                       </div>
