@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Gamepad2,
@@ -137,6 +137,11 @@ const faqs = [
 export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [scrollOpacity, setScrollOpacity] = useState(1);
+  const [visibleSections, setVisibleSections] = useState<Record<number, boolean>>({});
+  const sectionRefs = useRef<(HTMLElement | null)[]>([]);
+  const setSectionRef = (i: number) => (el: HTMLElement | null) => {
+    sectionRefs.current[i] = el;
+  };
 
   useEffect(() => {
     const onScroll = () => {
@@ -145,6 +150,28 @@ export default function LandingPage() {
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const elToIndex = new Map<Element, number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const index = elToIndex.get(entry.target);
+          if (index !== undefined && entry.isIntersecting) {
+            setVisibleSections((prev) => ({ ...prev, [index]: true }));
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+    sectionRefs.current.forEach((el, i) => {
+      if (el) {
+        elToIndex.set(el, i);
+        observer.observe(el);
+      }
+    });
+    return () => observer.disconnect();
   }, []);
 
   return (
@@ -248,7 +275,15 @@ export default function LandingPage() {
       </section>
 
       {/* Feature Cards */}
-      <section className="mx-auto max-w-6xl px-6 pb-24">
+      <section
+        ref={setSectionRef(0)}
+        className="mx-auto max-w-6xl px-6 pb-24 transition-all duration-500 ease-out"
+        style={{
+          opacity: visibleSections[0] ? 1 : 0,
+          transform: visibleSections[0] ? "translateY(0)" : "translateY(20px)",
+          transitionDelay: "0ms",
+        }}
+      >
         <div className="grid gap-6 md:grid-cols-3">
           {features.map((f, i) => (
             <div
@@ -269,7 +304,16 @@ export default function LandingPage() {
       </section>
 
       {/* Tools Showcase */}
-      <section id="tools" className="border-t border-[#2A2A2A] bg-[#0A0A0A] py-24">
+      <section
+        id="tools"
+        ref={setSectionRef(1)}
+        className="border-t border-[#2A2A2A] bg-[#0A0A0A] py-24 transition-all duration-500 ease-out"
+        style={{
+          opacity: visibleSections[1] ? 1 : 0,
+          transform: visibleSections[1] ? "translateY(0)" : "translateY(20px)",
+          transitionDelay: "100ms",
+        }}
+      >
         <div className="mx-auto max-w-6xl px-6">
           <div className="mb-14 text-center">
             <h2 className="text-3xl font-bold md:text-4xl">
@@ -304,7 +348,15 @@ export default function LandingPage() {
       </section>
 
       {/* AI-Powered Section */}
-      <section className="relative border-t border-[#2A2A2A] py-24 overflow-hidden">
+      <section
+        ref={setSectionRef(2)}
+        className="relative border-t border-[#2A2A2A] py-24 overflow-hidden transition-all duration-500 ease-out"
+        style={{
+          opacity: visibleSections[2] ? 1 : 0,
+          transform: visibleSections[2] ? "translateY(0)" : "translateY(20px)",
+          transitionDelay: "200ms",
+        }}
+      >
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(245,158,11,0.06)_0%,_transparent_70%)]" />
         <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-[#F59E0B]/[0.03] blur-3xl" />
         <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-[#F59E0B]/[0.03] blur-3xl" />
@@ -349,7 +401,15 @@ export default function LandingPage() {
       </section>
 
       {/* Platform Stats */}
-      <section className="relative border-t border-[#2A2A2A] py-20 overflow-hidden">
+      <section
+        ref={setSectionRef(3)}
+        className="relative border-t border-[#2A2A2A] py-20 overflow-hidden transition-all duration-500 ease-out"
+        style={{
+          opacity: visibleSections[3] ? 1 : 0,
+          transform: visibleSections[3] ? "translateY(0)" : "translateY(20px)",
+          transitionDelay: "300ms",
+        }}
+      >
         <div className="absolute inset-0 bg-gradient-to-b from-[#0F0F0F] via-[#131313] to-[#0F0F0F]" />
         <div className="relative mx-auto max-w-5xl px-6">
           <div className="grid gap-8 sm:grid-cols-3">
@@ -371,7 +431,15 @@ export default function LandingPage() {
       </section>
 
       {/* How It Works */}
-      <section className="border-t border-[#2A2A2A] py-24">
+      <section
+        ref={setSectionRef(4)}
+        className="border-t border-[#2A2A2A] py-24 transition-all duration-500 ease-out"
+        style={{
+          opacity: visibleSections[4] ? 1 : 0,
+          transform: visibleSections[4] ? "translateY(0)" : "translateY(20px)",
+          transitionDelay: "400ms",
+        }}
+      >
         <div className="mx-auto max-w-6xl px-6">
           <div className="mb-16 text-center">
             <h2 className="text-3xl font-bold md:text-4xl">
@@ -403,7 +471,15 @@ export default function LandingPage() {
       </section>
 
       {/* Social Proof */}
-      <section className="border-t border-[#2A2A2A] bg-[#0A0A0A] py-20">
+      <section
+        ref={setSectionRef(5)}
+        className="border-t border-[#2A2A2A] bg-[#0A0A0A] py-20 transition-all duration-500 ease-out"
+        style={{
+          opacity: visibleSections[5] ? 1 : 0,
+          transform: visibleSections[5] ? "translateY(0)" : "translateY(20px)",
+          transitionDelay: "500ms",
+        }}
+      >
         <div className="mx-auto max-w-6xl px-6">
           <div className="mx-auto max-w-lg text-center">
             <BookOpen className="mx-auto mb-4 h-8 w-8 text-[#F59E0B]" />
@@ -436,7 +512,15 @@ export default function LandingPage() {
       </section>
 
       {/* FAQ */}
-      <section className="border-t border-[#2A2A2A] py-24">
+      <section
+        ref={setSectionRef(6)}
+        className="border-t border-[#2A2A2A] py-24 transition-all duration-500 ease-out"
+        style={{
+          opacity: visibleSections[6] ? 1 : 0,
+          transform: visibleSections[6] ? "translateY(0)" : "translateY(20px)",
+          transitionDelay: "600ms",
+        }}
+      >
         <div className="mx-auto max-w-3xl px-6">
           <h2 className="mb-12 text-center text-3xl font-bold md:text-4xl">
             Frequently Asked Questions
@@ -473,7 +557,15 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing */}
-      <section className="border-t border-[#2A2A2A] py-24">
+      <section
+        ref={setSectionRef(7)}
+        className="border-t border-[#2A2A2A] py-24 transition-all duration-500 ease-out"
+        style={{
+          opacity: visibleSections[7] ? 1 : 0,
+          transform: visibleSections[7] ? "translateY(0)" : "translateY(20px)",
+          transitionDelay: "700ms",
+        }}
+      >
         <div className="mx-auto max-w-6xl px-6">
           <p className="mb-4 text-center text-lg font-medium text-[#F59E0B]">
             One plan. Everything included.
@@ -518,7 +610,15 @@ export default function LandingPage() {
       </section>
 
       {/* CTA */}
-      <section className="border-t border-[#2A2A2A] py-24">
+      <section
+        ref={setSectionRef(8)}
+        className="border-t border-[#2A2A2A] py-24 transition-all duration-500 ease-out"
+        style={{
+          opacity: visibleSections[8] ? 1 : 0,
+          transform: visibleSections[8] ? "translateY(0)" : "translateY(20px)",
+          transitionDelay: "800ms",
+        }}
+      >
         <div className="mx-auto max-w-6xl px-6 text-center">
           <h2 className="text-3xl font-bold md:text-4xl">Ready to forge your next game?</h2>
           <p className="mt-4 text-lg text-[#9CA3AF]">
