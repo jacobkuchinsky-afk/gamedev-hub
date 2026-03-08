@@ -288,6 +288,8 @@ export default function DialoguePage() {
   const [customVoice, setCustomVoice] = useState("");
   const [aiRewriteLoading, setAiRewriteLoading] = useState(false);
   const [aiEmotionLoading, setAiEmotionLoading] = useState(false);
+  const [aiBranchLoading, setAiBranchLoading] = useState(false);
+  const [aiBranchSuggestions, setAiBranchSuggestions] = useState<string[]>([]);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const interRef = useRef<Interaction>({ type: "idle" });
@@ -851,6 +853,45 @@ export default function DialoguePage() {
     }
     setAiEmotionLoading(false);
   }, [nodes]);
+
+  const aiBranchSuggest = useCallback(async () => {
+    if (!selectedNode || selectedNode.type !== "choice") return;
+    setAiBranchLoading(true);
+    setAiBranchSuggestions([]);
+
+    const parentConn = connections.find((c) => c.toNodeId === selectedNode.id);
+    const parentNode = parentConn ? nodes.find((n) => n.id === parentConn.fromNodeId) : null;
+    const context = parentNode?.text || selectedNode.text || "a conversation";
+
+    const prompt = `For a game dialogue where the player is choosing between options after: '${context}'. Suggest 3 player choice options that lead to different outcomes. Just list them, one per line.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 128,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const lines = content
+        .split("\n")
+        .map((l: string) => l.replace(/^\d+[\.\)\-]\s*/, "").replace(/^["'\-*]\s*|["']$/g, "").trim())
+        .filter((l: string) => l.length > 3);
+      setAiBranchSuggestions(lines.slice(0, 3));
+    } catch {
+      setAiWriteNotice("AI branch suggestion failed");
+    }
+    setAiBranchLoading(false);
+  }, [selectedNode, connections, nodes]);
 
   // ── Simulator ───────────────────────────────────────────
 
@@ -1628,6 +1669,33 @@ export default function DialoguePage() {
                     >
                       <Plus className="w-3 h-3" /> Add Choice
                     </button>
+                    <button
+                      onClick={aiBranchSuggest}
+                      disabled={aiBranchLoading}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded text-xs hover:bg-amber-500/20 transition-colors disabled:opacity-40"
+                    >
+                      {aiBranchLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                      {aiBranchLoading ? "Thinking..." : "AI Branch"}
+                    </button>
+                    {aiBranchSuggestions.length > 0 && (
+                      <div className="space-y-1 pt-1.5 border-t border-[#2A2A2A]">
+                        <span className="text-[10px] text-gray-500">Click to add:</span>
+                        {aiBranchSuggestions.map((s, i) => (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              updateNode(selectedNode.id, {
+                                choices: [...selectedNode.choices, s],
+                              });
+                              setAiBranchSuggestions((prev) => prev.filter((_, j) => j !== i));
+                            }}
+                            className="w-full text-left px-2.5 py-1.5 bg-amber-500/5 border border-amber-500/20 rounded text-[11px] text-amber-300/80 hover:border-amber-500/40 hover:text-amber-300 transition-colors"
+                          >
+                            + {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

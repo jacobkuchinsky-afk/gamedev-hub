@@ -58,6 +58,7 @@ export default function ReferenceBoardPage() {
   const [copied, setCopied] = useState(false);
   const [similarGames, setSimilarGames] = useState<{ title: string; year: string; study: string; relation: string }[]>([]);
   const [similarLoading, setSimilarLoading] = useState(false);
+  const [aiDescribeLoading, setAiDescribeLoading] = useState(false);
 
   const fetchAiSuggestions = async () => {
     if (!project) return;
@@ -194,6 +195,36 @@ export default function ReferenceBoardPage() {
     });
     setReferences((prev) => [...prev, ref]);
     setSimilarGames((prev) => prev.filter((g) => g.title !== game.title));
+  };
+
+  const aiDescribeReference = async () => {
+    if (!formTitle.trim() && !formUrl.trim()) return;
+    setAiDescribeLoading(true);
+    try {
+      const prompt = `Write a brief note about why this game reference is useful: title='${formTitle}', url='${formUrl}'. 1 sentence about what to study from it.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 128,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const cleaned = content.replace(/^["']|["']$/g, "").trim();
+      if (cleaned) setFormNotes(cleaned);
+    } catch {
+      // silently fail
+    } finally {
+      setAiDescribeLoading(false);
+    }
   };
 
   const handleExportMarkdown = () => {
@@ -575,7 +606,17 @@ export default function ReferenceBoardPage() {
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-xs text-[#9CA3AF]">Notes</label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="block text-xs text-[#9CA3AF]">Notes</label>
+                  <button
+                    onClick={aiDescribeReference}
+                    disabled={aiDescribeLoading || (!formTitle.trim() && !formUrl.trim())}
+                    className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium text-[#F59E0B] border border-[#F59E0B]/25 bg-[#F59E0B]/5 hover:bg-[#F59E0B]/15 transition-colors disabled:opacity-40"
+                  >
+                    {aiDescribeLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    {aiDescribeLoading ? "Writing..." : "AI Describe"}
+                  </button>
+                </div>
                 <textarea
                   value={formNotes}
                   onChange={(e) => setFormNotes(e.target.value)}
