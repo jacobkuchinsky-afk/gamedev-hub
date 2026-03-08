@@ -359,6 +359,9 @@ export function deleteProject(id: string): boolean {
   const changelog = getChangelog();
   save(CHANGELOG_KEY, changelog.filter((c) => c.projectId !== id));
 
+  const sprintData = getSprints();
+  save(SPRINTS_KEY, sprintData.filter((s) => s.projectId !== id));
+
   return true;
 }
 
@@ -1056,4 +1059,88 @@ export function deleteChangelogEntry(id: string): boolean {
   if (filtered.length === entries.length) return false;
   save(CHANGELOG_KEY, filtered);
   return true;
+}
+
+// ─── Sprints ──────────────────────────────────────────────────────────────────
+
+export interface Sprint {
+  id: string;
+  projectId: string;
+  name: string;
+  goal: string;
+  startDate: string;
+  endDate: string;
+  status: "active" | "completed" | "planned";
+  created_at: string;
+}
+
+const SPRINTS_KEY = "gameforge_sprints";
+
+const SEED_SPRINTS: Sprint[] = [
+  {
+    id: "sprint_001",
+    projectId: "proj_001",
+    name: "Sprint 12",
+    goal: "Core UI & menus",
+    startDate: "2026-01-20",
+    endDate: "2026-02-02",
+    status: "completed",
+    created_at: "2026-01-20T08:00:00Z",
+  },
+  {
+    id: "sprint_002",
+    projectId: "proj_001",
+    name: "Sprint 13",
+    goal: "Save system & persistence",
+    startDate: "2026-02-03",
+    endDate: "2026-02-16",
+    status: "completed",
+    created_at: "2026-02-03T08:00:00Z",
+  },
+  {
+    id: "sprint_003",
+    projectId: "proj_001",
+    name: "Sprint 14",
+    goal: "Trading, VFX & performance",
+    startDate: "2026-02-17",
+    endDate: "2026-03-09",
+    status: "active",
+    created_at: "2026-02-17T08:00:00Z",
+  },
+  {
+    id: "sprint_004",
+    projectId: "proj_001",
+    name: "Sprint 15",
+    goal: "Tutorial & polish",
+    startDate: "2026-03-10",
+    endDate: "2026-03-23",
+    status: "planned",
+    created_at: "2026-03-07T08:00:00Z",
+  },
+];
+
+export function getSprints(projectId?: string): Sprint[] {
+  const sprints = getOrSeed(SPRINTS_KEY, SEED_SPRINTS);
+  return projectId ? sprints.filter((s) => s.projectId === projectId) : sprints;
+}
+
+export function addSprint(sprint: Omit<Sprint, "id" | "created_at">): Sprint {
+  const sprints = getSprints();
+  const newSprint: Sprint = {
+    ...sprint,
+    id: `sprint_${Date.now()}`,
+    created_at: new Date().toISOString(),
+  };
+  sprints.push(newSprint);
+  save(SPRINTS_KEY, sprints);
+  return newSprint;
+}
+
+export function updateSprint(id: string, updates: Partial<Sprint>): Sprint | undefined {
+  const sprints = getSprints();
+  const idx = sprints.findIndex((s) => s.id === id);
+  if (idx === -1) return undefined;
+  sprints[idx] = { ...sprints[idx], ...updates };
+  save(SPRINTS_KEY, sprints);
+  return sprints[idx];
 }

@@ -13,6 +13,7 @@ import {
   ArrowUpDown,
   BookOpen,
   Clock,
+  AlertTriangle,
 } from "lucide-react";
 import {
   getProjects,
@@ -46,7 +47,9 @@ type ViewMode = "grid" | "list";
 interface ProjectData {
   project: Project;
   taskCount: number;
+  completedTaskCount: number;
   bugCount: number;
+  overdueBugCount: number;
   devlogCount: number;
 }
 
@@ -74,12 +77,23 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     const allProjects = getProjects();
-    const data: ProjectData[] = allProjects.map((p) => ({
-      project: p,
-      taskCount: getTasks(p.id).length,
-      bugCount: getBugs(p.id).filter((b) => b.status !== "closed").length,
-      devlogCount: getDevlog(p.id).length,
-    }));
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const data: ProjectData[] = allProjects.map((p) => {
+      const allTasks = getTasks(p.id);
+      const allBugs = getBugs(p.id);
+      return {
+        project: p,
+        taskCount: allTasks.length,
+        completedTaskCount: allTasks.filter((t) => t.status === "done").length,
+        bugCount: allBugs.filter((b) => b.status !== "closed").length,
+        overdueBugCount: allBugs.filter(
+          (b) =>
+            b.status !== "closed" &&
+            new Date(b.created_at).getTime() < sevenDaysAgo
+        ).length,
+        devlogCount: getDevlog(p.id).length,
+      };
+    });
     setProjectData(data);
   }, []);
 
@@ -226,55 +240,95 @@ export default function ProjectsPage() {
       {/* Grid View */}
       {view === "grid" && filtered.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map(({ project, taskCount, bugCount, devlogCount }) => (
-            <Link
-              key={project.id}
-              href={`/dashboard/projects/${project.id}`}
-              className="group rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] transition-all hover:border-[#F59E0B]/30"
-            >
-              <div
-                className="h-2 rounded-t-xl"
-                style={{ backgroundColor: project.coverColor }}
-              />
-              <div className="p-5">
-                <div className="flex items-start justify-between">
-                  <h3 className="font-semibold text-[#F5F5F5] transition-colors group-hover:text-[#F59E0B]">
-                    {project.name}
-                  </h3>
-                  <span
-                    className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium capitalize ${STATUS_BADGE_STYLES[project.status]}`}
-                  >
-                    {project.status}
-                  </span>
-                </div>
-                <p className="mt-2 line-clamp-2 text-sm text-[#9CA3AF]">
-                  {project.description}
-                </p>
-                <div className="mt-4 flex items-center gap-3 text-xs text-[#6B7280]">
-                  <span className="rounded bg-[#2A2A2A] px-2 py-0.5">
-                    {project.engine}
-                  </span>
-                  <span className="rounded bg-[#2A2A2A] px-2 py-0.5">
-                    {project.genre}
-                  </span>
-                </div>
-                <div className="mt-4 flex items-center gap-4 border-t border-[#2A2A2A] pt-3 text-xs text-[#9CA3AF]">
-                  <div className="flex items-center gap-1.5">
-                    <ListTodo className="h-3.5 w-3.5" />
-                    {taskCount}
+          {filtered.map(
+            ({
+              project,
+              taskCount,
+              completedTaskCount,
+              bugCount,
+              overdueBugCount,
+              devlogCount,
+            }) => {
+              const pct = taskCount
+                ? Math.round((completedTaskCount / taskCount) * 100)
+                : 0;
+              return (
+                <Link
+                  key={project.id}
+                  href={`/dashboard/projects/${project.id}`}
+                  className="group rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] transition-all hover:border-[#F59E0B]/30"
+                >
+                  <div
+                    className="h-2 rounded-t-xl"
+                    style={{ backgroundColor: project.coverColor }}
+                  />
+                  <div className="p-5">
+                    <div className="flex items-start justify-between">
+                      <h3 className="font-semibold text-[#F5F5F5] transition-colors group-hover:text-[#F59E0B]">
+                        {project.name}
+                      </h3>
+                      <span
+                        className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium capitalize ${STATUS_BADGE_STYLES[project.status]}`}
+                      >
+                        {project.status}
+                      </span>
+                    </div>
+                    <p className="mt-2 line-clamp-2 text-sm text-[#9CA3AF]">
+                      {project.description}
+                    </p>
+                    <div className="mt-4 flex items-center gap-3 text-xs text-[#6B7280]">
+                      <span className="rounded bg-[#2A2A2A] px-2 py-0.5">
+                        {project.engine}
+                      </span>
+                      <span className="rounded bg-[#2A2A2A] px-2 py-0.5">
+                        {project.genre}
+                      </span>
+                    </div>
+                    {/* Progress Bar */}
+                    <div className="mt-4">
+                      <div className="flex items-center justify-between text-[10px] text-[#6B7280]">
+                        <span>
+                          {completedTaskCount}/{taskCount} tasks
+                        </span>
+                        <span>{pct}%</span>
+                      </div>
+                      <div className="mt-1 h-1 overflow-hidden rounded-full bg-[#2A2A2A]">
+                        <div
+                          className="h-full rounded-full bg-[#F59E0B] transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center gap-4 border-t border-[#2A2A2A] pt-3 text-xs text-[#9CA3AF]">
+                      <div className="flex items-center gap-1.5">
+                        <ListTodo className="h-3.5 w-3.5" />
+                        {taskCount}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Bug className="h-3.5 w-3.5" />
+                        {bugCount}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <BookOpen className="h-3.5 w-3.5" />
+                        {devlogCount}
+                      </div>
+                      <div className="flex-1" />
+                      {overdueBugCount > 0 && (
+                        <div className="flex items-center gap-1 rounded bg-[#EF4444]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#EF4444]">
+                          <AlertTriangle className="h-3 w-3" />
+                          {overdueBugCount} overdue
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-2 flex items-center gap-1 text-[10px] text-[#6B7280]">
+                      <Clock className="h-3 w-3" />
+                      Updated {relativeTime(project.updated_at)}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <Bug className="h-3.5 w-3.5" />
-                    {bugCount}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <BookOpen className="h-3.5 w-3.5" />
-                    {devlogCount}
-                  </div>
-                </div>
-              </div>
-            </Link>
-          ))}
+                </Link>
+              );
+            }
+          )}
         </div>
       )}
 
@@ -282,47 +336,79 @@ export default function ProjectsPage() {
       {view === "list" && filtered.length > 0 && (
         <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
           {/* Table header */}
-          <div className="grid grid-cols-[1fr_100px_70px_70px_110px] gap-2 border-b border-[#2A2A2A] px-5 py-3 text-xs font-medium text-[#6B7280]">
+          <div className="grid grid-cols-[1fr_100px_100px_70px_80px_110px] gap-2 border-b border-[#2A2A2A] px-5 py-3 text-xs font-medium text-[#6B7280]">
             <span>Name</span>
             <span>Status</span>
-            <span className="text-center">Tasks</span>
+            <span className="text-center">Progress</span>
             <span className="text-center">Bugs</span>
+            <span className="text-center">Alerts</span>
             <span className="text-right">Last Activity</span>
           </div>
           {/* Rows */}
           <div className="divide-y divide-[#2A2A2A]">
-            {filtered.map(({ project, taskCount, bugCount }) => (
-              <Link
-                key={project.id}
-                href={`/dashboard/projects/${project.id}`}
-                className="grid grid-cols-[1fr_100px_70px_70px_110px] gap-2 items-center px-5 py-3.5 transition-colors hover:bg-[#1F1F1F]"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div
-                    className="h-3 w-3 shrink-0 rounded"
-                    style={{ backgroundColor: project.coverColor }}
-                  />
-                  <span className="truncate text-sm font-medium text-[#F5F5F5]">
-                    {project.name}
-                  </span>
-                </div>
-                <span
-                  className={`justify-self-start rounded-md px-2 py-0.5 text-xs font-medium capitalize ${STATUS_BADGE_STYLES[project.status]}`}
-                >
-                  {project.status}
-                </span>
-                <span className="text-center text-sm text-[#9CA3AF]">
-                  {taskCount}
-                </span>
-                <span className="text-center text-sm text-[#9CA3AF]">
-                  {bugCount}
-                </span>
-                <span className="flex items-center justify-end gap-1 text-xs text-[#6B7280]">
-                  <Clock className="h-3 w-3" />
-                  {relativeTime(project.updated_at)}
-                </span>
-              </Link>
-            ))}
+            {filtered.map(
+              ({
+                project,
+                taskCount,
+                completedTaskCount,
+                bugCount,
+                overdueBugCount,
+              }) => {
+                const pct = taskCount
+                  ? Math.round((completedTaskCount / taskCount) * 100)
+                  : 0;
+                return (
+                  <Link
+                    key={project.id}
+                    href={`/dashboard/projects/${project.id}`}
+                    className="grid grid-cols-[1fr_100px_100px_70px_80px_110px] items-center gap-2 px-5 py-3.5 transition-colors hover:bg-[#1F1F1F]"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div
+                        className="h-3 w-3 shrink-0 rounded"
+                        style={{ backgroundColor: project.coverColor }}
+                      />
+                      <span className="truncate text-sm font-medium text-[#F5F5F5]">
+                        {project.name}
+                      </span>
+                    </div>
+                    <span
+                      className={`justify-self-start rounded-md px-2 py-0.5 text-xs font-medium capitalize ${STATUS_BADGE_STYLES[project.status]}`}
+                    >
+                      {project.status}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <div className="h-1 flex-1 overflow-hidden rounded-full bg-[#2A2A2A]">
+                        <div
+                          className="h-full rounded-full bg-[#F59E0B]"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="w-8 text-right text-[10px] text-[#9CA3AF]">
+                        {pct}%
+                      </span>
+                    </div>
+                    <span className="text-center text-sm text-[#9CA3AF]">
+                      {bugCount}
+                    </span>
+                    <div className="flex justify-center">
+                      {overdueBugCount > 0 ? (
+                        <span className="flex items-center gap-1 rounded bg-[#EF4444]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#EF4444]">
+                          <AlertTriangle className="h-3 w-3" />
+                          {overdueBugCount}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-[#4B5563]">—</span>
+                      )}
+                    </div>
+                    <span className="flex items-center justify-end gap-1 text-xs text-[#6B7280]">
+                      <Clock className="h-3 w-3" />
+                      {relativeTime(project.updated_at)}
+                    </span>
+                  </Link>
+                );
+              }
+            )}
           </div>
         </div>
       )}

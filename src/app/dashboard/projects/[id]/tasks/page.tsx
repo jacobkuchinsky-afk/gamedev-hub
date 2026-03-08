@@ -12,6 +12,8 @@ import {
   Pencil,
   Check,
   ArrowUpDown,
+  Target,
+  TrendingUp,
 } from "lucide-react";
 import {
   getProject,
@@ -19,8 +21,11 @@ import {
   addTask,
   updateTask,
   getPriorityColor,
+  getSprints,
+  addSprint,
   type Project,
   type Task,
+  type Sprint,
 } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
 
@@ -41,6 +46,15 @@ const PRIORITY_ORDER: Record<Task["priority"], number> = {
 };
 
 type SortOption = "priority" | "name" | "date";
+
+const SPRINT_STATUS_STYLES: Record<
+  Sprint["status"],
+  { bg: string; text: string }
+> = {
+  active: { bg: "bg-[#F59E0B]/10", text: "text-[#F59E0B]" },
+  completed: { bg: "bg-[#10B981]/10", text: "text-[#10B981]" },
+  planned: { bg: "bg-[#9CA3AF]/10", text: "text-[#9CA3AF]" },
+};
 
 export default function TaskBoardPage() {
   const params = useParams();
@@ -67,10 +81,19 @@ export default function TaskBoardPage() {
   const [newDesc, setNewDesc] = useState("");
   const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
   const [newAssignee, setNewAssignee] = useState("JacobK");
-  const [newSprint, setNewSprint] = useState("Sprint 1");
+  const [newSprint, setNewSprint] = useState("");
+
+  const [sprints, setSprints] = useState<Sprint[]>([]);
+  const [selectedSprint, setSelectedSprint] = useState<string>("all");
+  const [showCreateSprint, setShowCreateSprint] = useState(false);
+  const [csName, setCsName] = useState("");
+  const [csGoal, setCsGoal] = useState("");
+  const [csStart, setCsStart] = useState("");
+  const [csEnd, setCsEnd] = useState("");
 
   const reload = useCallback(() => {
     setTasks(getTasks(projectId));
+    setSprints(getSprints(projectId));
   }, [projectId]);
 
   useEffect(() => {
@@ -78,6 +101,27 @@ export default function TaskBoardPage() {
     if (p) setProject(p);
     reload();
   }, [projectId, reload]);
+
+  const defaultSprint = useMemo(() => {
+    if (selectedSprint !== "all" && selectedSprint !== "backlog")
+      return selectedSprint;
+    const active = sprints.find((s) => s.status === "active");
+    return (
+      active?.name ||
+      (sprints.length > 0 ? sprints[sprints.length - 1].name : "Sprint 1")
+    );
+  }, [selectedSprint, sprints]);
+
+  useEffect(() => {
+    setNewSprint(defaultSprint);
+  }, [defaultSprint]);
+
+  const nextSprintNum = useMemo(() => {
+    const nums = sprints
+      .map((s) => parseInt(s.name.replace(/\D/g, "")))
+      .filter((n) => !isNaN(n));
+    return nums.length > 0 ? Math.max(...nums) + 1 : 1;
+  }, [sprints]);
 
   const handleAddTask = (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,7 +132,7 @@ export default function TaskBoardPage() {
       description: newDesc.trim(),
       status: addToColumn,
       priority: newPriority,
-      sprint: newSprint,
+      sprint: newSprint || defaultSprint,
       assignee: newAssignee,
     });
     setNewTitle("");
@@ -107,10 +151,29 @@ export default function TaskBoardPage() {
       description: "",
       status,
       priority: "medium",
-      sprint: "Sprint 1",
+      sprint: defaultSprint,
       assignee: "JacobK",
     });
     setQuickAddTexts((p) => ({ ...p, [status]: "" }));
+    reload();
+  };
+
+  const handleCreateSprint = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!csName.trim()) return;
+    addSprint({
+      projectId,
+      name: csName.trim(),
+      goal: csGoal.trim(),
+      startDate: csStart,
+      endDate: csEnd,
+      status: "planned",
+    });
+    setCsName("");
+    setCsGoal("");
+    setCsStart("");
+    setCsEnd("");
+    setShowCreateSprint(false);
     reload();
   };
 
@@ -137,11 +200,50 @@ export default function TaskBoardPage() {
     reload();
   };
 
+  const sprintSummary = useMemo(() => {
+    let pool: Task[];
+    if (selectedSprint === "all") pool = tasks;
+    else if (selectedSprint === "backlog")
+      pool = tasks.filter((t) => !t.sprint || t.sprint === "Backlog");
+    else pool = tasks.filter((t) => t.sprint === selectedSprint);
+    const total = pool.length;
+    const done = pool.filter((t) => t.status === "done").length;
+    const inProgress = pool.filter(
+      (t) => t.status === "in-progress"
+    ).length;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    return { total, done, inProgress, pct };
+  }, [tasks, selectedSprint]);
+
+  const velocity = useMemo(() => {
+    const completed = sprints.filter((s) => s.status === "completed");
+    if (!completed.length) return 0;
+    const count = completed.reduce(
+      (sum, s) =>
+        sum +
+        tasks.filter((t) => t.sprint === s.name && t.status === "done").length,
+      0
+    );
+    return count / completed.length;
+  }, [tasks, sprints]);
+
+  const currentSprintInfo = useMemo(() => {
+    if (selectedSprint === "all" || selectedSprint === "backlog") return null;
+    return sprints.find((s) => s.name === selectedSprint) || null;
+  }, [selectedSprint, sprints]);
+
   const sortedFilteredTasks = useMemo(() => {
-    const filtered =
-      filterPriority === "all"
-        ? tasks
-        : tasks.filter((t) => t.priority === filterPriority);
+    let filtered = tasks;
+    if (selectedSprint === "backlog") {
+      filtered = filtered.filter(
+        (t) => !t.sprint || t.sprint === "Backlog"
+      );
+    } else if (selectedSprint !== "all") {
+      filtered = filtered.filter((t) => t.sprint === selectedSprint);
+    }
+    if (filterPriority !== "all") {
+      filtered = filtered.filter((t) => t.priority === filterPriority);
+    }
     return [...filtered].sort((a, b) => {
       switch (sortBy) {
         case "priority":
@@ -154,12 +256,12 @@ export default function TaskBoardPage() {
           return 0;
       }
     });
-  }, [tasks, filterPriority, sortBy]);
+  }, [tasks, filterPriority, sortBy, selectedSprint]);
 
   if (!project) return null;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-5">
       {/* Header */}
       <div>
         <Breadcrumbs
@@ -218,6 +320,222 @@ export default function TaskBoardPage() {
           </div>
         </div>
       </div>
+
+      {/* Sprint Selector */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <button
+          onClick={() => setSelectedSprint("all")}
+          className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+            selectedSprint === "all"
+              ? "border-[#F59E0B]/40 bg-[#F59E0B]/10 text-[#F59E0B]"
+              : "border-[#2A2A2A] text-[#9CA3AF] hover:border-[#3A3A3A] hover:text-[#F5F5F5]"
+          }`}
+        >
+          All
+        </button>
+        {sprints.map((s) => {
+          const isSelected = selectedSprint === s.name;
+          return (
+            <button
+              key={s.id}
+              onClick={() => setSelectedSprint(s.name)}
+              className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                isSelected
+                  ? "border-[#F59E0B]/40 bg-[#F59E0B]/10 text-[#F59E0B]"
+                  : "border-[#2A2A2A] text-[#9CA3AF] hover:border-[#3A3A3A] hover:text-[#F5F5F5]"
+              }`}
+            >
+              {s.status === "completed" && (
+                <Check className="h-3 w-3 text-[#10B981]" />
+              )}
+              {s.status === "active" && (
+                <span className="h-1.5 w-1.5 rounded-full bg-[#F59E0B]" />
+              )}
+              {s.name}
+            </button>
+          );
+        })}
+        <button
+          onClick={() => setSelectedSprint("backlog")}
+          className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+            selectedSprint === "backlog"
+              ? "border-[#F59E0B]/40 bg-[#F59E0B]/10 text-[#F59E0B]"
+              : "border-[#2A2A2A] text-[#9CA3AF] hover:border-[#3A3A3A] hover:text-[#F5F5F5]"
+          }`}
+        >
+          Backlog
+        </button>
+        <button
+          onClick={() => {
+            setCsName(`Sprint ${nextSprintNum}`);
+            setCsGoal("");
+            setCsStart("");
+            setCsEnd("");
+            setShowCreateSprint(true);
+          }}
+          className="flex shrink-0 items-center gap-1 rounded-lg border border-dashed border-[#2A2A2A] px-3 py-1.5 text-xs text-[#6B7280] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+        >
+          <Plus className="h-3 w-3" />
+          New Sprint
+        </button>
+      </div>
+
+      {/* Sprint Summary */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            {currentSprintInfo ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <Target className="h-4 w-4 shrink-0 text-[#F59E0B]" />
+                  <span className="font-semibold text-[#F5F5F5]">
+                    {currentSprintInfo.name}
+                  </span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${SPRINT_STATUS_STYLES[currentSprintInfo.status].bg} ${SPRINT_STATUS_STYLES[currentSprintInfo.status].text}`}
+                  >
+                    {currentSprintInfo.status}
+                  </span>
+                </div>
+                {(currentSprintInfo.goal || currentSprintInfo.startDate) && (
+                  <p className="mt-1 truncate text-xs text-[#6B7280]">
+                    {currentSprintInfo.goal}
+                    {currentSprintInfo.startDate &&
+                      ` · ${currentSprintInfo.startDate} — ${currentSprintInfo.endDate}`}
+                  </p>
+                )}
+              </>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-[#F59E0B]" />
+                <span className="font-semibold text-[#F5F5F5]">
+                  {selectedSprint === "backlog" ? "Backlog" : "All Sprints"}
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-5">
+            <div className="text-center">
+              <p className="text-lg font-bold text-[#F5F5F5]">
+                {sprintSummary.total}
+              </p>
+              <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">
+                Total
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-bold text-[#10B981]">
+                {sprintSummary.done}
+              </p>
+              <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">
+                Done
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-bold text-[#F59E0B]">
+                {sprintSummary.inProgress}
+              </p>
+              <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">
+                Active
+              </p>
+            </div>
+            <div className="w-24">
+              <div className="flex items-center justify-between text-[10px] text-[#6B7280]">
+                <span>Progress</span>
+                <span>{sprintSummary.pct}%</span>
+              </div>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#2A2A2A]">
+                <div
+                  className="h-full rounded-full bg-[#F59E0B] transition-all"
+                  style={{ width: `${sprintSummary.pct}%` }}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-2.5 py-1.5">
+              <TrendingUp className="h-3.5 w-3.5 text-[#F59E0B]" />
+              <span className="text-xs font-medium text-[#F5F5F5]">
+                {velocity.toFixed(1)}
+              </span>
+              <span className="text-[10px] text-[#6B7280]">/sprint</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Create Sprint Modal */}
+      {showCreateSprint && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">New Sprint</h3>
+              <button
+                onClick={() => setShowCreateSprint(false)}
+                className="rounded-lg p-1 text-[#9CA3AF] hover:text-[#F5F5F5]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateSprint} className="space-y-4">
+              <div>
+                <label className="mb-1 block text-xs text-[#6B7280]">
+                  Sprint Name
+                </label>
+                <input
+                  type="text"
+                  value={csName}
+                  onChange={(e) => setCsName(e.target.value)}
+                  placeholder="Sprint 16"
+                  required
+                  autoFocus
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[#6B7280]">
+                  Sprint Goal
+                </label>
+                <input
+                  type="text"
+                  value={csGoal}
+                  onChange={(e) => setCsGoal(e.target.value)}
+                  placeholder="What should this sprint achieve?"
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs text-[#6B7280]">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={csStart}
+                    onChange={(e) => setCsStart(e.target.value)}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none [color-scheme:dark] focus:border-[#F59E0B]/50"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-[#6B7280]">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={csEnd}
+                    onChange={(e) => setCsEnd(e.target.value)}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none [color-scheme:dark] focus:border-[#F59E0B]/50"
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                className="w-full rounded-lg bg-[#F59E0B] py-2.5 text-sm font-semibold text-black transition-colors hover:bg-[#F59E0B]/90"
+              >
+                Create Sprint
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Add Task Modal */}
       {showAddForm && (
@@ -303,12 +621,18 @@ export default function TaskBoardPage() {
                   <label className="mb-1 block text-xs text-[#6B7280]">
                     Sprint
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={newSprint}
                     onChange={(e) => setNewSprint(e.target.value)}
                     className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
-                  />
+                  >
+                    {sprints.map((s) => (
+                      <option key={s.id} value={s.name}>
+                        {s.name}
+                      </option>
+                    ))}
+                    <option value="Backlog">Backlog</option>
+                  </select>
                 </div>
               </div>
               <button
