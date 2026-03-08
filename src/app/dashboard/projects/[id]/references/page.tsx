@@ -56,6 +56,7 @@ export default function ReferenceBoardPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [categorizingProgress, setCategorizingProgress] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedList, setCopiedList] = useState(false);
   const [similarGames, setSimilarGames] = useState<{ title: string; year: string; study: string; relation: string }[]>([]);
   const [similarLoading, setSimilarLoading] = useState(false);
   const [aiStudyGuides, setAiStudyGuides] = useState<Record<string, string>>({});
@@ -308,6 +309,15 @@ export default function ReferenceBoardPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleCopyAsList = async () => {
+    const list = references
+      .map((r) => `- ${r.title}: ${r.url}`)
+      .join("\n");
+    await navigator.clipboard.writeText(list);
+    setCopiedList(true);
+    setTimeout(() => setCopiedList(false), 2000);
+  };
+
   useEffect(() => {
     const p = getProject(projectId);
     setProject(p || null);
@@ -471,6 +481,14 @@ export default function ReferenceBoardPage() {
             >
               {copied ? <Check className="h-4 w-4 text-[#10B981]" /> : <Copy className="h-4 w-4" />}
               {copied ? "Copied!" : "Copy Links"}
+            </button>
+            <button
+              onClick={handleCopyAsList}
+              disabled={references.length === 0}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B] disabled:opacity-40"
+            >
+              {copiedList ? <Check className="h-4 w-4 text-[#10B981]" /> : <Copy className="h-4 w-4" />}
+              {copiedList ? "Copied!" : "Copy as List"}
             </button>
             <button
               onClick={() => setShowForm(true)}

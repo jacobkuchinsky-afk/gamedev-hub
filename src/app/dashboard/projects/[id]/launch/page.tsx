@@ -1017,6 +1017,31 @@ export default function LaunchChecklistPage() {
     saveData(getChecklistKey(projectId), {});
   }, [projectId]);
 
+  const exportChecklist = useCallback(() => {
+    if (!project) return;
+    let md = `# ${project.name} \u2014 Launch Checklist\n\n`;
+    md += `**Overall Readiness: ${overallPct}% (${totalChecked}/${totalItems})**\n\n---\n\n`;
+    for (const cat of effectiveChecklist) {
+      const catChecked = cat.items.filter((i) => checked[i.id]).length;
+      const catPct = cat.items.length > 0 ? Math.round((catChecked / cat.items.length) * 100) : 0;
+      md += `## ${cat.title} \u2014 ${catPct}% (${catChecked}/${cat.items.length})\n\n`;
+      for (const item of cat.items) {
+        md += `- ${checked[item.id] ? "\u2705" : "\u274c"} ${item.label}\n`;
+      }
+      md += `\n`;
+    }
+    const slug = project.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${slug}-launch-checklist.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [project, effectiveChecklist, checked, overallPct, totalChecked, totalItems]);
+
   if (!project) return null;
 
   return (
@@ -1178,6 +1203,13 @@ export default function LaunchChecklistPage() {
             >
               {aiDayChecklistLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
               {aiDayChecklistLoading ? "Generating..." : "Launch Day Checklist"}
+            </button>
+            <button
+              onClick={exportChecklist}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export Checklist
             </button>
             <button
               onClick={handleReset}
