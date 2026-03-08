@@ -16,6 +16,7 @@ import {
   Sparkles,
   Loader2,
   CalendarDays,
+  Download,
 } from "lucide-react";
 import {
   getProject,
@@ -336,6 +337,60 @@ export default function DevlogPage() {
     }
   };
 
+  const handleExportAllEntries = () => {
+    if (entries.length === 0) return;
+    const projectSlug = (project?.name || "project").replace(/\s+/g, "-").toLowerCase();
+    const lines: string[] = [];
+    lines.push(`# ${project?.name || "Project"} — Development Log`);
+    lines.push("");
+    lines.push(`_Exported on ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}_`);
+    lines.push(`_${entries.length} ${entries.length === 1 ? "entry" : "entries"}_`);
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+
+    for (const entry of entries) {
+      const dateStr = new Date(entry.date).toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      lines.push(`## ${entry.title}`);
+      lines.push("");
+      lines.push(`**Date:** ${dateStr}  `);
+      lines.push(`**Mood:** ${getMoodEmoji(entry.mood)} ${entry.mood}`);
+      lines.push("");
+      lines.push(entry.content);
+
+      if (entry.notes && entry.notes.length > 0) {
+        lines.push("");
+        lines.push("### Notes");
+        for (const note of entry.notes) {
+          const ts = new Date(note.timestamp).toLocaleString("en-US", {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          });
+          lines.push(`- ${note.text} _(${ts})_`);
+        }
+      }
+
+      lines.push("");
+      lines.push("---");
+      lines.push("");
+    }
+
+    const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${projectSlug}-devlog.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (!project) return null;
 
   return (
@@ -353,6 +408,14 @@ export default function DevlogPage() {
         <div className="mt-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Development Log</h1>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportAllEntries}
+              disabled={entries.length === 0}
+              className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] px-4 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Download className="h-4 w-4" />
+              Export .md
+            </button>
             <button
               onClick={handleMonthlyRecap}
               disabled={monthlyRecapLoading}

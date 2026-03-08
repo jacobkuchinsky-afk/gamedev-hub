@@ -46,6 +46,7 @@ import {
   ThumbsDown,
   Lightbulb,
   Printer,
+  ClipboardList,
 } from "lucide-react";
 import {
   getProject,
@@ -1705,6 +1706,10 @@ export default function ProjectDetailPage() {
   const [postmortemLoading, setPostmortemLoading] = useState(false);
   const [postmortemError, setPostmortemError] = useState<string | null>(null);
 
+  const [statusReportOpen, setStatusReportOpen] = useState(false);
+  const [statusReport, setStatusReport] = useState<string | null>(null);
+  const [statusReportLoading, setStatusReportLoading] = useState(false);
+
   const [featureIdeas, setFeatureIdeas] = useState<FeatureIdea[]>([]);
   const [showAddFeature, setShowAddFeature] = useState(false);
   const [newFeatureTitle, setNewFeatureTitle] = useState("");
@@ -2381,6 +2386,71 @@ export default function ProjectDetailPage() {
     }
   }, [project, tasks, bugs, sprints, milestones, doneTasks, riskLoading]);
 
+  const generateStatusReport = useCallback(async () => {
+    if (!project || statusReportLoading) return;
+    setStatusReportLoading(true);
+    setStatusReport(null);
+    setStatusReportOpen(true);
+
+    const activeSprint = sprints.find((s) => s.status === "active");
+    let sprintStatus = "No active sprint";
+    if (activeSprint) {
+      const sprintTasks = tasks.filter((t) => t.sprint === activeSprint.name);
+      const sprintDone = sprintTasks.filter((t) => t.status === "done").length;
+      sprintStatus = `${activeSprint.name}: ${sprintDone}/${sprintTasks.length} tasks done`;
+    }
+
+    const metMs = milestones.filter((m) => m.status === "completed").length;
+
+    const prompt = `Write a formal project status report for game '${project.name}'. Metrics: ${taskPct}% complete, ${doneTasks}/${tasks.length} tasks, ${openBugs} open bugs, Sprint: ${sprintStatus}, Milestones: ${metMs}/${milestones.length}. Include: Executive Summary (2 sentences), Current Sprint Status, Risk Areas, Next Steps. Keep it professional.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 1024,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+
+      const result = await response.json();
+      const content =
+        result.choices?.[0]?.message?.content ||
+        result.choices?.[0]?.message?.reasoning ||
+        "";
+
+      if (!content) throw new Error("No response from AI");
+      setStatusReport(content);
+    } catch (err) {
+      setStatusReport(
+        err instanceof Error ? `Failed: ${err.message}` : "Failed to generate status report."
+      );
+    } finally {
+      setStatusReportLoading(false);
+    }
+  }, [project, tasks, sprints, milestones, doneTasks, openBugs, taskPct, statusReportLoading]);
+
+  const exportStatusReportMd = useCallback(() => {
+    if (!statusReport || !project) return;
+    const md = `# Project Status Report: ${project.name}\n\n_Generated: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}_\n\n${statusReport}`;
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.name.replace(/\s+/g, "-").toLowerCase()}-status-report.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [statusReport, project]);
+
   const suggestMilestones = useCallback(async () => {
     if (!project || aiMilestoneLoading) return;
     setAiMilestoneLoading(true);
@@ -2675,6 +2745,70 @@ export default function ProjectDetailPage() {
         error={postmortemError}
       />
 
+      {statusReportOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-2xl rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                  <ClipboardList className="h-4 w-4 text-[#F59E0B]" />
+                </div>
+                <h2 className="text-lg font-semibold text-[#F5F5F5]">AI Status Report</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                {statusReport && !statusReportLoading && (
+                  <button
+                    onClick={exportStatusReportMd}
+                    className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-1.5 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Export .md
+                  </button>
+                )}
+                <button
+                  onClick={() => { setStatusReportOpen(false); setStatusReport(null); }}
+                  className="rounded-lg p-1.5 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto px-6 py-5">
+              {statusReportLoading ? (
+                <div className="flex flex-col items-center gap-3 py-16">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#F59E0B]" />
+                  <p className="text-sm text-[#9CA3AF]">Generating project status report...</p>
+                  <p className="text-xs text-[#6B7280]">Analyzing tasks, bugs, sprints, and milestones</p>
+                </div>
+              ) : statusReport ? (
+                <div className="prose prose-invert max-w-none">
+                  {statusReport.split("\n").map((line, i) => {
+                    if (line.startsWith("# ")) return <h1 key={i} className="mb-3 mt-4 text-xl font-bold text-[#F5F5F5]">{line.slice(2)}</h1>;
+                    if (line.startsWith("## ")) return <h2 key={i} className="mb-2 mt-4 text-base font-semibold text-[#F59E0B]">{line.slice(3)}</h2>;
+                    if (line.startsWith("### ")) return <h3 key={i} className="mb-1.5 mt-3 text-sm font-semibold text-[#D1D5DB]">{line.slice(4)}</h3>;
+                    if (line.startsWith("- ") || line.startsWith("* ")) return (
+                      <div key={i} className="flex gap-2 py-0.5 text-sm text-[#D1D5DB]">
+                        <span className="mt-0.5 text-[#F59E0B]">&bull;</span>
+                        <span>{line.slice(2)}</span>
+                      </div>
+                    );
+                    if (line.match(/^\d+\.\s/)) return (
+                      <div key={i} className="flex gap-2 py-0.5 text-sm text-[#D1D5DB]">
+                        <span className="min-w-[1.2em] text-right text-[#6B7280]">{line.match(/^\d+/)?.[0]}.</span>
+                        <span>{line.replace(/^\d+\.\s*/, "")}</span>
+                      </div>
+                    );
+                    if (line.startsWith("**") && line.endsWith("**")) return <p key={i} className="py-0.5 text-sm font-semibold text-[#F5F5F5]">{line.replace(/\*\*/g, "")}</p>;
+                    if (!line.trim()) return <div key={i} className="h-2" />;
+                    return <p key={i} className="py-0.5 text-sm leading-relaxed text-[#D1D5DB]">{line}</p>;
+                  })}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Back + Header */}
       <div>
         <Link
@@ -2831,6 +2965,18 @@ export default function ProjectDetailPage() {
                 <FileBarChart className="h-3.5 w-3.5" />
               )}
               Postmortem
+            </button>
+            <button
+              onClick={generateStatusReport}
+              disabled={statusReportLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/40 hover:bg-[#F59E0B]/10 disabled:opacity-50"
+            >
+              {statusReportLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <ClipboardList className="h-3.5 w-3.5" />
+              )}
+              Status Report
             </button>
             <div className="flex items-center">
               <button
