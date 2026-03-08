@@ -2426,13 +2426,22 @@ export default function DashboardPage() {
             View all <ChevronRight className="h-3 w-3" />
           </Link>
         </div>
-        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+        <div className="flex gap-3 overflow-x-auto py-2 scrollbar-thin">
           {allProjects.map((project) => (
             <Link
               key={project.id}
               href={`/dashboard/projects/${project.id}`}
-              className="group flex w-56 shrink-0 flex-col rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] transition-all hover:border-[#F59E0B]/20 hover:bg-[#1F1F1F]"
-              style={{ borderLeftColor: project.coverColor, borderLeftWidth: "3px" }}
+              className="group flex w-56 shrink-0 flex-col rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] transition-all duration-300 ease-out hover:scale-[1.02] hover:border-[#F59E0B]/20 hover:bg-[#1F1F1F]"
+              style={{
+                borderLeftColor: project.coverColor,
+                borderLeftWidth: "3px",
+              } as React.CSSProperties}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = `0 0 20px 2px ${project.coverColor}40`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = "0 0 0 transparent";
+              }}
             >
               <div className="flex-1 p-4">
                 <div className="flex items-center justify-between gap-2">
