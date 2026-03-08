@@ -25,6 +25,7 @@ import {
   Code2,
   BookOpen,
   Sigma,
+  Network,
 } from "lucide-react";
 import { getToolUsage } from "./layout";
 
@@ -199,6 +200,15 @@ const TOOLS: {
       "Visual particle effect designer with presets for fire, smoke, sparks, rain, and more. Export as JSON.",
     color: "#F97316",
     category: "Animation",
+  },
+  {
+    href: "/dashboard/tools/statemachine",
+    icon: Network,
+    name: "State Machine Designer",
+    description:
+      "Visual state machine editor for game AI and character behavior. Drag states, connect transitions, and generate with AI.",
+    color: "#F59E0B",
+    category: "AI-Powered",
   },
 ];
 
