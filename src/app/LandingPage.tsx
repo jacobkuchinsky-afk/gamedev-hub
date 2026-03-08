@@ -620,7 +620,7 @@ export default function LandingPage() {
             {testimonials.map((t, i) => (
               <div
                 key={t.name}
-                className={`animate-fade-in stagger-${i + 1} group relative rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-7 transition-all hover:border-[#F59E0B]/25`}
+                className={`animate-fade-in stagger-${i + 1} group relative rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-7 transition-all duration-200 hover:scale-[1.02] hover:border-[#F59E0B]/30`}
               >
                 <Quote className="mb-4 h-8 w-8 text-[#F59E0B]/30" />
                 <p className="text-sm leading-relaxed text-[#D1D5DB]">
