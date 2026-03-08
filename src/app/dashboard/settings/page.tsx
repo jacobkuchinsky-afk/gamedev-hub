@@ -30,7 +30,7 @@ import { changePassword } from "@/lib/auth";
 
 const SETTINGS_KEY = "gameforge_user_settings";
 const ACCENT_COLOR_KEY = "gameforge_accent_color";
-const VERSION = "1.0.0";
+const VERSION = "2.0.0";
 const FIRST_LOGIN_KEY = "gameforge_first_login";
 const LOGIN_COUNT_KEY = "gameforge_login_count";
 const LIFETIME_PROJECTS_KEY = "gameforge_lifetime_projects";
@@ -926,28 +926,29 @@ export default function SettingsPage() {
           <h2 className="font-semibold">About</h2>
         </div>
         <div className="space-y-3 p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-[#9CA3AF]">Version</span>
+          <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-md bg-[#F59E0B]/10 px-2 py-0.5 text-xs font-medium text-[#F59E0B]">
               v{VERSION}
             </span>
+            <span className="rounded-md border border-[#F59E0B]/40 bg-[#F59E0B]/5 px-2 py-0.5 text-xs font-medium text-[#F59E0B]">
+              Built by AI
+            </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-[#9CA3AF]">Made by</span>
-            <span className="text-sm text-[#F5F5F5]">CursorClaw</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-[#9CA3AF]">Source</span>
+            <span className="text-sm text-[#9CA3AF]">Source Code</span>
             <a
-              href="https://github.com/jacobkuchinsky-afk"
+              href="https://github.com/jacobkuchinsky-afk/gamedev-hub"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1 text-sm text-[#F59E0B] transition-colors hover:text-[#F59E0B]/80"
-              onClick={() => console.log("[Settings] opened GitHub link")}
             >
               GitHub
               <ExternalLink className="h-3 w-3" />
             </a>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[#9CA3AF]">Features</span>
+            <span className="text-sm text-[#F5F5F5]">200+ AI, 23 Tools, 32 Pages</span>
           </div>
 
           <div className="my-3 h-px bg-[#2A2A2A]" />
