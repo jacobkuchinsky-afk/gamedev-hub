@@ -16,9 +16,29 @@
   --font-sans: 'Inter', system-ui, sans-serif;
 }
 
+/* Custom scrollbar - dark theme */
 * {
   scrollbar-width: thin;
   scrollbar-color: #2A2A2A #0F0F0F;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #0F0F0F;
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #2A2A2A;
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #F59E0B;
 }
 
 body {
