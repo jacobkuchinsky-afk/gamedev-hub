@@ -226,6 +226,8 @@ export default function WorldBuilderPage() {
 
   const [placeNames, setPlaceNames] = useState<{ name: string; desc: string }[]>([]);
   const [placeNamesLoading, setPlaceNamesLoading] = useState(false);
+  const [aiHistory, setAiHistory] = useState("");
+  const [aiHistoryLoading, setAiHistoryLoading] = useState(false);
 
   const generatePlaceNames = useCallback(async () => {
     setPlaceNamesLoading(true);
@@ -275,6 +277,35 @@ export default function WorldBuilderPage() {
     const entry = `\n**${placeName}** - ${placeDesc}`;
     setResult((prev) => prev ? prev + entry : entry);
   }, []);
+
+  const generateHistory = useCallback(async () => {
+    setAiHistoryLoading(true);
+    setAiHistory("");
+    try {
+      const prompt = `Write a brief history timeline for a ${setting} game world with ${tone} tone. Include 5 key events spanning different eras. Format as: Year/Era — Event description. Keep it brief.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      setAiHistory(content || "Could not generate history. Try again.");
+    } catch {
+      setAiHistory("Failed to generate history. Check your connection and try again.");
+    } finally {
+      setAiHistoryLoading(false);
+    }
+  }, [setting, tone]);
 
   useEffect(() => {
     try {
@@ -866,6 +897,24 @@ export default function WorldBuilderPage() {
               )}
             </button>
 
+            <button
+              onClick={generateHistory}
+              disabled={aiHistoryLoading}
+              className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#111] px-4 py-2.5 text-sm font-medium text-[#F5F5F5] transition-colors hover:bg-[#2A2A2A] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {aiHistoryLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin text-[#F59E0B]" />
+                  Generating History...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+                  AI History
+                </>
+              )}
+            </button>
+
             {placeNames.length > 0 && (
               <div className="space-y-1.5">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
@@ -1012,6 +1061,22 @@ export default function WorldBuilderPage() {
                   <div className="mt-4 flex items-center gap-2 text-xs text-[#9CA3AF]">
                     <Loader2 className="h-3 w-3 animate-spin text-[#F59E0B]" />
                     Expanding: {detailSection}...
+                  </div>
+                )}
+                {(aiHistory || aiHistoryLoading) && (
+                  <div className="mt-5 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4 space-y-2">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-[#F59E0B]">
+                      <Sparkles className="h-3 w-3" />
+                      World History
+                    </div>
+                    {aiHistoryLoading ? (
+                      <div className="flex items-center justify-center gap-2 py-4 text-xs text-[#6B7280]">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F59E0B]" />
+                        Writing history...
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap text-xs leading-relaxed text-[#D1D5DB]">{aiHistory}</p>
+                    )}
                   </div>
                 )}
               </div>

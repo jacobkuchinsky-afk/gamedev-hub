@@ -132,6 +132,8 @@ export default function AnimationPage() {
   const [aiFrameDesc, setAiFrameDesc] = useState("");
   const [aiFrameResult, setAiFrameResult] = useState("");
   const [aiFrameLoading, setAiFrameLoading] = useState(false);
+  const [aiName, setAiName] = useState("");
+  const [aiNameLoading, setAiNameLoading] = useState(false);
 
   const fetchAiTips = async () => {
     setAiTipsLoading(true);
@@ -208,6 +210,36 @@ export default function AnimationPage() {
       setAiFrameResult("Failed to get suggestion. Check your connection and try again.");
     } finally {
       setAiFrameLoading(false);
+    }
+  };
+
+  const fetchAiName = async () => {
+    setAiNameLoading(true);
+    setAiName("");
+    try {
+      const desc = aiDescription.trim() || "a game sprite";
+      const prompt = `Name this pixel art animation: ${frames.length} frames at ${fps} FPS, described as: '${desc}'. Give a file-naming style name like 'player_walk_cycle' or 'explosion_3f'. Just the name.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      setAiName(content.replace(/[^a-zA-Z0-9_\-]/g, "").toLowerCase() || "unnamed_anim");
+    } catch {
+      setAiName("naming_failed");
+    } finally {
+      setAiNameLoading(false);
     }
   };
 
@@ -377,7 +409,8 @@ export default function AnimationPage() {
           }
     });
     const a = document.createElement("a");
-    a.download = `spritesheet_${frames.length}f_${GRID}x${GRID}.png`;
+    const baseName = aiName || `spritesheet_${frames.length}f_${GRID}x${GRID}`;
+    a.download = `${baseName}.png`;
     a.href = cvs.toDataURL();
     a.click();
   };
@@ -595,9 +628,29 @@ export default function AnimationPage() {
             </div>
           </div>
 
-          <button onClick={exportSpritesheet} className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-4 py-3 text-sm font-medium text-[#F59E0B] hover:bg-[#F59E0B]/20 transition-colors">
-            <Download className="h-4 w-4" /> Export Spritesheet
-          </button>
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 space-y-3">
+            <p className="text-xs font-medium text-[#9CA3AF]">EXPORT</p>
+            {aiName && (
+              <div className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2">
+                <span className="text-[10px] text-[#6B7280]">Name:</span>
+                <span className="text-xs font-mono text-[#F59E0B]">{aiName}</span>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={fetchAiName}
+                disabled={aiNameLoading}
+                className="flex items-center justify-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-3 py-2 text-xs font-medium text-[#F59E0B] hover:bg-[#F59E0B]/20 transition-colors disabled:opacity-50"
+                title="AI Name"
+              >
+                {aiNameLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                AI Name
+              </button>
+              <button onClick={exportSpritesheet} className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-4 py-2 text-xs font-medium text-[#F59E0B] hover:bg-[#F59E0B]/20 transition-colors">
+                <Download className="h-4 w-4" /> Export Spritesheet
+              </button>
+            </div>
+          </div>
 
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 space-y-3">
             <p className="text-xs font-medium text-[#9CA3AF]">AI ANIMATION TIPS</p>
