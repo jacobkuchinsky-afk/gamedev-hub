@@ -8,6 +8,12 @@ const inter = Inter({
   display: "swap",
 });
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover" as const,
+};
+
 export const metadata: Metadata = {
   title: "GameForge - Game Development Productivity Platform",
   description:
@@ -26,6 +32,12 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: "/favicon.svg",
+  },
+  themeColor: "#0F0F0F",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    title: "GameForge",
+    statusBarStyle: "black-translucent",
   },
 };
 
