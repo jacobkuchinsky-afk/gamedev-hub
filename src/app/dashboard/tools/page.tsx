@@ -321,6 +321,16 @@ export default function ToolsPage() {
     return counts;
   }, []);
 
+  const stats = useMemo(() => {
+    const totalUses = Object.values(toolUsage).reduce((a, b) => a + b, 0);
+    const mostUsed = TOOLS.reduce<{ name: string; count: number } | null>((best, t) => {
+      const c = toolUsage[t.href] || 0;
+      return c > (best?.count ?? 0) ? { name: t.name, count: c } : best;
+    }, null);
+    const aiCount = TOOLS.filter((t) => t.category === "AI-Powered").length;
+    return { totalTools: TOOLS.length, mostUsed, totalUses, aiCount };
+  }, [toolUsage]);
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
@@ -328,6 +338,21 @@ export default function ToolsPage() {
         <p className="mt-1 text-sm text-[#9CA3AF]">
           {TOOLS.length} utilities and generators to speed up your game development workflow
         </p>
+      </div>
+
+      <div className="flex flex-wrap gap-3 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3">
+        <span className="text-xs text-[#6B7280]">
+          <span className="font-semibold text-[#F59E0B]">{stats.totalTools}</span> tools
+        </span>
+        <span className="text-xs text-[#6B7280]">
+          Most used: <span className="font-semibold text-[#F59E0B]">{stats.mostUsed?.name ?? "—"}</span>
+        </span>
+        <span className="text-xs text-[#6B7280]">
+          <span className="font-semibold text-[#F59E0B]">{stats.aiCount}</span> AI features
+        </span>
+        <span className="text-xs text-[#6B7280]">
+          <span className="font-semibold text-[#F59E0B]">{stats.totalUses}</span> total uses
+        </span>
       </div>
 
       <div className="relative">
