@@ -29,6 +29,7 @@ import {
   GitBranch,
   Clock,
   ChevronUp,
+  Download,
 } from "lucide-react";
 import {
   getProject,
@@ -408,6 +409,39 @@ export default function AssetPipelinePage() {
                 </button>
               ))}
             </div>
+            {assets.length > 0 && (
+              <button
+                onClick={() => {
+                  const escCsv = (v: string) => {
+                    if (v.includes(",") || v.includes('"') || v.includes("\n")) return `"${v.replace(/"/g, '""')}"`;
+                    return v;
+                  };
+                  const rows = [["Name", "Type", "Status", "Folder", "Version", "File Reference", "Notes"].join(",")];
+                  assets.forEach((a) => {
+                    rows.push([
+                      escCsv(a.name),
+                      escCsv(ASSET_TYPE_LABELS[a.type] || a.type),
+                      escCsv(ASSET_STATUS_LABELS[a.status] || a.status),
+                      escCsv(a.folder || TYPE_TO_DEFAULT_FOLDER[a.type] || ""),
+                      String(a.version || 1),
+                      escCsv(a.fileRef || ""),
+                      escCsv(a.notes || ""),
+                    ].join(","));
+                  });
+                  const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+                  const url = URL.createObjectURL(blob);
+                  const el = document.createElement("a");
+                  el.href = url;
+                  el.download = `${(project.name || "project").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-assets.csv`;
+                  el.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] px-4 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              >
+                <Download className="h-4 w-4" />
+                Export CSV
+              </button>
+            )}
             <button
               onClick={() => setShowAddForm(true)}
               className="flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-[#F59E0B]/90"

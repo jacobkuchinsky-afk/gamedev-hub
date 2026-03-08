@@ -3844,6 +3844,32 @@ export default function ProjectDetailPage() {
                     <option value="newest">Newest</option>
                   </select>
                 )}
+                {featureIdeas.length > 0 && (
+                  <button
+                    onClick={() => {
+                      const sorted = [...featureIdeas].sort((a, b) => b.votes - a.votes);
+                      const lines = [`# Feature Ideas - ${project.name}\n`, `> Exported ${new Date().toLocaleDateString()} | ${sorted.length} ideas\n`];
+                      sorted.forEach((f, i) => {
+                        const statusLabel = FEATURE_STATUS_STYLES[f.status]?.label || f.status;
+                        lines.push(`## ${i + 1}. ${f.title}`);
+                        lines.push(`**Status:** ${statusLabel} | **Votes:** ${f.votes > 0 ? "+" : ""}${f.votes}\n`);
+                        if (f.description) lines.push(`${f.description}\n`);
+                        lines.push("---\n");
+                      });
+                      const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `${project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-feature-ideas.md`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] px-2.5 py-1 text-xs text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                  >
+                    <Download className="h-3 w-3" />
+                    Export
+                  </button>
+                )}
                 <button
                   onClick={() => setShowAddFeature(!showAddFeature)}
                   className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] px-2.5 py-1 text-xs text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
