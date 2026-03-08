@@ -37,6 +37,7 @@ import {
   Pin,
   Copy,
   Check,
+  ChevronUp,
 } from "lucide-react";
 import { AuthProvider, useAuthContext } from "@/components/AuthProvider";
 import { getProjects, getStatusColor, getTasks, getBugs, getDevlog, validateStorage, type Project, type Task, type Bug, type DevlogEntry } from "@/lib/store";
@@ -655,6 +656,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const [pinnedPages, setPinnedPages] = useState<PinnedPage[]>([]);
   const pendingKeyRef = useRef<string | null>(null);
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mainRef = useRef<HTMLMainElement>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => {
     console.log("[DashboardLayout] rendered");
@@ -799,6 +802,19 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const onScroll = () => setShowScrollTop(el.scrollTop > 200);
+    onScroll();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const handleLogout = () => {
     logout();
@@ -1119,7 +1135,18 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         <KeyboardShortcutsHint />
 
         {/* Content */}
-        <main id="main-content" aria-label="Page content" className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main ref={mainRef} id="main-content" aria-label="Page content" className="flex-1 overflow-y-auto p-6">{children}</main>
+
+        {/* Scroll to top */}
+        <button
+          onClick={scrollToTop}
+          aria-label="Scroll to top"
+          className={`fixed bottom-20 right-6 z-[199] flex h-10 w-10 items-center justify-center rounded-full bg-[#F59E0B] text-[#0F0F0F] shadow-lg transition-all duration-300 hover:bg-[#D97706] focus:outline-none focus:ring-2 focus:ring-[#F59E0B] focus:ring-offset-2 focus:ring-offset-[#0F0F0F] ${
+            showScrollTop ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-2 opacity-0"
+          }`}
+        >
+          <ChevronUp className="h-5 w-5" />
+        </button>
       </div>
     </div>
   );
