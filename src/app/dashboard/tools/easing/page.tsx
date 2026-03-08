@@ -10,9 +10,11 @@ import {
   GitCompareArrows,
   SlidersHorizontal,
   X,
+  Clock,
 } from "lucide-react";
 
 type EasingFn = (t: number) => number;
+type EasingGroup = "in" | "out" | "inout" | "special";
 
 interface EasingDef {
   name: string;
@@ -20,6 +22,7 @@ interface EasingDef {
   css?: string;
   js: string;
   category: "basic" | "bounce" | "elastic" | "back" | "power";
+  group: EasingGroup;
   params?: { label: string; key: string; min: number; max: number; step: number; default: number }[];
 }
 
@@ -36,6 +39,7 @@ function makeEasings(overrides: Record<string, number> = {}): EasingDef[] {
       css: "linear",
       js: "function linear(t) { return t; }",
       category: "basic",
+      group: "special",
     },
     {
       name: "Ease In Quad",
@@ -43,6 +47,7 @@ function makeEasings(overrides: Record<string, number> = {}): EasingDef[] {
       css: "cubic-bezier(0.55, 0.085, 0.68, 0.53)",
       js: "function easeInQuad(t) { return t * t; }",
       category: "power",
+      group: "in",
     },
     {
       name: "Ease Out Quad",
@@ -50,6 +55,7 @@ function makeEasings(overrides: Record<string, number> = {}): EasingDef[] {
       css: "cubic-bezier(0.25, 0.46, 0.45, 0.94)",
       js: "function easeOutQuad(t) { return t * (2 - t); }",
       category: "power",
+      group: "out",
     },
     {
       name: "Ease In Out Quad",
@@ -57,6 +63,7 @@ function makeEasings(overrides: Record<string, number> = {}): EasingDef[] {
       css: "cubic-bezier(0.455, 0.03, 0.515, 0.955)",
       js: "function easeInOutQuad(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }",
       category: "power",
+      group: "inout",
     },
     {
       name: "Ease In Cubic",
@@ -64,6 +71,7 @@ function makeEasings(overrides: Record<string, number> = {}): EasingDef[] {
       css: "cubic-bezier(0.55, 0.055, 0.675, 0.19)",
       js: "function easeInCubic(t) { return t * t * t; }",
       category: "power",
+      group: "in",
     },
     {
       name: "Ease Out Cubic",
@@ -71,6 +79,7 @@ function makeEasings(overrides: Record<string, number> = {}): EasingDef[] {
       css: "cubic-bezier(0.215, 0.61, 0.355, 1)",
       js: "function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }",
       category: "power",
+      group: "out",
     },
     {
       name: "Ease In Out",
@@ -78,6 +87,7 @@ function makeEasings(overrides: Record<string, number> = {}): EasingDef[] {
       css: "ease-in-out",
       js: "function easeInOut(t) { return t < 0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2; }",
       category: "basic",
+      group: "inout",
     },
     {
       name: "Ease In Expo",
@@ -85,6 +95,7 @@ function makeEasings(overrides: Record<string, number> = {}): EasingDef[] {
       css: "cubic-bezier(0.95, 0.05, 0.795, 0.035)",
       js: "function easeInExpo(t) { return t === 0 ? 0 : Math.pow(2, 10*t-10); }",
       category: "power",
+      group: "in",
     },
     {
       name: "Ease Out Expo",
@@ -92,6 +103,7 @@ function makeEasings(overrides: Record<string, number> = {}): EasingDef[] {
       css: "cubic-bezier(0.19, 1, 0.22, 1)",
       js: "function easeOutExpo(t) { return t === 1 ? 1 : 1-Math.pow(2,-10*t); }",
       category: "power",
+      group: "out",
     },
     {
       name: "Bounce",
@@ -106,6 +118,7 @@ function makeEasings(overrides: Record<string, number> = {}): EasingDef[] {
       },
       js: `function bounce(t) {\n  if (t < 1/2.75) return 7.5625*t*t;\n  if (t < 2/2.75) { t -= 1.5/2.75; return 7.5625*t*t + 0.75; }\n  if (t < 2.5/2.75) { t -= 2.25/2.75; return 7.5625*t*t + 0.9375; }\n  t -= 2.625/2.75; return 7.5625*t*t + 0.984375;\n}`,
       category: "bounce",
+      group: "special",
       params: [{ label: "Decay", key: "bounceDecay", min: 0.1, max: 1, step: 0.05, default: 0.5 }],
     },
     {
@@ -116,6 +129,7 @@ function makeEasings(overrides: Record<string, number> = {}): EasingDef[] {
       },
       js: `function elastic(t) {\n  if (t===0||t===1) return t;\n  return -Math.pow(2,10*(t-1)) * Math.sin((t-1.075)*(2*Math.PI)/0.3);\n}`,
       category: "elastic",
+      group: "special",
       params: [
         { label: "Amplitude", key: "elasticAmp", min: 0.5, max: 3, step: 0.1, default: 1 },
         { label: "Frequency", key: "elasticFreq", min: 1, max: 8, step: 0.5, default: 3 },
@@ -129,10 +143,18 @@ function makeEasings(overrides: Record<string, number> = {}): EasingDef[] {
       },
       js: `function back(t) {\n  const s = 1.70158;\n  return t*t*((s+1)*t - s);\n}`,
       category: "back",
+      group: "special",
       params: [{ label: "Overshoot", key: "backOvershoot", min: 0.5, max: 4, step: 0.1, default: 1.70158 }],
     },
   ];
 }
+
+const GROUP_META: { key: EasingGroup; label: string }[] = [
+  { key: "in", label: "Ease In" },
+  { key: "out", label: "Ease Out" },
+  { key: "inout", label: "Ease In-Out" },
+  { key: "special", label: "Special" },
+];
 
 function drawCurve(
   ctx: CanvasRenderingContext2D,
@@ -158,6 +180,26 @@ function drawCurve(
   ctx.stroke();
 }
 
+function generateKeyframesCSS(easing: EasingDef, durationMs: number): string {
+  const safeName = easing.name.replace(/\s+/g, "");
+  const dur = durationMs;
+
+  if (easing.css) {
+    return `@keyframes ${safeName}Slide {\n  from {\n    transform: translateX(0);\n    opacity: 0;\n  }\n  to {\n    transform: translateX(300px);\n    opacity: 1;\n  }\n}\n\n.animated-element {\n  animation: ${safeName}Slide ${dur}ms ${easing.css} both;\n}`;
+  }
+
+  const steps = 10;
+  let kf = `@keyframes ${safeName}Slide {\n`;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const v = easing.fn(t);
+    const pct = Math.round(t * 100);
+    kf += `  ${pct}% {\n    transform: translateX(${(v * 300).toFixed(1)}px);\n    opacity: ${v.toFixed(3)};\n  }\n`;
+  }
+  kf += `}\n\n.animated-element {\n  animation: ${safeName}Slide ${dur}ms linear both;\n}`;
+  return kf;
+}
+
 function MiniCard({
   easing,
   selected,
@@ -165,6 +207,7 @@ function MiniCard({
   onClick,
   onCompareToggle,
   compareMode,
+  ballRef,
 }: {
   easing: EasingDef;
   selected: boolean;
@@ -172,6 +215,7 @@ function MiniCard({
   onClick: () => void;
   onCompareToggle: () => void;
   compareMode: boolean;
+  ballRef?: (el: HTMLDivElement | null) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
@@ -202,11 +246,17 @@ function MiniCard({
       onClick={onClick}
     >
       <canvas ref={ref} width={100} height={100} className="mx-auto block" />
+      <div className="relative mx-3 mb-2 h-2 rounded-full bg-[#0F0F0F]">
+        <div
+          ref={ballRef}
+          className="absolute top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-[#F59E0B] opacity-30"
+          style={{ left: "0%" }}
+        />
+      </div>
       <div className="px-3 pb-3 pt-0 text-center">
         <p className={`text-xs font-medium ${selected ? "text-[#F59E0B]" : "text-[#E5E5E5]"}`}>
           {easing.name}
         </p>
-        <p className="text-[10px] text-[#6B7280]">{easing.category}</p>
       </div>
       {compareMode && (
         <button
@@ -233,11 +283,14 @@ export default function EasingPage() {
   const [customBezier, setCustomBezier] = useState({ x1: 0.25, y1: 0.1, x2: 0.25, y2: 1 });
   const [showCustom, setShowCustom] = useState(false);
   const [animating, setAnimating] = useState(false);
+  const [duration, setDuration] = useState(1500);
+  const [previewingAll, setPreviewingAll] = useState(false);
 
   const easings = useMemo(() => makeEasings(paramOverrides), [paramOverrides]);
   const bigRef = useRef<HTMLCanvasElement>(null);
   const ballRef = useRef<HTMLDivElement>(null);
   const animFrame = useRef<number | null>(null);
+  const ballRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   const current = easings[selected];
 
@@ -294,15 +347,41 @@ export default function EasingPage() {
 
   useEffect(() => { drawBig(); }, [drawBig]);
 
+  useEffect(() => {
+    if (!previewingAll) return;
+    const start = performance.now();
+    const dur = duration;
+
+    const step = (ts: number) => {
+      const t = Math.min((ts - start) / dur, 1);
+      ballRefs.current.forEach((el, idx) => {
+        if (idx < easings.length) {
+          const v = easings[idx].fn(Math.max(0, Math.min(1, t)));
+          el.style.left = `${Math.max(0, Math.min(100, v * 100))}%`;
+          el.style.opacity = "1";
+        }
+      });
+      if (t < 1) {
+        animFrame.current = requestAnimationFrame(step);
+      } else {
+        setPreviewingAll(false);
+        ballRefs.current.forEach((el) => {
+          el.style.opacity = "0.3";
+        });
+      }
+    };
+    animFrame.current = requestAnimationFrame(step);
+    return () => { if (animFrame.current) cancelAnimationFrame(animFrame.current); };
+  }, [previewingAll, duration, easings]);
+
   const runAnimation = () => {
     if (animating) return;
     setAnimating(true);
     const start = performance.now();
-    const dur = 1500;
 
     const step = (ts: number) => {
       const elapsed = ts - start;
-      let t = Math.min(elapsed / dur, 1);
+      const t = Math.min(elapsed / duration, 1);
       const v = activeFn(t);
       if (ballRef.current) {
         ballRef.current.style.left = `${v * 100}%`;
@@ -314,6 +393,15 @@ export default function EasingPage() {
       }
     };
     animFrame.current = requestAnimationFrame(step);
+  };
+
+  const runPreviewAll = () => {
+    if (previewingAll) return;
+    ballRefs.current.forEach((el) => {
+      el.style.left = "0%";
+      el.style.opacity = "1";
+    });
+    setPreviewingAll(true);
   };
 
   const copyCode = (text: string, label: string) => {
@@ -330,6 +418,14 @@ export default function EasingPage() {
     });
   };
 
+  const keyframesCSS = useMemo(() => {
+    if (showCustom) {
+      const { x1, y1, x2, y2 } = customBezier;
+      return `@keyframes customSlide {\n  from {\n    transform: translateX(0);\n    opacity: 0;\n  }\n  to {\n    transform: translateX(300px);\n    opacity: 1;\n  }\n}\n\n.animated-element {\n  animation: customSlide ${duration}ms cubic-bezier(${x1}, ${y1}, ${x2}, ${y2}) both;\n}`;
+    }
+    return generateKeyframesCSS(current, duration);
+  }, [current, duration, showCustom, customBezier]);
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-center gap-3">
@@ -343,36 +439,60 @@ export default function EasingPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-        {/* Grid of easings */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-xs font-medium text-[#9CA3AF]">EASING FUNCTIONS</p>
-            <button
-              onClick={() => { setCompareMode(!compareMode); setCompareSet(new Set()); }}
-              className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                compareMode
-                  ? "border-[#3B82F6]/40 bg-[#3B82F6]/10 text-[#3B82F6]"
-                  : "border-[#2A2A2A] bg-[#1A1A1A] text-[#9CA3AF] hover:text-[#F5F5F5]"
-              }`}
-            >
-              <GitCompareArrows className="h-3.5 w-3.5" /> Compare
-            </button>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-            {easings.map((e, i) => (
-              <MiniCard
-                key={e.name}
-                easing={e}
-                selected={selected === i && !compareMode}
-                comparing={compareSet.has(i)}
-                onClick={() => setSelected(i)}
-                onCompareToggle={() => toggleCompare(i)}
-                compareMode={compareMode}
-              />
-            ))}
+            <div className="flex gap-2">
+              <button
+                onClick={runPreviewAll}
+                disabled={previewingAll}
+                className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/40 bg-[#F59E0B]/10 px-3 py-1.5 text-xs font-medium text-[#F59E0B] hover:bg-[#F59E0B]/20 transition-colors disabled:opacity-40"
+              >
+                <Play className="h-3.5 w-3.5" /> {previewingAll ? "Playing..." : "Preview All"}
+              </button>
+              <button
+                onClick={() => { setCompareMode(!compareMode); setCompareSet(new Set()); }}
+                className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  compareMode
+                    ? "border-[#3B82F6]/40 bg-[#3B82F6]/10 text-[#3B82F6]"
+                    : "border-[#2A2A2A] bg-[#1A1A1A] text-[#9CA3AF] hover:text-[#F5F5F5]"
+                }`}
+              >
+                <GitCompareArrows className="h-3.5 w-3.5" /> Compare
+              </button>
+            </div>
           </div>
 
-          {/* Custom cubic-bezier */}
+          {GROUP_META.map(({ key, label }) => {
+            const groupEasings = easings.filter((e) => e.group === key);
+            if (groupEasings.length === 0) return null;
+            return (
+              <div key={key}>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7280] mb-2">{label}</p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                  {groupEasings.map((e) => {
+                    const globalIdx = easings.findIndex((x) => x.name === e.name);
+                    return (
+                      <MiniCard
+                        key={e.name}
+                        easing={e}
+                        selected={selected === globalIdx && !compareMode}
+                        comparing={compareSet.has(globalIdx)}
+                        onClick={() => setSelected(globalIdx)}
+                        onCompareToggle={() => toggleCompare(globalIdx)}
+                        compareMode={compareMode}
+                        ballRef={(el) => {
+                          if (el) ballRefs.current.set(globalIdx, el);
+                          else ballRefs.current.delete(globalIdx);
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-[#9CA3AF]">CUSTOM CUBIC-BEZIER</p>
@@ -409,7 +529,6 @@ export default function EasingPage() {
           </div>
         </div>
 
-        {/* Detail panel */}
         <div className="space-y-4">
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 space-y-4">
             <div className="flex items-center justify-between">
@@ -425,7 +544,6 @@ export default function EasingPage() {
 
             <canvas ref={bigRef} width={320} height={280} className="w-full rounded-lg" />
 
-            {/* Ball animation preview */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[#9CA3AF]">Live Preview</p>
@@ -448,7 +566,22 @@ export default function EasingPage() {
               </div>
             </div>
 
-            {/* Compare legend */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs text-[#9CA3AF]">
+                <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Duration</span>
+                <span className="font-mono text-[#F59E0B]">{duration}ms</span>
+              </div>
+              <input
+                type="range"
+                min={100}
+                max={3000}
+                step={50}
+                value={duration}
+                onChange={(e) => setDuration(+e.target.value)}
+                className="w-full accent-[#F59E0B]"
+              />
+            </div>
+
             {compareMode && compareSet.size > 0 && (
               <div className="space-y-1.5">
                 {Array.from(compareSet).map((idx, ci) => {
@@ -467,7 +600,6 @@ export default function EasingPage() {
             )}
           </div>
 
-          {/* Parameters (for elastic, bounce, back) */}
           {!showCustom && current.params && current.params.length > 0 && (
             <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 space-y-3">
               <p className="flex items-center gap-1.5 text-xs font-medium text-[#9CA3AF]">
@@ -493,7 +625,6 @@ export default function EasingPage() {
             </div>
           )}
 
-          {/* Copy buttons */}
           <div className="space-y-2">
             {!showCustom && current.css && (
               <button
@@ -530,6 +661,17 @@ export default function EasingPage() {
                 <p className="mt-0.5 font-mono text-[11px] text-[#F5F5F5] truncate">{showCustom ? "cubicBezier(t)" : current.js.split("\n")[0]}</p>
               </div>
               {copied === "js" ? <Check className="h-4 w-4 flex-shrink-0 text-[#10B981]" /> : <Copy className="h-4 w-4 flex-shrink-0 text-[#6B7280]" />}
+            </button>
+
+            <button
+              onClick={() => copyCode(keyframesCSS, "keyframes")}
+              className="flex w-full items-center justify-between rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3 text-left transition-colors hover:border-[#3A3A3A]"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-[#9CA3AF]">CSS @keyframes</p>
+                <p className="mt-0.5 font-mono text-[11px] text-[#F5F5F5] truncate">@keyframes {showCustom ? "customSlide" : current.name.replace(/\s+/g, "") + "Slide"} {"{ ... }"}</p>
+              </div>
+              {copied === "keyframes" ? <Check className="h-4 w-4 flex-shrink-0 text-[#10B981]" /> : <Copy className="h-4 w-4 flex-shrink-0 text-[#6B7280]" />}
             </button>
           </div>
         </div>

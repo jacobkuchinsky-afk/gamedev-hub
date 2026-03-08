@@ -10,6 +10,13 @@ import {
   Heart,
   Star,
   Crosshair,
+  Code,
+  Camera,
+  Copy,
+  Check,
+  Sword,
+  Zap,
+  Shield,
 } from "lucide-react";
 
 interface EffectConfig {
@@ -35,9 +42,159 @@ const DEFAULT_EFFECTS: AllEffects = {
   crt: { enabled: false, intensity: 50 },
 };
 
+interface RecordFrame {
+  label: string;
+  transform: string;
+  overlayColor: string;
+  overlayOpacity: number;
+  filter: string;
+  vignetteStyle: string;
+}
+
+function generateCSSCode(effects: AllEffects): string {
+  const lines: string[] = ["/* Game Screen Effects - Generated CSS */", ""];
+
+  if (effects.shake.enabled) {
+    const { intensity, duration } = effects.shake;
+    lines.push("/* Screen Shake */");
+    lines.push("@keyframes screenShake {");
+    lines.push("  0%, 100% { transform: translate(0, 0); }");
+    lines.push(`  10% { transform: translate(${-intensity}px, ${Math.round(intensity * 0.6)}px); }`);
+    lines.push(`  20% { transform: translate(${intensity}px, ${Math.round(-intensity * 0.4)}px); }`);
+    lines.push(`  30% { transform: translate(${Math.round(-intensity * 0.8)}px, ${intensity}px); }`);
+    lines.push(`  40% { transform: translate(${Math.round(intensity * 0.6)}px, ${Math.round(-intensity * 0.8)}px); }`);
+    lines.push(`  50% { transform: translate(${Math.round(-intensity * 0.4)}px, ${Math.round(intensity * 0.6)}px); }`);
+    lines.push(`  60% { transform: translate(${Math.round(intensity * 0.3)}px, ${Math.round(-intensity * 0.3)}px); }`);
+    lines.push(`  70% { transform: translate(${Math.round(-intensity * 0.2)}px, ${Math.round(intensity * 0.2)}px); }`);
+    lines.push(`  80% { transform: translate(${Math.round(intensity * 0.1)}px, ${Math.round(-intensity * 0.1)}px); }`);
+    lines.push("}");
+    lines.push(`.shake-effect { animation: screenShake ${duration}ms ease-in-out; }`);
+    lines.push("");
+  }
+
+  if (effects.flash.enabled) {
+    const { color, duration } = effects.flash;
+    lines.push("/* Screen Flash */");
+    lines.push("@keyframes screenFlash {");
+    lines.push(`  0% { background: ${color}; opacity: 1; }`);
+    lines.push("  100% { opacity: 0; }");
+    lines.push("}");
+    lines.push(`.flash-overlay { position: absolute; inset: 0; pointer-events: none; animation: screenFlash ${duration}ms ease-out forwards; }`);
+    lines.push("");
+  }
+
+  if (effects.fade.enabled) {
+    const { direction, duration, color } = effects.fade;
+    const fadeIn = direction === "in";
+    lines.push(`/* Screen Fade ${direction} */`);
+    lines.push("@keyframes screenFade {");
+    lines.push(`  0% { opacity: ${fadeIn ? 1 : 0}; }`);
+    lines.push(`  100% { opacity: ${fadeIn ? 0 : 1}; }`);
+    lines.push("}");
+    lines.push(`.fade-overlay { position: absolute; inset: 0; background: ${color}; pointer-events: none; animation: screenFade ${duration}ms ease forwards; }`);
+    lines.push("");
+  }
+
+  if (effects.chromatic.enabled) {
+    const { intensity } = effects.chromatic;
+    lines.push("/* Chromatic Aberration */");
+    lines.push(`.chromatic-effect {`);
+    lines.push(`  filter: drop-shadow(${intensity}px 0 0 rgba(255,0,0,0.5)) drop-shadow(-${intensity}px 0 0 rgba(0,0,255,0.5));`);
+    lines.push("}");
+    lines.push("");
+  }
+
+  if (effects.vignette.enabled) {
+    const { intensity, color } = effects.vignette;
+    const spread = 100 - intensity;
+    lines.push("/* Vignette */");
+    lines.push(`.vignette-overlay {`);
+    lines.push("  position: absolute; inset: 0; pointer-events: none;");
+    lines.push(`  background: radial-gradient(ellipse at center, transparent ${spread}%, ${color} 100%);`);
+    lines.push("}");
+    lines.push("");
+  }
+
+  if (effects.crt.enabled) {
+    const { intensity } = effects.crt;
+    const opacity = (intensity / 100 * 0.4).toFixed(2);
+    lines.push("/* CRT Scanlines */");
+    lines.push(".crt-overlay {");
+    lines.push("  position: absolute; inset: 0; pointer-events: none;");
+    lines.push(`  background-image: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,${opacity}) 2px, rgba(0,0,0,${opacity}) 4px);`);
+    lines.push("  mix-blend-mode: multiply;");
+    lines.push("}");
+    lines.push("");
+  }
+
+  const enabledCount = Object.values(effects).filter((e) => e.enabled).length;
+  if (enabledCount === 0) {
+    return "/* No effects enabled. Toggle effects on the right panel, then export. */";
+  }
+
+  return lines.join("\n");
+}
+
+function captureRecordFrames(effects: AllEffects): RecordFrame[] {
+  const timePoints = [
+    { t: 0, label: "t=0%" },
+    { t: 0.33, label: "t=33%" },
+    { t: 0.66, label: "t=66%" },
+    { t: 1, label: "t=100%" },
+  ];
+
+  return timePoints.map(({ t, label }) => {
+    const frame: RecordFrame = {
+      label,
+      transform: "translate(0,0)",
+      overlayColor: "transparent",
+      overlayOpacity: 0,
+      filter: "none",
+      vignetteStyle: "none",
+    };
+
+    if (effects.shake.enabled) {
+      const { intensity } = effects.shake;
+      const decay = 1 - t;
+      const x = Math.sin(t * Math.PI * 8) * intensity * decay;
+      const y = Math.cos(t * Math.PI * 6) * intensity * decay;
+      frame.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+    }
+
+    if (effects.flash.enabled) {
+      frame.overlayColor = effects.flash.color;
+      frame.overlayOpacity = Math.max(0, 1 - t);
+    }
+
+    if (effects.fade.enabled) {
+      const fadeIn = effects.fade.direction === "in";
+      frame.overlayColor = effects.fade.color;
+      frame.overlayOpacity = fadeIn ? Math.max(0, 1 - t) : t;
+    }
+
+    if (effects.chromatic.enabled) {
+      const { intensity } = effects.chromatic;
+      const i = intensity * (1 - t * 0.7);
+      frame.filter = `drop-shadow(${i.toFixed(1)}px 0 0 rgba(255,0,0,0.5)) drop-shadow(-${i.toFixed(1)}px 0 0 rgba(0,0,255,0.5))`;
+    }
+
+    if (effects.vignette.enabled) {
+      const { intensity, color } = effects.vignette;
+      const spread = 100 - intensity;
+      frame.vignetteStyle = `radial-gradient(ellipse at center, transparent ${spread}%, ${color} 100%)`;
+    }
+
+    return frame;
+  });
+}
+
 export default function EffectsPage() {
   const [effects, setEffects] = useState<AllEffects>({ ...DEFAULT_EFFECTS });
   const [activeEffects, setActiveEffects] = useState<Set<string>>(new Set());
+  const [showCSS, setShowCSS] = useState(false);
+  const [showRecord, setShowRecord] = useState(false);
+  const [recordFrames, setRecordFrames] = useState<RecordFrame[]>([]);
+  const [copiedCSS, setCopiedCSS] = useState(false);
   const screenRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -190,6 +347,25 @@ export default function EffectsPage() {
     URL.revokeObjectURL(url);
   }
 
+  function handleExportCSS() {
+    setShowCSS(!showCSS);
+    setShowRecord(false);
+  }
+
+  function handleRecord() {
+    const frames = captureRecordFrames(effects);
+    setRecordFrames(frames);
+    setShowRecord(!showRecord);
+    setShowCSS(false);
+  }
+
+  function copyCSS() {
+    const css = generateCSSCode(effects);
+    navigator.clipboard.writeText(css);
+    setCopiedCSS(true);
+    setTimeout(() => setCopiedCSS(false), 1500);
+  }
+
   const crtIntensity = effects.crt.intensity;
   const showCrt = activeEffects.has("crt");
 
@@ -211,7 +387,6 @@ export default function EffectsPage() {
       </div>
 
       <div className="flex gap-4">
-        {/* Game Screen Preview */}
         <div className="flex-1">
           <div className="relative overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#0a0a0a]">
             <div
@@ -221,7 +396,6 @@ export default function EffectsPage() {
                 background: "linear-gradient(135deg, #1a2a1a 0%, #0d1a0d 50%, #1a1a2a 100%)",
               }}
             >
-              {/* CRT scanlines overlay */}
               {showCrt && (
                 <div
                   className="pointer-events-none absolute inset-0 z-20"
@@ -238,17 +412,25 @@ export default function EffectsPage() {
                 />
               )}
 
-              {/* Flash / Fade / Vignette overlay target */}
               <div ref={overlayRef} />
 
-              {/* Fake game HUD */}
+              {/* HUD */}
               <div className="relative z-10 flex items-start justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <Heart className="h-4 w-4 text-red-500 fill-red-500" />
-                  <div className="h-2.5 w-28 rounded-full bg-[#333] overflow-hidden">
-                    <div className="h-full w-[72%] rounded-full bg-gradient-to-r from-red-600 to-red-400" />
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Heart className="h-4 w-4 text-red-500 fill-red-500" />
+                    <div className="h-2.5 w-28 rounded-full bg-[#333] overflow-hidden">
+                      <div className="h-full w-[72%] rounded-full bg-gradient-to-r from-red-600 to-red-400" />
+                    </div>
+                    <span className="text-red-300 font-mono text-[10px]">72/100</span>
                   </div>
-                  <span className="text-red-300 font-mono text-[10px]">72/100</span>
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-blue-400" />
+                    <div className="h-2.5 w-28 rounded-full bg-[#333] overflow-hidden">
+                      <div className="h-full w-[45%] rounded-full bg-gradient-to-r from-blue-600 to-blue-400" />
+                    </div>
+                    <span className="text-blue-300 font-mono text-[10px]">45/100</span>
+                  </div>
                 </div>
                 <div className="flex items-center gap-1.5 text-[#F59E0B]">
                   <Star className="h-3.5 w-3.5 fill-[#F59E0B]" />
@@ -256,15 +438,40 @@ export default function EffectsPage() {
                 </div>
               </div>
 
-              {/* Mini character */}
-              <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10">
+              {/* Player character */}
+              <div className="absolute bottom-16 left-[35%] -translate-x-1/2 z-10">
                 <div className="relative">
                   <div className="h-10 w-7 rounded-t-lg bg-[#4CAF50]" />
                   <div className="h-3 w-7 bg-[#3E8E41] rounded-b" />
                   <div className="absolute -top-2 left-1/2 -translate-x-1/2 h-5 w-5 rounded-full bg-[#FFCC80]" />
                   <div className="absolute -top-1 left-[6px] h-1 w-1 rounded-full bg-[#333]" />
                   <div className="absolute -top-1 right-[6px] h-1 w-1 rounded-full bg-[#333]" />
+                  <Sword className="absolute top-1 -right-4 h-5 w-5 text-[#9CA3AF] rotate-45" />
                   <Crosshair className="absolute -top-6 left-1/2 -translate-x-1/2 h-3 w-3 text-[#F59E0B] opacity-60" />
+                </div>
+              </div>
+
+              {/* Projectile */}
+              <div className="absolute bottom-20 left-[52%] z-10">
+                <div className="flex items-center gap-1">
+                  <Zap className="h-3 w-3 text-[#F59E0B] fill-[#F59E0B]" />
+                  <div className="h-2 w-6 rounded-full bg-gradient-to-r from-[#F59E0B] to-[#F59E0B]/0" />
+                </div>
+              </div>
+
+              {/* Enemy */}
+              <div className="absolute bottom-16 right-[20%] z-10">
+                <div className="relative">
+                  <div className="h-10 w-8 rounded-t-lg bg-[#c62828]" />
+                  <div className="h-3 w-8 bg-[#b71c1c] rounded-b" />
+                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 h-5 w-5 rounded-full bg-[#8d6e63]" />
+                  <div className="absolute -top-1 left-[7px] h-1.5 w-1.5 rounded-full bg-[#ff5252]" />
+                  <div className="absolute -top-1 right-[7px] h-1.5 w-1.5 rounded-full bg-[#ff5252]" />
+                  <div className="absolute -top-5 left-1/2 -translate-x-1/2 flex items-center gap-0.5">
+                    <div className="h-1 w-8 rounded-full bg-[#333] overflow-hidden">
+                      <div className="h-full w-[60%] rounded-full bg-red-500" />
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -294,15 +501,17 @@ export default function EffectsPage() {
 
               {/* Mini-map */}
               <div className="absolute bottom-4 right-4 z-10 h-16 w-16 rounded border border-[#444] bg-[#111]/80 p-1">
-                <div className="h-full w-full rounded-sm bg-[#1a2a1a]">
+                <div className="relative h-full w-full rounded-sm bg-[#1a2a1a]">
+                  <div className="absolute bottom-3 left-4 h-1 w-1 rounded-full bg-[#4CAF50]" />
+                  <div className="absolute bottom-3 right-2 h-1 w-1 rounded-full bg-red-500" />
                   <div className="absolute bottom-2 right-2 h-1 w-1 rounded-full bg-[#F59E0B]" />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Combine & Export */}
-          <div className="mt-3 flex gap-2">
+          {/* Action buttons */}
+          <div className="mt-3 flex gap-2 flex-wrap">
             <button
               onClick={triggerAll}
               className="flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-semibold text-black hover:bg-[#D97706] transition-colors"
@@ -315,12 +524,122 @@ export default function EffectsPage() {
             >
               <Download className="h-4 w-4" /> Export JSON
             </button>
+            <button
+              onClick={handleExportCSS}
+              className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors ${
+                showCSS
+                  ? "border-[#F59E0B]/40 bg-[#F59E0B]/10 text-[#F59E0B]"
+                  : "border-[#2A2A2A] bg-[#1A1A1A] text-[#9CA3AF] hover:text-[#F5F5F5]"
+              }`}
+            >
+              <Code className="h-4 w-4" /> Export CSS
+            </button>
+            <button
+              onClick={handleRecord}
+              className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors ${
+                showRecord
+                  ? "border-[#F59E0B]/40 bg-[#F59E0B]/10 text-[#F59E0B]"
+                  : "border-[#2A2A2A] bg-[#1A1A1A] text-[#9CA3AF] hover:text-[#F5F5F5]"
+              }`}
+            >
+              <Camera className="h-4 w-4" /> Record
+            </button>
           </div>
+
+          {/* CSS Output Panel */}
+          {showCSS && (
+            <div className="mt-3 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-medium text-[#9CA3AF]">GENERATED CSS</p>
+                <button
+                  onClick={copyCSS}
+                  className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-xs text-[#9CA3AF] hover:text-[#F5F5F5] transition-colors"
+                >
+                  {copiedCSS ? <Check className="h-3 w-3 text-[#10B981]" /> : <Copy className="h-3 w-3" />}
+                  {copiedCSS ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <pre className="max-h-64 overflow-auto rounded-lg bg-[#0F0F0F] p-3 text-[11px] font-mono text-[#E5E5E5] leading-relaxed">
+                {generateCSSCode(effects)}
+              </pre>
+            </div>
+          )}
+
+          {/* Record Panel */}
+          {showRecord && recordFrames.length > 0 && (
+            <div className="mt-3 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+              <p className="text-xs font-medium text-[#9CA3AF] mb-3">EFFECT TIMELINE</p>
+              <div className="grid grid-cols-4 gap-2">
+                {recordFrames.map((frame, i) => (
+                  <div key={i} className="space-y-1">
+                    <div
+                      className="relative aspect-[16/10] overflow-hidden rounded-lg border border-[#2A2A2A]"
+                      style={{ filter: frame.filter }}
+                    >
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          background: "linear-gradient(135deg, #1a2a1a 0%, #0d1a0d 50%, #1a1a2a 100%)",
+                          transform: frame.transform,
+                        }}
+                      >
+                        {/* Mini HUD */}
+                        <div className="absolute top-1 left-1.5 flex items-center gap-1">
+                          <div className="h-1 w-6 rounded-full bg-[#333] overflow-hidden">
+                            <div className="h-full w-[72%] rounded-full bg-red-500" />
+                          </div>
+                        </div>
+
+                        {/* Mini player */}
+                        <div className="absolute bottom-3 left-[30%]">
+                          <div className="h-3 w-2 rounded-t bg-[#4CAF50]" />
+                          <div className="h-1 w-2 bg-[#3E8E41]" />
+                        </div>
+
+                        {/* Mini projectile */}
+                        <div className="absolute bottom-4 left-[50%]">
+                          <div className="h-0.5 w-2 rounded-full bg-[#F59E0B]" />
+                        </div>
+
+                        {/* Mini enemy */}
+                        <div className="absolute bottom-3 right-[20%]">
+                          <div className="h-3 w-2 rounded-t bg-[#c62828]" />
+                          <div className="h-1 w-2 bg-[#b71c1c]" />
+                        </div>
+
+                        {/* Ground */}
+                        <div className="absolute bottom-0 left-0 right-0 h-2 bg-[#2E7D32]" />
+                      </div>
+
+                      {/* Effect overlay */}
+                      {frame.overlayOpacity > 0 && (
+                        <div
+                          className="absolute inset-0 pointer-events-none"
+                          style={{
+                            backgroundColor: frame.overlayColor,
+                            opacity: frame.overlayOpacity,
+                          }}
+                        />
+                      )}
+
+                      {/* Vignette */}
+                      {frame.vignetteStyle !== "none" && (
+                        <div
+                          className="absolute inset-0 pointer-events-none"
+                          style={{ background: frame.vignetteStyle }}
+                        />
+                      )}
+                    </div>
+                    <p className="text-center text-[10px] font-mono text-[#6B7280]">{frame.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Effects Panel */}
         <div className="w-72 shrink-0 space-y-2">
-          {/* Screen Shake */}
           <EffectCard
             title="Screen Shake"
             active={activeEffects.has("shake")}
@@ -345,7 +664,6 @@ export default function EffectsPage() {
             />
           </EffectCard>
 
-          {/* Flash */}
           <EffectCard
             title="Flash"
             active={activeEffects.has("flash")}
@@ -368,7 +686,6 @@ export default function EffectsPage() {
             />
           </EffectCard>
 
-          {/* Fade */}
           <EffectCard
             title="Fade In/Out"
             active={activeEffects.has("fade")}
@@ -406,7 +723,6 @@ export default function EffectsPage() {
             />
           </EffectCard>
 
-          {/* Chromatic Aberration */}
           <EffectCard
             title="Chromatic Aberration"
             active={activeEffects.has("chromatic")}
@@ -423,7 +739,6 @@ export default function EffectsPage() {
             />
           </EffectCard>
 
-          {/* Vignette */}
           <EffectCard
             title="Vignette"
             active={activeEffects.has("vignette")}
@@ -445,7 +760,6 @@ export default function EffectsPage() {
             />
           </EffectCard>
 
-          {/* CRT / Scanlines */}
           <EffectCard
             title="CRT / Scanlines"
             active={activeEffects.has("crt")}
@@ -466,8 +780,6 @@ export default function EffectsPage() {
     </div>
   );
 }
-
-/* ─── Shared Components ─── */
 
 function EffectCard({
   title,

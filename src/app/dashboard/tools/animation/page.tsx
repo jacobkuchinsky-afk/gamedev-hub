@@ -14,7 +14,6 @@ import {
   Pencil,
   Eraser,
   Eye,
-  Repeat,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -24,8 +23,10 @@ const CELL = 20;
 const CANVAS_SIZE = GRID * CELL;
 const PREVIEW_SIZE = 256;
 const STRIP_THUMB = 64;
+const DEFAULT_FRAME_MS = 125;
 
 type PixelGrid = (string | null)[][];
+type LoopMode = "once" | "loop" | "pingpong";
 
 function emptyGrid(): PixelGrid {
   return Array.from({ length: GRID }, () => Array<string | null>(GRID).fill(null));
@@ -51,7 +52,6 @@ function makeSampleFrames(): PixelGrid[] {
     for (let y = 5; y <= 9; y++) { g[y][7] = c; g[y][8] = c; }
   };
 
-  // Frame 0 — standing
   const f0 = cloneGrid(base);
   drawHead(f0); drawBody(f0);
   f0[6][6] = s; f0[7][5] = s; f0[6][9] = s; f0[7][10] = s;
@@ -59,7 +59,6 @@ function makeSampleFrames(): PixelGrid[] {
   f0[12][6] = s; f0[12][9] = s;
   frames.push(f0);
 
-  // Frame 1 — step right
   const f1 = cloneGrid(base);
   drawHead(f1); drawBody(f1);
   f1[6][6] = s; f1[7][5] = s; f1[6][9] = s; f1[7][10] = s;
@@ -67,10 +66,8 @@ function makeSampleFrames(): PixelGrid[] {
   f1[12][4] = s; f1[12][11] = s;
   frames.push(f1);
 
-  // Frame 2 — standing (same as 0)
   frames.push(cloneGrid(f0));
 
-  // Frame 3 — step left (mirror of 1)
   const f3 = cloneGrid(base);
   drawHead(f3); drawBody(f3);
   f3[6][6] = s; f3[7][5] = s; f3[6][9] = s; f3[7][10] = s;
@@ -113,22 +110,26 @@ function renderGridToCanvas(
 
 export default function AnimationPage() {
   const [frames, setFrames] = useState<PixelGrid[]>(makeSampleFrames);
+  const [frameDurations, setFrameDurations] = useState<number[]>(() =>
+    new Array(4).fill(DEFAULT_FRAME_MS)
+  );
   const [activeFrame, setActiveFrame] = useState(0);
   const [tool, setTool] = useState<"pencil" | "eraser">("pencil");
   const [color, setColor] = useState("#F59E0B");
   const [playing, setPlaying] = useState(false);
   const [fps, setFps] = useState(8);
-  const [loop, setLoop] = useState(true);
+  const [loopMode, setLoopMode] = useState<LoopMode>("loop");
   const [onionSkin, setOnionSkin] = useState(false);
+  const [selectedFrames, setSelectedFrames] = useState<Set<number>>(new Set());
 
   const editorRef = useRef<HTMLCanvasElement>(null);
   const previewRef = useRef<HTMLCanvasElement>(null);
   const stripRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
-  const animRef = useRef<number | null>(null);
-  const lastTickRef = useRef(0);
   const isPainting = useRef(false);
+  const pingPongForward = useRef(true);
 
   const currentGrid = frames[activeFrame];
+  const totalDuration = frameDurations.reduce((s, d) => s + d, 0);
 
   const drawEditor = useCallback(() => {
     const ctx = editorRef.current?.getContext("2d");
@@ -162,24 +163,37 @@ export default function AnimationPage() {
   useEffect(() => { frames.forEach((_, i) => drawStrip(i)); }, [frames, drawStrip]);
 
   useEffect(() => {
-    if (!playing) { if (animRef.current) cancelAnimationFrame(animRef.current); return; }
-    const step = (ts: number) => {
-      if (ts - lastTickRef.current >= 1000 / fps) {
-        lastTickRef.current = ts;
-        setActiveFrame((prev) => {
-          const next = prev + 1;
-          if (next >= frames.length) {
-            if (!loop) { setPlaying(false); return prev; }
-            return 0;
+    if (!playing) return;
+
+    const timeout = setTimeout(() => {
+      setActiveFrame((prev) => {
+        if (loopMode === "pingpong") {
+          if (pingPongForward.current) {
+            if (prev >= frames.length - 1) {
+              pingPongForward.current = false;
+              return Math.max(0, prev - 1);
+            }
+            return prev + 1;
+          } else {
+            if (prev <= 0) {
+              pingPongForward.current = true;
+              return Math.min(frames.length - 1, prev + 1);
+            }
+            return prev - 1;
           }
-          return next;
-        });
-      }
-      animRef.current = requestAnimationFrame(step);
-    };
-    animRef.current = requestAnimationFrame(step);
-    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
-  }, [playing, fps, loop, frames.length]);
+        }
+
+        const next = prev + 1;
+        if (next >= frames.length) {
+          if (loopMode === "once") { setPlaying(false); return prev; }
+          return 0;
+        }
+        return next;
+      });
+    }, frameDurations[activeFrame] ?? DEFAULT_FRAME_MS);
+
+    return () => clearTimeout(timeout);
+  }, [playing, activeFrame, frameDurations, loopMode, frames.length]);
 
   const paint = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = editorRef.current!.getBoundingClientRect();
@@ -195,14 +209,21 @@ export default function AnimationPage() {
 
   const addFrame = () => {
     setFrames((p) => [...p, emptyGrid()]);
+    setFrameDurations((p) => [...p, DEFAULT_FRAME_MS]);
     setActiveFrame(frames.length);
   };
 
   const duplicateFrame = () => {
     const copy = cloneGrid(frames[activeFrame]);
+    const dur = frameDurations[activeFrame];
     setFrames((p) => {
       const n = [...p];
       n.splice(activeFrame + 1, 0, copy);
+      return n;
+    });
+    setFrameDurations((p) => {
+      const n = [...p];
+      n.splice(activeFrame + 1, 0, dur);
       return n;
     });
     setActiveFrame(activeFrame + 1);
@@ -211,7 +232,46 @@ export default function AnimationPage() {
   const deleteFrame = () => {
     if (frames.length <= 1) return;
     setFrames((p) => p.filter((_, i) => i !== activeFrame));
+    setFrameDurations((p) => p.filter((_, i) => i !== activeFrame));
     setActiveFrame(Math.min(activeFrame, frames.length - 2));
+  };
+
+  const deleteSelectedFrames = () => {
+    if (selectedFrames.size === 0 || selectedFrames.size >= frames.length) return;
+    setFrames((p) => p.filter((_, i) => !selectedFrames.has(i)));
+    setFrameDurations((p) => p.filter((_, i) => !selectedFrames.has(i)));
+    setActiveFrame(0);
+    setSelectedFrames(new Set());
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedFrames.size === frames.length) {
+      setSelectedFrames(new Set());
+    } else {
+      setSelectedFrames(new Set(frames.map((_, i) => i)));
+    }
+  };
+
+  const toggleFrameSelect = (idx: number) => {
+    setSelectedFrames((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
+
+  const applyFpsToAll = () => {
+    const ms = Math.round(1000 / fps);
+    setFrameDurations(frames.map(() => ms));
+  };
+
+  const setFrameDuration = (idx: number, ms: number) => {
+    setFrameDurations((p) => {
+      const n = [...p];
+      n[idx] = ms;
+      return n;
+    });
   };
 
   const exportSpritesheet = () => {
@@ -228,7 +288,7 @@ export default function AnimationPage() {
           }
     });
     const a = document.createElement("a");
-    a.download = "spritesheet.png";
+    a.download = `spritesheet_${frames.length}f_${GRID}x${GRID}.png`;
     a.href = cvs.toDataURL();
     a.click();
   };
@@ -241,18 +301,25 @@ export default function AnimationPage() {
         <Link href="/dashboard/tools" className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] text-[#9CA3AF] hover:text-[#F5F5F5] transition-colors">
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold">Animation Frame Viewer</h1>
           <p className="text-sm text-[#9CA3AF]">Draw frames, preview animations, export spritesheets</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5">
+            <span className="text-xs text-[#9CA3AF]">Frames </span>
+            <span className="text-sm font-mono font-medium text-[#F59E0B]">{frames.length}</span>
+          </div>
+          <div className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5">
+            <span className="text-xs text-[#9CA3AF]">Duration </span>
+            <span className="text-sm font-mono font-medium text-[#F59E0B]">{totalDuration}ms</span>
+          </div>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
-        {/* Main area */}
         <div className="space-y-4">
-          {/* Editor + Preview side by side */}
           <div className="flex flex-wrap gap-4">
-            {/* Pixel editor */}
             <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
               <p className="mb-2 text-xs font-medium text-[#9CA3AF]">
                 DRAW — Frame {activeFrame + 1}/{frames.length}
@@ -269,7 +336,6 @@ export default function AnimationPage() {
                 onMouseLeave={() => { isPainting.current = false; }}
               />
             </div>
-            {/* Preview */}
             <div className="flex flex-col gap-4">
               <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
                 <p className="mb-2 text-xs font-medium text-[#9CA3AF]">PREVIEW</p>
@@ -282,17 +348,16 @@ export default function AnimationPage() {
                 />
               </div>
 
-              {/* Playback */}
               <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 space-y-3">
                 <p className="text-xs font-medium text-[#9CA3AF]">PLAYBACK</p>
                 <div className="flex items-center gap-2">
                   <button onClick={() => setActiveFrame((p) => Math.max(0, p - 1))} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-2 text-[#9CA3AF] hover:text-[#F5F5F5] transition-colors" title="Previous frame">
                     <SkipBack className="h-4 w-4" />
                   </button>
-                  <button onClick={() => setPlaying(!playing)} className="rounded-lg border border-[#F59E0B]/40 bg-[#F59E0B]/10 p-2 text-[#F59E0B] hover:bg-[#F59E0B]/20 transition-colors" title={playing ? "Pause" : "Play"}>
+                  <button onClick={() => { setPlaying(!playing); if (!playing) pingPongForward.current = true; }} className="rounded-lg border border-[#F59E0B]/40 bg-[#F59E0B]/10 p-2 text-[#F59E0B] hover:bg-[#F59E0B]/20 transition-colors" title={playing ? "Pause" : "Play"}>
                     {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                   </button>
-                  <button onClick={() => { setPlaying(false); setActiveFrame(0); }} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-2 text-[#9CA3AF] hover:text-[#F5F5F5] transition-colors" title="Stop">
+                  <button onClick={() => { setPlaying(false); setActiveFrame(0); pingPongForward.current = true; }} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-2 text-[#9CA3AF] hover:text-[#F5F5F5] transition-colors" title="Stop">
                     <Square className="h-3.5 w-3.5" />
                   </button>
                   <button onClick={() => setActiveFrame((p) => Math.min(frames.length - 1, p + 1))} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-2 text-[#9CA3AF] hover:text-[#F5F5F5] transition-colors" title="Next frame">
@@ -304,24 +369,64 @@ export default function AnimationPage() {
                     <span>FPS</span><span className="font-mono text-[#F59E0B]">{fps}</span>
                   </div>
                   <input type="range" min={1} max={30} value={fps} onChange={(e) => setFps(+e.target.value)} className="w-full accent-[#F59E0B]" />
+                  <button
+                    onClick={applyFpsToAll}
+                    className="w-full rounded-md border border-[#2A2A2A] bg-[#0F0F0F] px-2 py-1 text-[10px] text-[#9CA3AF] hover:text-[#F5F5F5] transition-colors"
+                  >
+                    Apply {Math.round(1000 / fps)}ms to all frames
+                  </button>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => setLoop(!loop)} className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${loop ? "border-[#F59E0B]/40 bg-[#F59E0B]/10 text-[#F59E0B]" : "border-[#2A2A2A] bg-[#0F0F0F] text-[#9CA3AF]"}`}>
-                    <Repeat className="h-3.5 w-3.5" /> Loop
-                  </button>
-                  <button onClick={() => setOnionSkin(!onionSkin)} className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${onionSkin ? "border-[#F59E0B]/40 bg-[#F59E0B]/10 text-[#F59E0B]" : "border-[#2A2A2A] bg-[#0F0F0F] text-[#9CA3AF]"}`}>
-                    <Eye className="h-3.5 w-3.5" /> Onion
-                  </button>
+                <div className="flex gap-1">
+                  {(["once", "loop", "pingpong"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => { setLoopMode(mode); pingPongForward.current = true; }}
+                      className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors ${
+                        loopMode === mode
+                          ? "border-[#F59E0B]/40 bg-[#F59E0B]/10 text-[#F59E0B]"
+                          : "border-[#2A2A2A] bg-[#0F0F0F] text-[#9CA3AF] hover:text-[#F5F5F5]"
+                      }`}
+                    >
+                      {mode === "once" ? "Once" : mode === "loop" ? "Loop" : "Ping-pong"}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setOnionSkin(!onionSkin)} className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${onionSkin ? "border-[#F59E0B]/40 bg-[#F59E0B]/10 text-[#F59E0B]" : "border-[#2A2A2A] bg-[#0F0F0F] text-[#9CA3AF]"}`}>
+                  <Eye className="h-3.5 w-3.5" /> Onion Skin
+                </button>
+              </div>
+
+              <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 space-y-2">
+                <p className="text-xs font-medium text-[#9CA3AF]">FRAME TIMING</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[#9CA3AF] whitespace-nowrap">Frame {activeFrame + 1}</span>
+                  <input
+                    type="number"
+                    min={10}
+                    max={5000}
+                    step={10}
+                    value={frameDurations[activeFrame] ?? DEFAULT_FRAME_MS}
+                    onChange={(e) => setFrameDuration(activeFrame, Math.max(10, parseInt(e.target.value) || DEFAULT_FRAME_MS))}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-2 py-1.5 text-xs font-mono text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+                  />
+                  <span className="text-[10px] text-[#6B7280]">ms</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Frame strip */}
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-medium text-[#9CA3AF]">FRAMES</p>
               <div className="flex gap-1.5">
+                <button onClick={toggleSelectAll} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-2 py-1 text-[10px] text-[#9CA3AF] hover:text-[#F5F5F5] transition-colors">
+                  {selectedFrames.size === frames.length ? "Deselect All" : "Select All"}
+                </button>
+                {selectedFrames.size > 0 && selectedFrames.size < frames.length && (
+                  <button onClick={deleteSelectedFrames} className="rounded-lg border border-[#EF4444]/30 bg-[#EF4444]/10 px-2 py-1 text-[10px] text-[#EF4444] hover:bg-[#EF4444]/20 transition-colors">
+                    Delete {selectedFrames.size}
+                  </button>
+                )}
                 <button onClick={addFrame} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-1.5 text-[#9CA3AF] hover:text-[#F5F5F5] transition-colors" title="New blank frame"><Plus className="h-3.5 w-3.5" /></button>
                 <button onClick={duplicateFrame} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-1.5 text-[#9CA3AF] hover:text-[#F5F5F5] transition-colors" title="Duplicate frame"><Copy className="h-3.5 w-3.5" /></button>
                 <button onClick={deleteFrame} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-1.5 text-[#9CA3AF] hover:text-[#EF4444] transition-colors" title="Delete frame"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -329,28 +434,42 @@ export default function AnimationPage() {
             </div>
             <div className="flex gap-2 overflow-x-auto pb-2">
               {frames.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setActiveFrame(i)}
-                  className={`relative flex-shrink-0 rounded-lg border-2 transition-colors ${i === activeFrame ? "border-[#F59E0B]" : "border-[#2A2A2A] hover:border-[#3A3A3A]"}`}
-                >
-                  <canvas
-                    ref={(el) => { if (el) stripRefs.current.set(i, el); }}
-                    width={STRIP_THUMB}
-                    height={STRIP_THUMB}
-                    className="rounded-md"
-                    style={{ imageRendering: "pixelated" }}
+                <div key={i} className="relative flex-shrink-0">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleFrameSelect(i); }}
+                    className={`absolute left-1 top-1 z-10 h-3.5 w-3.5 rounded-sm border transition-colors ${
+                      selectedFrames.has(i)
+                        ? "bg-[#F59E0B] border-[#F59E0B]"
+                        : "border-[#555] bg-[#0F0F0F]/60 hover:border-[#888]"
+                    }`}
                   />
-                  <span className="absolute bottom-0.5 right-1 text-[10px] font-mono text-[#9CA3AF]/60">{i + 1}</span>
-                </button>
+                  <button
+                    onClick={() => setActiveFrame(i)}
+                    className={`relative rounded-lg border-2 transition-colors ${
+                      i === activeFrame ? "border-[#F59E0B]" :
+                      selectedFrames.has(i) ? "border-[#F59E0B]/40" :
+                      "border-[#2A2A2A] hover:border-[#3A3A3A]"
+                    }`}
+                  >
+                    <canvas
+                      ref={(el) => { if (el) stripRefs.current.set(i, el); }}
+                      width={STRIP_THUMB}
+                      height={STRIP_THUMB}
+                      className="rounded-md"
+                      style={{ imageRendering: "pixelated" }}
+                    />
+                    <span className="absolute bottom-0.5 right-1 text-[10px] font-mono text-[#9CA3AF]/60">{i + 1}</span>
+                  </button>
+                  <div className="mt-0.5 text-center">
+                    <span className="text-[9px] font-mono text-[#6B7280]">{frameDurations[i]}ms</span>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-4">
-          {/* Tools */}
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 space-y-3">
             <p className="text-xs font-medium text-[#9CA3AF]">TOOLS</p>
             <div className="flex gap-2">
@@ -369,7 +488,6 @@ export default function AnimationPage() {
             </div>
           </div>
 
-          {/* Color */}
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 space-y-3">
             <p className="text-xs font-medium text-[#9CA3AF]">COLOR</p>
             <div className="flex items-center gap-2">
@@ -388,7 +506,6 @@ export default function AnimationPage() {
             </div>
           </div>
 
-          {/* Export */}
           <button onClick={exportSpritesheet} className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-4 py-3 text-sm font-medium text-[#F59E0B] hover:bg-[#F59E0B]/20 transition-colors">
             <Download className="h-4 w-4" /> Export Spritesheet
           </button>
