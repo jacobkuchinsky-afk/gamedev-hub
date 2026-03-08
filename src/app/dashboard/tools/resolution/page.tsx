@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, Monitor, Smartphone, Gamepad2, Globe, X, Star, Zap, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, Monitor, Smartphone, Gamepad2, Globe, X, Star, Zap, Sparkles, Loader2, Crosshair } from "lucide-react";
 
 interface Resolution {
   label: string;
@@ -127,6 +127,12 @@ export default function ResolutionGuidePage() {
   const [aiResult, setAiResult] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
+  const [spriteRes, setSpriteRes] = useState("");
+  const [spriteStyle, setSpriteStyle] = useState("");
+  const [spritePlatform, setSpritePlatform] = useState("");
+  const [spriteResult, setSpriteResult] = useState<string | null>(null);
+  const [spriteLoading, setSpriteLoading] = useState(false);
+
   const handleAiRecommend = useCallback(async () => {
     if (!aiGenre.trim() || !aiArtStyle.trim() || !aiPlatform.trim()) return;
     setAiLoading(true);
@@ -156,6 +162,36 @@ export default function ResolutionGuidePage() {
       setAiLoading(false);
     }
   }, [aiGenre, aiArtStyle, aiPlatform]);
+
+  const handleSpriteSize = useCallback(async () => {
+    if (!spriteRes.trim() || !spriteStyle.trim() || !spritePlatform.trim()) return;
+    setSpriteLoading(true);
+    setSpriteResult(null);
+    try {
+      const prompt = `For a ${spriteRes.trim()} game targeting ${spritePlatform.trim()} with ${spriteStyle.trim()} art style, what's the ideal sprite size for: player character, enemy, tile, projectile, and UI icon? Give sizes in pixels. Just list them.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      setSpriteResult(content || "No recommendation returned. Try again.");
+    } catch {
+      setSpriteResult("Failed to get sprite size recommendations. Check your connection and try again.");
+    } finally {
+      setSpriteLoading(false);
+    }
+  }, [spriteRes, spriteStyle, spritePlatform]);
 
   const aspectResults = useMemo(
     () =>
@@ -588,6 +624,85 @@ export default function ResolutionGuidePage() {
               <span className="text-xs font-semibold text-[#F59E0B]">AI Recommendation</span>
             </div>
             <p className="text-sm leading-relaxed text-[#E5E7EB]">{aiResult}</p>
+          </div>
+        )}
+      </section>
+
+      {/* AI Sprite Size */}
+      <section className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+            <Crosshair className="h-4 w-4 text-[#F59E0B]" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-[#F5F5F5]">AI Sprite Size</h2>
+            <p className="text-[10px] text-[#6B7280]">Get ideal sprite dimensions for your game setup</p>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label className="mb-1.5 block text-xs text-[#9CA3AF]">Game Resolution</label>
+            <input
+              type="text"
+              placeholder="e.g. 320x180, 1920x1080"
+              value={spriteRes}
+              onChange={(e) => setSpriteRes(e.target.value)}
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/50"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs text-[#9CA3AF]">Art Style</label>
+            <input
+              type="text"
+              placeholder="e.g. Pixel Art, Hand-Drawn, 3D"
+              value={spriteStyle}
+              onChange={(e) => setSpriteStyle(e.target.value)}
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/50"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs text-[#9CA3AF]">Target Platform</label>
+            <input
+              type="text"
+              placeholder="e.g. Desktop, Mobile, Web"
+              value={spritePlatform}
+              onChange={(e) => setSpritePlatform(e.target.value)}
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/50"
+            />
+          </div>
+        </div>
+        <button
+          onClick={handleSpriteSize}
+          disabled={spriteLoading || !spriteRes.trim() || !spriteStyle.trim() || !spritePlatform.trim()}
+          className="mt-4 flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2.5 text-sm font-semibold text-[#0F0F0F] transition-all hover:bg-[#D97706] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {spriteLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Calculating...
+            </>
+          ) : (
+            <>
+              <Crosshair className="h-4 w-4" />
+              Get Sprite Sizes
+            </>
+          )}
+        </button>
+        {spriteResult && (
+          <div className="mt-4 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Crosshair className="h-3.5 w-3.5 text-[#F59E0B]" />
+                <span className="text-xs font-semibold text-[#F59E0B]">Recommended Sprite Sizes</span>
+              </div>
+              <button
+                onClick={() => setSpriteResult(null)}
+                className="text-[#6B7280] transition-colors hover:text-[#F5F5F5]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#E5E7EB]">{spriteResult}</div>
           </div>
         )}
       </section>

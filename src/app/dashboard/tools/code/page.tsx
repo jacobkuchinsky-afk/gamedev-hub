@@ -16,6 +16,7 @@ import {
   ChevronDown,
   AlertTriangle,
   Sparkles,
+  ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -134,6 +135,8 @@ export default function CodeSnippetPage() {
   const [loading, setLoading] = useState(false);
   const [explaining, setExplaining] = useState(false);
   const [explanation, setExplanation] = useState("");
+  const [reviewing, setReviewing] = useState(false);
+  const [review, setReview] = useState("");
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState<SavedSnippet[]>([]);
   const [savedNotice, setSavedNotice] = useState(false);
@@ -164,6 +167,7 @@ export default function CodeSnippetPage() {
     setError("");
     setGeneratedCode("");
     setExplanation("");
+    setReview("");
 
     const langLabel = LANGUAGES.find((l) => l.id === language)?.label || language;
     const engineLabel = ENGINES.find((e) => e.id === engine)?.label || engine;
@@ -249,6 +253,45 @@ export default function CodeSnippetPage() {
       setExplanation("Failed to get explanation. Try again.");
     } finally {
       setExplaining(false);
+    }
+  }, [generatedCode]);
+
+  const reviewCode = useCallback(async () => {
+    if (!generatedCode) return;
+    setReviewing(true);
+    setReview("");
+
+    const prompt = `Review this game code for potential issues: ${generatedCode}. Identify: bugs, performance concerns, and one improvement suggestion. Be brief (3 bullets).`;
+
+    try {
+      const response = await fetch(
+        "https://llm.chutes.ai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization:
+              "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "moonshotai/Kimi-K2.5-TEE",
+            messages: [{ role: "user", content: prompt }],
+            stream: false,
+            max_tokens: 512,
+            temperature: 0.5,
+          }),
+        }
+      );
+      const data = await response.json();
+      const content =
+        data.choices?.[0]?.message?.content ||
+        data.choices?.[0]?.message?.reasoning ||
+        "";
+      setReview(content || "Could not generate review.");
+    } catch {
+      setReview("Failed to get review. Try again.");
+    } finally {
+      setReviewing(false);
     }
   }, [generatedCode]);
 
@@ -603,19 +646,33 @@ export default function CodeSnippetPage() {
                 </button>
               </div>
 
-              {/* Explain button */}
-              <button
-                onClick={explainCode}
-                disabled={explaining}
-                className="flex items-center gap-2 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-5 py-2.5 text-sm font-medium text-[#9CA3AF] transition-all hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
-              >
-                {explaining ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <BookOpen className="h-4 w-4" />
-                )}
-                {explaining ? "Thinking..." : "Explain This Code"}
-              </button>
+              {/* Explain + Review buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={explainCode}
+                  disabled={explaining}
+                  className="flex items-center gap-2 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-5 py-2.5 text-sm font-medium text-[#9CA3AF] transition-all hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                >
+                  {explaining ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <BookOpen className="h-4 w-4" />
+                  )}
+                  {explaining ? "Thinking..." : "Explain This Code"}
+                </button>
+                <button
+                  onClick={reviewCode}
+                  disabled={reviewing}
+                  className="flex items-center gap-2 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-5 py-2.5 text-sm font-medium text-[#9CA3AF] transition-all hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                >
+                  {reviewing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="h-4 w-4" />
+                  )}
+                  {reviewing ? "Reviewing..." : "AI Review"}
+                </button>
+              </div>
 
               {/* Explanation */}
               {explanation && (
@@ -634,6 +691,27 @@ export default function CodeSnippetPage() {
                   </div>
                   <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">
                     {explanation}
+                  </div>
+                </div>
+              )}
+
+              {/* AI Review */}
+              {review && (
+                <div className="rounded-xl border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-5">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#F59E0B]">
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      Code Review
+                    </h3>
+                    <button
+                      onClick={() => setReview("")}
+                      className="text-[#6B7280] transition-colors hover:text-[#F5F5F5]"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">
+                    {review}
                   </div>
                 </div>
               )}
