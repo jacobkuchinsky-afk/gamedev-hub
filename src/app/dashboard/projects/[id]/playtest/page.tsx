@@ -26,6 +26,7 @@ import {
   Calendar,
   ClipboardCopy,
   Check,
+  ShieldCheck,
 } from "lucide-react";
 import {
   getProject,
@@ -94,6 +95,76 @@ const CATEGORY_CONFIG: Record<FeedbackCategory, { label: string; color: string }
 
 const ALL_CATEGORIES: FeedbackCategory[] = ["bug", "feature-request", "ux-issue", "performance", "positive"];
 
+interface TestCase {
+  id: string;
+  category: string;
+  name: string;
+  detail: string;
+  priority: "Critical" | "High" | "Medium" | "Low";
+  status: "untested" | "passed" | "failed" | "skipped";
+}
+
+const PRIORITY_STYLES: Record<TestCase["priority"], string> = {
+  Critical: "bg-[#EF4444]/10 text-[#EF4444]",
+  High: "bg-[#F97316]/10 text-[#F97316]",
+  Medium: "bg-[#F59E0B]/10 text-[#F59E0B]",
+  Low: "bg-[#6B7280]/10 text-[#9CA3AF]",
+};
+
+function parseTestCases(raw: string): TestCase[] {
+  const cases: TestCase[] = [];
+  let category = "General";
+  let idx = 0;
+
+  for (const line of raw.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    const headingMatch = trimmed.match(/^#{1,3}\s+(.+?)(?:\s*\(.*\))?\s*$/);
+    if (headingMatch) {
+      category = headingMatch[1].replace(/\*\*/g, "").trim();
+      continue;
+    }
+
+    const boldHeading = trimmed.match(/^\*\*(.+?)\*\*\s*$/);
+    if (boldHeading && !/^\d/.test(trimmed)) {
+      category = boldHeading[1].trim();
+      continue;
+    }
+
+    const itemMatch = trimmed.match(/^\d+[\.\)]\s*\**(.+)/);
+    if (itemMatch) {
+      const content = itemMatch[1].replace(/\*\*/g, "").trim();
+      let priority: TestCase["priority"] = "Medium";
+      if (/\bcritical\b/i.test(content)) priority = "Critical";
+      else if (/\bhigh\b/i.test(content)) priority = "High";
+      else if (/\blow\b/i.test(content)) priority = "Low";
+
+      const nameEnd = content.search(/[-:]/);
+      const name = nameEnd > 0 ? content.slice(0, nameEnd).trim() : content.slice(0, 80).trim();
+      const detail = nameEnd > 0 ? content.slice(nameEnd + 1).trim() : "";
+
+      cases.push({ id: `tc-${idx++}`, category, name, detail, priority, status: "untested" });
+    }
+  }
+
+  if (cases.length === 0) {
+    const lines = raw.split("\n").filter((l) => l.trim().length > 5);
+    for (const line of lines.slice(0, 20)) {
+      cases.push({
+        id: `tc-${idx++}`,
+        category: "General",
+        name: line.trim().replace(/^[-*#>\d.)\s]+/, "").slice(0, 80),
+        detail: "",
+        priority: "Medium",
+        status: "untested",
+      });
+    }
+  }
+
+  return cases;
+}
+
 function categorizeResponse(r: PlaytestResponse): FeedbackCategory[] {
   const cats: FeedbackCategory[] = [];
   const text = `${r.favoriteMoment} ${r.frustratingMoment} ${r.suggestions} ${r.bugDescription}`.toLowerCase();
@@ -123,6 +194,10 @@ export default function PlaytestPage() {
   const [aiQuestionsLoading, setAiQuestionsLoading] = useState(false);
   const [showAiQuestions, setShowAiQuestions] = useState(false);
   const [questionsCopied, setQuestionsCopied] = useState(false);
+
+  const [testCases, setTestCases] = useState<TestCase[]>([]);
+  const [testPlanLoading, setTestPlanLoading] = useState(false);
+  const [showTestPlan, setShowTestPlan] = useState(false);
 
   const [sessions, setSessions] = useState<PlaytestSession[]>([]);
   const [showSessionForm, setShowSessionForm] = useState(false);
@@ -205,6 +280,89 @@ export default function PlaytestPage() {
       setQuestionsCopied(true);
       setTimeout(() => setQuestionsCopied(false), 2000);
     });
+  };
+
+  const handleAiTestPlan = async () => {
+    if (!project) return;
+    setTestPlanLoading(true);
+    setShowTestPlan(true);
+    try {
+      const prompt = `Create a QA testing checklist for a ${project.genre} game called '${project.name}'. Include 20 test cases grouped by: Functionality (5 tests), Performance (3 tests), Edge Cases (4 tests), UI/UX (4 tests), Platform-Specific (4 tests). For each test case, format as a numbered list item with: test name, steps to test, expected result, and priority (Critical/High/Medium/Low). Use markdown headers for each group.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 2048,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      if (content) {
+        setTestCases(parseTestCases(content));
+      } else {
+        setTestCases([]);
+      }
+    } catch {
+      setTestCases([]);
+    } finally {
+      setTestPlanLoading(false);
+    }
+  };
+
+  const toggleTestStatus = (id: string, status: TestCase["status"]) => {
+    setTestCases((prev) =>
+      prev.map((tc) =>
+        tc.id === id ? { ...tc, status: tc.status === status ? "untested" : status } : tc
+      )
+    );
+  };
+
+  const exportTestReport = () => {
+    if (testCases.length === 0) return;
+    const passed = testCases.filter((t) => t.status === "passed").length;
+    const failed = testCases.filter((t) => t.status === "failed").length;
+    const skipped = testCases.filter((t) => t.status === "skipped").length;
+    const untested = testCases.length - passed - failed - skipped;
+
+    const statusIcon: Record<TestCase["status"], string> = {
+      passed: "[PASS]",
+      failed: "[FAIL]",
+      skipped: "[SKIP]",
+      untested: "[    ]",
+    };
+
+    const categories = Array.from(new Set(testCases.map((t) => t.category)));
+    let md = `# QA Test Report: ${project?.name || "Game"}\n\n`;
+    md += `**Generated:** ${new Date().toLocaleString()}\n\n`;
+    md += `## Summary\n\n`;
+    md += `| Status | Count |\n|--------|-------|\n`;
+    md += `| Passed | ${passed} |\n| Failed | ${failed} |\n| Skipped | ${skipped} |\n| Untested | ${untested} |\n| **Total** | **${testCases.length}** |\n\n`;
+    md += `**Completion:** ${Math.round(((passed + failed + skipped) / testCases.length) * 100)}%\n\n`;
+
+    for (const cat of categories) {
+      md += `## ${cat}\n\n`;
+      for (const tc of testCases.filter((t) => t.category === cat)) {
+        md += `- ${statusIcon[tc.status]} **${tc.name}** (${tc.priority})`;
+        if (tc.detail) md += ` - ${tc.detail}`;
+        md += "\n";
+      }
+      md += "\n";
+    }
+
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `qa-report-${project?.name || "game"}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // Playtester form state
@@ -429,6 +587,18 @@ export default function PlaytestPage() {
               AI Questions
             </button>
             <button
+              onClick={handleAiTestPlan}
+              disabled={testPlanLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {testPlanLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ShieldCheck className="h-4 w-4" />
+              )}
+              AI Test Plan
+            </button>
+            <button
               onClick={handleShareLink}
               className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
             >
@@ -498,6 +668,175 @@ export default function PlaytestPage() {
           ) : (
             <div className="text-sm leading-relaxed text-[#D1D5DB] whitespace-pre-wrap">{aiQuestions}</div>
           )}
+        </div>
+      )}
+
+      {/* ─── AI TEST PLAN PANEL ─── */}
+      {showTestPlan && (
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-4">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-[#F59E0B]" />
+              <h3 className="text-sm font-semibold">AI QA Test Plan</h3>
+              {testCases.length > 0 && (
+                <span className="rounded bg-[#F59E0B]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B]">
+                  {testCases.filter((t) => t.status !== "untested").length}/{testCases.length} tested
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              {testCases.length > 0 && !testPlanLoading && (
+                <button
+                  onClick={exportTestReport}
+                  className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B]/10 px-3 py-1.5 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Export MD
+                </button>
+              )}
+              <button
+                onClick={() => setShowTestPlan(false)}
+                className="rounded p-1 text-[#6B7280] transition-colors hover:text-[#9CA3AF]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {testPlanLoading ? (
+            <div className="flex items-center justify-center gap-3 px-5 py-12">
+              <Loader2 className="h-5 w-5 animate-spin text-[#F59E0B]" />
+              <span className="text-sm text-[#9CA3AF]">Generating QA test plan...</span>
+            </div>
+          ) : testCases.length > 0 ? (
+            <>
+              {(() => {
+                const passed = testCases.filter((t) => t.status === "passed").length;
+                const failed = testCases.filter((t) => t.status === "failed").length;
+                const skipped = testCases.filter((t) => t.status === "skipped").length;
+                const total = testCases.length;
+                const testedPct = Math.round(((passed + failed + skipped) / total) * 100);
+                return (
+                  <div className="border-b border-[#2A2A2A] px-5 py-3">
+                    <div className="mb-1.5 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-3">
+                        <span className="text-[#10B981]">{passed} passed</span>
+                        <span className="text-[#EF4444]">{failed} failed</span>
+                        <span className="text-[#6B7280]">{skipped} skipped</span>
+                        <span className="text-[#9CA3AF]">{total - passed - failed - skipped} remaining</span>
+                      </div>
+                      <span className="font-medium tabular-nums text-[#F5F5F5]">{testedPct}%</span>
+                    </div>
+                    <div className="flex h-2 overflow-hidden rounded-full bg-[#2A2A2A]">
+                      {passed > 0 && (
+                        <div
+                          className="h-full bg-[#10B981] transition-all"
+                          style={{ width: `${(passed / total) * 100}%` }}
+                        />
+                      )}
+                      {failed > 0 && (
+                        <div
+                          className="h-full bg-[#EF4444] transition-all"
+                          style={{ width: `${(failed / total) * 100}%` }}
+                        />
+                      )}
+                      {skipped > 0 && (
+                        <div
+                          className="h-full bg-[#6B7280] transition-all"
+                          style={{ width: `${(skipped / total) * 100}%` }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div>
+                {Array.from(new Set(testCases.map((t) => t.category))).map((cat) => (
+                  <div key={cat}>
+                    <div className="bg-[#0F0F0F] px-5 py-2">
+                      <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                        {cat}
+                      </h4>
+                    </div>
+                    <div className="divide-y divide-[#2A2A2A]/50">
+                      {testCases
+                        .filter((t) => t.category === cat)
+                        .map((tc) => (
+                          <div
+                            key={tc.id}
+                            className="flex items-start gap-3 px-5 py-3 transition-colors hover:bg-[#1F1F1F]"
+                          >
+                            <div className="flex shrink-0 items-center gap-1 pt-0.5">
+                              <button
+                                onClick={() => toggleTestStatus(tc.id, "passed")}
+                                className={`rounded p-1 transition-all ${
+                                  tc.status === "passed"
+                                    ? "bg-[#10B981]/20 text-[#10B981]"
+                                    : "text-[#2A2A2A] hover:text-[#10B981]/60"
+                                }`}
+                                title="Pass"
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => toggleTestStatus(tc.id, "failed")}
+                                className={`rounded p-1 transition-all ${
+                                  tc.status === "failed"
+                                    ? "bg-[#EF4444]/20 text-[#EF4444]"
+                                    : "text-[#2A2A2A] hover:text-[#EF4444]/60"
+                                }`}
+                                title="Fail"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => toggleTestStatus(tc.id, "skipped")}
+                                className={`rounded px-1.5 py-1 text-[10px] font-medium transition-all ${
+                                  tc.status === "skipped"
+                                    ? "bg-[#6B7280]/20 text-[#9CA3AF]"
+                                    : "text-[#2A2A2A] hover:text-[#6B7280]"
+                                }`}
+                                title="Skip"
+                              >
+                                SKIP
+                              </button>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <p
+                                  className={`text-sm font-medium ${
+                                    tc.status === "passed"
+                                      ? "text-[#10B981] line-through opacity-70"
+                                      : tc.status === "failed"
+                                        ? "text-[#EF4444]"
+                                        : tc.status === "skipped"
+                                          ? "text-[#6B7280] line-through"
+                                          : "text-[#F5F5F5]"
+                                  }`}
+                                >
+                                  {tc.name}
+                                </p>
+                                <span
+                                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${PRIORITY_STYLES[tc.priority]}`}
+                                >
+                                  {tc.priority}
+                                </span>
+                              </div>
+                              {tc.detail && (
+                                <p className="mt-0.5 text-xs leading-relaxed text-[#6B7280]">
+                                  {tc.detail}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
         </div>
       )}
 

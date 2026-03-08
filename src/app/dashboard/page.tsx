@@ -41,6 +41,7 @@ import {
   Play,
   Pause,
   RotateCcw,
+  Activity,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
 import {
@@ -396,6 +397,14 @@ export default function DashboardPage() {
   const [quickTaskName, setQuickTaskName] = useState("");
   const [quickTaskProjectId, setQuickTaskProjectId] = useState("");
   const [quickTaskConfirm, setQuickTaskConfirm] = useState<string | null>(null);
+
+  const [lifetimeStats, setLifetimeStats] = useState({
+    totalTasks: 0,
+    totalBugs: 0,
+    totalDevlogWords: 0,
+    totalAiRequests: 0,
+    platformDays: 0,
+  });
 
   useEffect(() => {
     const dismissed = localStorage.getItem("gameforge_welcome_dismissed") === "true";
@@ -761,6 +770,26 @@ export default function DashboardPage() {
     });
 
     setBadgeStats(getGamificationStats());
+
+    const totalDevlogWords = devlog.reduce((sum, d) => {
+      const text = `${d.title || ""} ${d.content || ""}`;
+      return sum + text.split(/\s+/).filter(Boolean).length;
+    }, 0);
+    const aiRequestsRaw = localStorage.getItem("gameforge_ai_uses");
+    const totalAiReqs = aiRequestsRaw ? parseInt(aiRequestsRaw, 10) : 0;
+    let firstVisit = localStorage.getItem("gameforge_first_visit");
+    if (!firstVisit) {
+      firstVisit = new Date().toISOString();
+      localStorage.setItem("gameforge_first_visit", firstVisit);
+    }
+    const platformDays = Math.max(1, Math.floor((Date.now() - new Date(firstVisit).getTime()) / 86400000));
+    setLifetimeStats({
+      totalTasks: tasks.length,
+      totalBugs: bugs.length,
+      totalDevlogWords,
+      totalAiRequests: totalAiReqs,
+      platformDays,
+    });
 
     const calendarData: { date: string; count: number; label: string }[] = [];
     for (let i = 29; i >= 0; i--) {
@@ -2286,6 +2315,30 @@ export default function DashboardPage() {
           </div>
         );
       })()}
+
+      {/* Platform Stats */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-[#2A2A2A] px-5 py-3">
+          <Activity className="h-4 w-4 text-[#F59E0B]" />
+          <h2 className="text-sm font-semibold">Platform Stats</h2>
+          <span className="ml-auto text-[10px] text-[#6B7280]">Lifetime</span>
+        </div>
+        <div className="grid grid-cols-5 gap-px bg-[#2A2A2A]">
+          {[
+            { label: "Tasks Created", value: lifetimeStats.totalTasks, icon: ListTodo, color: "#3B82F6" },
+            { label: "Bugs Filed", value: lifetimeStats.totalBugs, icon: Bug, color: "#EF4444" },
+            { label: "Words Written", value: lifetimeStats.totalDevlogWords.toLocaleString(), icon: PenLine, color: "#10B981" },
+            { label: "AI Requests", value: lifetimeStats.totalAiRequests, icon: Sparkles, color: "#F59E0B" },
+            { label: "Days Active", value: lifetimeStats.platformDays, icon: Clock, color: "#8B5CF6" },
+          ].map((stat) => (
+            <div key={stat.label} className="flex flex-col items-center bg-[#1A1A1A] px-3 py-4">
+              <stat.icon className="mb-2 h-4 w-4" style={{ color: stat.color }} />
+              <span className="text-lg font-bold tabular-nums text-[#F5F5F5]">{stat.value}</span>
+              <span className="mt-1 text-center text-[10px] text-[#6B7280]">{stat.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
