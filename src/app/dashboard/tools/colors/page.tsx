@@ -176,6 +176,8 @@ export default function ColorsPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [colorStory, setColorStory] = useState("");
+  const [colorStoryLoading, setColorStoryLoading] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -287,6 +289,39 @@ export default function ColorsPage() {
       showToast("AI unavailable — random palette generated");
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  const generateColorStory = async () => {
+    if (colorStoryLoading) return;
+    setColorStoryLoading(true);
+    setColorStory("");
+    try {
+      const hexList = colors.map((c) => c.hex).join(", ");
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{
+            role: "user",
+            content: `Explain the emotional story and game design rationale for this color palette: ${hexList}. What mood does it create? What genre does it suit? What elements should use each color (backgrounds, characters, UI, accents)? Be brief and practical.`,
+          }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setColorStory(content || "No analysis available.");
+    } catch {
+      setColorStory("Failed to generate color story. Try again.");
+    } finally {
+      setColorStoryLoading(false);
     }
   };
 
@@ -499,6 +534,48 @@ export default function ColorsPage() {
                 )}
               </button>
             </div>
+          </div>
+
+          {/* AI Color Story */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+              AI Color Story
+            </h2>
+            <p className="mb-3 text-xs text-[#6B7280]">
+              Get an AI analysis of your palette&apos;s mood, genre fit, and how to use each color in your game.
+            </p>
+            <button
+              onClick={generateColorStory}
+              disabled={colorStoryLoading}
+              className="flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2.5 text-sm font-bold text-[#0F0F0F] transition-all hover:bg-[#D97706] active:scale-[0.97] disabled:opacity-50 disabled:hover:bg-[#F59E0B]"
+            >
+              {colorStoryLoading ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Analyzing...</>
+              ) : (
+                <><Sparkles className="h-4 w-4" /> {colorStory ? "Re-analyze" : "Analyze Palette"}</>
+              )}
+            </button>
+            {colorStoryLoading && !colorStory && (
+              <div className="mt-4 flex items-center gap-3 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-4 py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-[#F59E0B]" />
+                <span className="text-sm text-[#9CA3AF]">Reading the emotional story of your palette...</span>
+              </div>
+            )}
+            {colorStory && !colorStoryLoading && (
+              <div className="mt-4 space-y-3 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-4">
+                <div className="flex gap-2">
+                  {colors.map((c, i) => (
+                    <div key={i} className="flex flex-col items-center gap-1">
+                      <div className="h-6 w-6 rounded-md" style={{ backgroundColor: c.hex }} />
+                      <span className="text-[9px] font-mono text-[#6B7280]">{c.hex}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="h-px bg-[#F59E0B]/10" />
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">{colorStory}</p>
+              </div>
+            )}
           </div>
 
           {/* Copy to Clipboard */}

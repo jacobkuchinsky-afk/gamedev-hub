@@ -479,7 +479,28 @@ Be concise and professional. Fill in any missing sections based on the title and
     }).length;
     const trendDiff = thisWeek - lastWeek;
 
-    return { resolutionRate, resolved, avgFixDays, fixedCount: fixedBugs.length, mostBuggyArea, mostBuggyCount, severityCounts, maxSeverityCount, thisWeek, lastWeek, trendDiff };
+    const now2 = Date.now();
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
+    const weeklyTrend: { label: string; blocker: number; critical: number; major: number; minor: number }[] = [];
+    for (let w = 3; w >= 0; w--) {
+      const weekStart = now2 - (w + 1) * weekMs;
+      const weekEnd = now2 - w * weekMs;
+      const weekBugs = bugs.filter((b) => {
+        const t = new Date(b.created_at).getTime();
+        return t >= weekStart && t < weekEnd;
+      });
+      const label = w === 0 ? "This week" : w === 1 ? "Last week" : `${w + 1}w ago`;
+      weeklyTrend.push({
+        label,
+        blocker: weekBugs.filter((b) => b.severity === "blocker").length,
+        critical: weekBugs.filter((b) => b.severity === "critical").length,
+        major: weekBugs.filter((b) => b.severity === "major").length,
+        minor: weekBugs.filter((b) => b.severity === "minor").length,
+      });
+    }
+    const maxWeekTotal = Math.max(...weeklyTrend.map((w) => w.blocker + w.critical + w.major + w.minor), 1);
+
+    return { resolutionRate, resolved, avgFixDays, fixedCount: fixedBugs.length, mostBuggyArea, mostBuggyCount, severityCounts, maxSeverityCount, thisWeek, lastWeek, trendDiff, weeklyTrend, maxWeekTotal };
   }, [bugs]);
 
   if (!project) return null;
@@ -865,6 +886,71 @@ Be concise and professional. Fill in any missing sections based on the title and
               ))}
             </div>
           </div>
+          {bugStats.weeklyTrend.some((w) => w.blocker + w.critical + w.major + w.minor > 0) && (
+            <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+              <div className="flex items-center gap-1.5 mb-3">
+                <BarChart3 className="h-3.5 w-3.5 text-[#F59E0B]" />
+                <span className="text-[10px] font-medium uppercase tracking-wider text-[#6B7280]">Severity Trend (4 weeks)</span>
+              </div>
+              <div className="flex items-end gap-3" style={{ height: 120 }}>
+                {bugStats.weeklyTrend.map((week, i) => {
+                  const total = week.blocker + week.critical + week.major + week.minor;
+                  const barHeight = bugStats.maxWeekTotal > 0 ? (total / bugStats.maxWeekTotal) * 100 : 0;
+                  const segments = [
+                    { count: week.blocker, color: "#991B1B", label: "Blocker" },
+                    { count: week.critical, color: "#EF4444", label: "Critical" },
+                    { count: week.major, color: "#F59E0B", label: "Major" },
+                    { count: week.minor, color: "#3B82F6", label: "Minor" },
+                  ].filter((s) => s.count > 0);
+                  return (
+                    <div key={i} className="flex flex-1 flex-col items-center gap-1.5">
+                      <div className="relative flex w-full flex-col justify-end" style={{ height: 90 }}>
+                        {total === 0 ? (
+                          <div className="mx-auto w-3/4 rounded-t bg-[#2A2A2A]" style={{ height: 2 }} />
+                        ) : (
+                          <div
+                            className="mx-auto flex w-3/4 flex-col overflow-hidden rounded-t transition-all duration-500"
+                            style={{ height: `${barHeight}%`, minHeight: 4 }}
+                          >
+                            {segments.map((seg, si) => (
+                              <div
+                                key={si}
+                                className="w-full"
+                                style={{
+                                  backgroundColor: seg.color,
+                                  flexGrow: seg.count,
+                                }}
+                                title={`${seg.label}: ${seg.count}`}
+                              />
+                            ))}
+                          </div>
+                        )}
+                        {total > 0 && (
+                          <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] font-semibold tabular-nums text-[#9CA3AF]">
+                            {total}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[9px] font-medium text-[#6B7280]">{week.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+                {[
+                  { color: "#991B1B", label: "Blocker" },
+                  { color: "#EF4444", label: "Critical" },
+                  { color: "#F59E0B", label: "Major" },
+                  { color: "#3B82F6", label: "Minor" },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center gap-1.5">
+                    <div className="h-2 w-2 rounded-sm" style={{ backgroundColor: item.color }} />
+                    <span className="text-[10px] text-[#6B7280]">{item.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
