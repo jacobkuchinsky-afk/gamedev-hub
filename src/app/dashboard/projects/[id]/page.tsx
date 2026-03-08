@@ -28,6 +28,7 @@ import {
   HeartPulse,
   Loader2,
   BarChart3,
+  Copy,
 } from "lucide-react";
 import {
   getProject,
@@ -42,6 +43,7 @@ import {
   getMoodEmoji,
   updateProject,
   deleteProject,
+  addProject,
   type Project,
   type Task,
   type Bug as BugType,
@@ -858,6 +860,18 @@ export default function ProjectDetailPage() {
     setProject(updated);
   };
 
+  const handleDuplicateProject = () => {
+    const newProject = addProject({
+      name: `${project.name} (Copy)`,
+      description: project.description,
+      engine: project.engine,
+      genre: project.genre,
+      status: "concept",
+      coverColor: project.coverColor,
+    });
+    router.push(`/dashboard/projects/${newProject.id}`);
+  };
+
   const handleDeleteProject = () => {
     deleteProject(projectId);
     router.replace("/dashboard/projects");
@@ -947,6 +961,13 @@ export default function ProjectDetailPage() {
             >
               <HeartPulse className="h-3.5 w-3.5" />
               Health Report
+            </button>
+            <button
+              onClick={handleDuplicateProject}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Duplicate
             </button>
             <button
               onClick={() => setEditOpen(true)}

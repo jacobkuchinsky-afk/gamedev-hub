@@ -26,6 +26,10 @@ import {
   Film,
   Activity,
   Command,
+  Timer,
+  Play,
+  Pause,
+  RotateCcw,
 } from "lucide-react";
 import { AuthProvider, useAuthContext } from "@/components/AuthProvider";
 import { getProjects, getStatusColor, getTasks, getBugs, type Project } from "@/lib/store";
@@ -57,6 +61,185 @@ const CMD_ITEMS = [
   { href: "/dashboard/tools/animation", icon: Film, label: "Animation Frames", section: "Tools" },
   { href: "/dashboard/tools/easing", icon: Activity, label: "Easing Visualizer", section: "Tools" },
 ];
+
+const TIMER_PRESETS = [
+  { label: "Pomodoro", minutes: 25 },
+  { label: "Deep Work", minutes: 50 },
+  { label: "Break", minutes: 15 },
+];
+
+function FocusTimer() {
+  const [open, setOpen] = useState(false);
+  const [totalSeconds, setTotalSeconds] = useState(25 * 60);
+  const [remaining, setRemaining] = useState(25 * 60);
+  const [running, setRunning] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const notifiedRef = useRef(false);
+
+  useEffect(() => {
+    if (!running) return;
+
+    intervalRef.current = setInterval(() => {
+      setRemaining((prev) => {
+        if (prev <= 1) {
+          setRunning(false);
+          if (!notifiedRef.current) {
+            notifiedRef.current = true;
+            if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+              new Notification("Focus Timer", { body: "Time's up! Take a break." });
+            }
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [running]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const selectPreset = (minutes: number) => {
+    setTotalSeconds(minutes * 60);
+    setRemaining(minutes * 60);
+    setRunning(false);
+    notifiedRef.current = false;
+  };
+
+  const toggleRunning = () => {
+    if (remaining === 0) return;
+    notifiedRef.current = false;
+    setRunning((r) => !r);
+  };
+
+  const reset = () => {
+    setRunning(false);
+    setRemaining(totalSeconds);
+    notifiedRef.current = false;
+  };
+
+  const mins = Math.floor(remaining / 60);
+  const secs = remaining % 60;
+  const progress = totalSeconds > 0 ? remaining / totalSeconds : 0;
+  const isActive = running || remaining < totalSeconds;
+  const isFinished = remaining === 0 && totalSeconds > 0 && remaining < totalSeconds;
+
+  return (
+    <div className="relative" ref={popoverRef}>
+      <button
+        onClick={() => setOpen((p) => !p)}
+        className="relative flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-sm text-[#6B7280] transition-colors hover:border-[#F59E0B]/30 hover:text-[#9CA3AF]"
+      >
+        <Timer className="h-3.5 w-3.5" />
+        {isActive && (
+          <>
+            <span className="hidden tabular-nums text-[#F59E0B] sm:inline">
+              {String(mins).padStart(2, "0")}:{String(secs).padStart(2, "0")}
+            </span>
+            <span className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center">
+              {running ? (
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#F59E0B] opacity-40" />
+              ) : null}
+              <span
+                className="relative inline-flex h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: isFinished ? "#10B981" : "#F59E0B" }}
+              />
+            </span>
+          </>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-2xl">
+          <div className="border-b border-[#2A2A2A] px-4 py-3">
+            <p className="text-xs font-semibold text-[#9CA3AF]">Focus Timer</p>
+          </div>
+
+          <div className="flex flex-col items-center gap-3 px-4 py-5">
+            <div className="relative flex h-24 w-24 items-center justify-center">
+              <svg className="absolute inset-0" viewBox="0 0 96 96">
+                <circle cx="48" cy="48" r="42" fill="none" stroke="#2A2A2A" strokeWidth="4" />
+                <circle
+                  cx="48"
+                  cy="48"
+                  r="42"
+                  fill="none"
+                  stroke={isFinished ? "#10B981" : "#F59E0B"}
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeDasharray={2 * Math.PI * 42}
+                  strokeDashoffset={2 * Math.PI * 42 * (1 - progress)}
+                  transform="rotate(-90 48 48)"
+                  className="transition-all duration-1000"
+                />
+              </svg>
+              <span className={`text-xl font-bold tabular-nums ${isFinished ? "text-[#10B981]" : "text-[#F5F5F5]"}`}>
+                {String(mins).padStart(2, "0")}:{String(secs).padStart(2, "0")}
+              </span>
+            </div>
+
+            {isFinished && (
+              <p className="text-xs font-medium text-[#10B981]">Time&apos;s up! Take a break.</p>
+            )}
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={toggleRunning}
+                disabled={isFinished}
+                className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F59E0B] text-[#0F0F0F] transition-colors hover:bg-[#D97706] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {running ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+              </button>
+              <button
+                onClick={reset}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#2A2A2A] text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="border-t border-[#2A2A2A] px-4 py-3">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">Presets</p>
+            <div className="flex gap-2">
+              {TIMER_PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  onClick={() => selectPreset(preset.minutes)}
+                  className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors ${
+                    totalSeconds === preset.minutes * 60 && !isActive
+                      ? "border-[#F59E0B]/50 bg-[#F59E0B]/10 text-[#F59E0B]"
+                      : "border-[#2A2A2A] text-[#9CA3AF] hover:border-[#3A3A3A] hover:text-[#F5F5F5]"
+                  }`}
+                >
+                  {preset.minutes}m
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [query, setQuery] = useState("");
@@ -447,16 +630,19 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
             <span className="hamburger-bar" />
             <span className="hamburger-bar" />
           </button>
-          <button
-            onClick={() => setCmdOpen(true)}
-            className="ml-auto flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-sm text-[#6B7280] transition-colors hover:border-[#F59E0B]/30 hover:text-[#9CA3AF]"
-          >
-            <Search className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Search</span>
-            <kbd className="hidden rounded bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] sm:inline">
-              <Command className="inline h-2.5 w-2.5" />K
-            </kbd>
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <FocusTimer />
+            <button
+              onClick={() => setCmdOpen(true)}
+              className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-sm text-[#6B7280] transition-colors hover:border-[#F59E0B]/30 hover:text-[#9CA3AF]"
+            >
+              <Search className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Search</span>
+              <kbd className="hidden rounded bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] sm:inline">
+                <Command className="inline h-2.5 w-2.5" />K
+              </kbd>
+            </button>
+          </div>
         </header>
 
         <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
