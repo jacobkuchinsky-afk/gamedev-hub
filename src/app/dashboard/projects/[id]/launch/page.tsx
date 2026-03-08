@@ -32,6 +32,11 @@ import {
   AlertTriangle as TriangleAlert,
   CheckCircle2,
   XCircle,
+  Hash,
+  Camera,
+  Music,
+  Gamepad2,
+  Share2,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -200,6 +205,63 @@ function parseMarketingSections(text: string): { title: string; content: string 
   return sections;
 }
 
+const SOCIAL_PLATFORM_META: { name: string; icon: React.ElementType; color: string; charLimit?: number }[] = [
+  { name: "Twitter/X", icon: Hash, color: "#1DA1F2", charLimit: 280 },
+  { name: "Instagram", icon: Camera, color: "#E1306C" },
+  { name: "Reddit", icon: MessageSquare, color: "#FF4500" },
+  { name: "TikTok", icon: Music, color: "#00F2EA" },
+  { name: "Steam", icon: Gamepad2, color: "#66C0F4" },
+];
+
+function parseSocialPosts(text: string): { platform: string; content: string }[] {
+  const posts: { platform: string; content: string }[] = [];
+  const lines = text.split("\n");
+  let currentPlatform = "";
+  let currentContent: string[] = [];
+  const platformKeys = ["twitter", "instagram", "reddit", "tiktok", "steam"];
+  const platformNames: Record<string, string> = {
+    twitter: "Twitter/X",
+    instagram: "Instagram",
+    reddit: "Reddit",
+    tiktok: "TikTok",
+    steam: "Steam",
+  };
+
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    const matched = platformKeys.find((k) => lower.includes(k));
+    const isHeader =
+      matched &&
+      (/^\s*\*\*/.test(line) || /^\s*#{1,4}\s/.test(line) || /^\s*\d+[\.\)]/.test(line));
+
+    if (isHeader && matched) {
+      if (currentPlatform && currentContent.length > 0) {
+        posts.push({
+          platform: currentPlatform,
+          content: currentContent.join("\n").replace(/^\s*\n|\n\s*$/g, "").trim(),
+        });
+      }
+      currentPlatform = platformNames[matched];
+      currentContent = [];
+    } else {
+      currentContent.push(line);
+    }
+  }
+
+  if (currentPlatform && currentContent.length > 0) {
+    posts.push({
+      platform: currentPlatform,
+      content: currentContent.join("\n").replace(/^\s*\n|\n\s*$/g, "").trim(),
+    });
+  }
+
+  if (posts.length === 0 && text.trim()) {
+    posts.push({ platform: "Social Post", content: text.trim() });
+  }
+
+  return posts;
+}
+
 function AccessibilityResults({ text }: { text: string }) {
   const sections: { category: string; rating: "pass" | "warning" | "fail"; lines: string[] }[] = [];
   let current: { category: string; rating: "pass" | "warning" | "fail"; lines: string[] } | null = null;
@@ -301,6 +363,9 @@ export default function LaunchChecklistPage() {
   const [aiAccessibility, setAiAccessibility] = useState<string>("");
   const [aiAccessibilityLoading, setAiAccessibilityLoading] = useState(false);
   const [aiAccessibilityOpen, setAiAccessibilityOpen] = useState(false);
+  const [aiSocial, setAiSocial] = useState<string>("");
+  const [aiSocialLoading, setAiSocialLoading] = useState(false);
+  const [aiSocialOpen, setAiSocialOpen] = useState(false);
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -556,6 +621,37 @@ export default function LaunchChecklistPage() {
     }
   }, [project, aiAccessibilityLoading, projectId]);
 
+  const generateSocialPosts = useCallback(async () => {
+    if (!project || aiSocialLoading) return;
+    setAiSocialLoading(true);
+    setAiSocialOpen(true);
+    setAiSocial("");
+    try {
+      const prompt = `Write 5 social media posts for announcing the indie game '${project.name}' (${project.genre || "unknown genre"}). Include: 1) Twitter/X post (max 280 chars, with hashtags), 2) Instagram caption (with emojis), 3) Reddit post title + body, 4) TikTok video caption (trendy, short), 5) Steam community announcement. Each should have different tone and target different audiences. Format each with a bold header like **1) Twitter/X Post**`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "Could not generate social posts. Please try again.";
+      setAiSocial(content);
+    } catch {
+      setAiSocial("Failed to generate social posts. Check your API key and try again.");
+    } finally {
+      setAiSocialLoading(false);
+    }
+  }, [project, aiSocialLoading]);
+
   const copyToClipboard = useCallback((text: string, sectionTitle: string) => {
     navigator.clipboard.writeText(text);
     setCopiedSection(sectionTitle);
@@ -742,6 +838,18 @@ export default function LaunchChecklistPage() {
                 <Eye className="h-3.5 w-3.5" />
               )}
               {aiAccessibilityLoading ? "Checking..." : "AI Accessibility"}
+            </button>
+            <button
+              onClick={generateSocialPosts}
+              disabled={aiSocialLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#6366F1]/40 bg-[#6366F1]/10 px-3 py-2 text-sm font-medium text-[#6366F1] transition-colors hover:bg-[#6366F1]/20 disabled:opacity-50"
+            >
+              {aiSocialLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Share2 className="h-3.5 w-3.5" />
+              )}
+              {aiSocialLoading ? "Generating..." : "AI Social Posts"}
             </button>
             <button
               onClick={handleReset}
@@ -1070,6 +1178,90 @@ export default function LaunchChecklistPage() {
               </div>
             ) : (
               <AccessibilityResults text={aiAccessibility} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AI Social Posts Panel */}
+      {aiSocialOpen && (
+        <div className="rounded-xl border border-[#6366F1]/30 bg-[#1A1A1A] overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3">
+            <div className="flex items-center gap-2">
+              <Share2 className="h-4 w-4 text-[#6366F1]" />
+              <h3 className="text-sm font-semibold text-[#6366F1]">AI Social Posts</h3>
+            </div>
+            <button
+              onClick={() => setAiSocialOpen(false)}
+              className="rounded-md p-1 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="px-5 py-4">
+            {aiSocialLoading ? (
+              <div className="flex items-center gap-3 py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-[#6366F1]" />
+                <p className="text-sm text-[#9CA3AF]">Generating social posts for {project.name}...</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {parseSocialPosts(aiSocial).map((post, idx) => {
+                  const meta = SOCIAL_PLATFORM_META.find((p) => p.name === post.platform);
+                  const PlatformIcon = meta?.icon || Share2;
+                  const platformColor = meta?.color || "#6366F1";
+                  const charLimit = meta?.charLimit;
+                  const cleanContent = post.content.replace(/\*\*/g, "");
+                  return (
+                    <div key={idx} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4">
+                      <div className="mb-2.5 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="flex h-7 w-7 items-center justify-center rounded-md"
+                            style={{ backgroundColor: `${platformColor}15` }}
+                          >
+                            <PlatformIcon className="h-3.5 w-3.5" style={{ color: platformColor }} />
+                          </div>
+                          <span className="text-sm font-semibold" style={{ color: platformColor }}>
+                            {post.platform}
+                          </span>
+                          {charLimit && (
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-medium tabular-nums ${
+                                cleanContent.length > charLimit
+                                  ? "bg-[#EF4444]/10 text-[#EF4444]"
+                                  : "bg-[#10B981]/10 text-[#10B981]"
+                              }`}
+                            >
+                              {cleanContent.length}/{charLimit}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => copyToClipboard(cleanContent, `social_${idx}`)}
+                          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                        >
+                          {copiedSection === `social_${idx}` ? (
+                            <Check className="h-3 w-3 text-[#10B981]" />
+                          ) : (
+                            <Copy className="h-3 w-3" />
+                          )}
+                          {copiedSection === `social_${idx}` ? "Copied!" : "Copy"}
+                        </button>
+                      </div>
+                      <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">
+                        {post.content.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
+                          part.startsWith("**") && part.endsWith("**") ? (
+                            <strong key={i} className="text-[#F5F5F5]">{part.slice(2, -2)}</strong>
+                          ) : (
+                            <span key={i}>{part}</span>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>

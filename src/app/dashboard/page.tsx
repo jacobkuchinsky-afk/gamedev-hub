@@ -362,6 +362,7 @@ export default function DashboardPage() {
   const [standupLoading, setStandupLoading] = useState(false);
   const [standupText, setStandupText] = useState("");
   const [standupCopied, setStandupCopied] = useState(false);
+  const [devlogCalendar, setDevlogCalendar] = useState<{ date: string; count: number; label: string }[]>([]);
 
   const [badgeStats, setBadgeStats] = useState<ReturnType<typeof getGamificationStats>>({ projects: 0, bugs: 0, devlogs: 0, completedSprints: 0, toolsUsed: 0, aiUses: 0 });
   const [streak, setStreak] = useState<StreakData>({ lastActiveDate: "", currentStreak: 0, longestStreak: 0 });
@@ -731,6 +732,22 @@ export default function DashboardPage() {
     });
 
     setBadgeStats(getGamificationStats());
+
+    const calendarData: { date: string; count: number; label: string }[] = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 86400000);
+      const dayStr = d.toISOString().split("T")[0];
+      const count = devlog.filter((entry) => {
+        const entryDate = new Date(entry.date).toISOString().split("T")[0];
+        return entryDate === dayStr;
+      }).length;
+      calendarData.push({
+        date: dayStr,
+        count,
+        label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      });
+    }
+    setDevlogCalendar(calendarData);
   }, []);
 
   const statCards = [
@@ -1126,6 +1143,75 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Devlog Calendar */}
+      {devlogCalendar.length > 0 && (
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-[#10B981]" />
+              <h2 className="text-sm font-semibold">Devlog Activity</h2>
+            </div>
+            <span className="text-xs text-[#6B7280]">
+              {devlogCalendar.reduce((s, d) => s + d.count, 0)} entries in the last 30 days
+            </span>
+          </div>
+          <div className="px-5 py-4">
+            <div className="flex items-start gap-6">
+              <div>
+                <div className="inline-grid grid-cols-6 gap-[5px]">
+                  {devlogCalendar.map((day) => (
+                    <div
+                      key={day.date}
+                      className="group relative h-5 w-5 rounded-[3px] cursor-default transition-all hover:ring-1 hover:ring-white/20"
+                      style={{
+                        backgroundColor:
+                          day.count === 0
+                            ? "#1F1F1F"
+                            : day.count === 1
+                              ? "#14532D"
+                              : day.count === 2
+                                ? "#166534"
+                                : "#10B981",
+                      }}
+                    >
+                      <div className="pointer-events-none absolute -top-8 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md border border-[#2A2A2A] bg-[#0F0F0F] px-2 py-1 text-[10px] text-[#D1D5DB] opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+                        {day.label}: {day.count} {day.count === 1 ? "entry" : "entries"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2.5 flex items-center gap-1.5">
+                  <span className="text-[10px] text-[#6B7280]">Less</span>
+                  {[0, 1, 2, 3].map((level) => (
+                    <div
+                      key={level}
+                      className="h-2.5 w-2.5 rounded-[2px]"
+                      style={{
+                        backgroundColor:
+                          level === 0
+                            ? "#1F1F1F"
+                            : level === 1
+                              ? "#14532D"
+                              : level === 2
+                                ? "#166534"
+                                : "#10B981",
+                      }}
+                    />
+                  ))}
+                  <span className="text-[10px] text-[#6B7280]">More</span>
+                </div>
+              </div>
+              <div className="flex-1 flex flex-col items-end justify-center">
+                <p className="text-3xl font-extrabold tabular-nums text-[#10B981]">
+                  {devlogCalendar.reduce((s, d) => s + d.count, 0)}
+                </p>
+                <p className="text-xs text-[#6B7280]">entries in 30 days</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Today's Focus */}
       {focusItems.length > 0 && (
