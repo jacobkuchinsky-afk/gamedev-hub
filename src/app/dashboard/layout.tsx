@@ -714,6 +714,11 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       clearPending();
       return;
     }
+    if ((e.metaKey || e.ctrlKey) && e.key === "p") {
+      e.preventDefault();
+      window.print();
+      return;
+    }
     const target = e.target as HTMLElement;
     const isTyping =
       target.tagName === "INPUT" ||
