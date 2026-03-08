@@ -684,6 +684,7 @@ export default function ProjectDetailPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [readmeLoading, setReadmeLoading] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
 
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -937,6 +938,65 @@ export default function ProjectDetailPage() {
     setExportOpen(false);
   }, [project, tasks, bugs, doneTasks, openBugs, projectId]);
 
+  const generateReadme = useCallback(async () => {
+    if (!project || readmeLoading) return;
+    setReadmeLoading(true);
+
+    const gddRaw = localStorage.getItem(`gameforge_gdd_${projectId}`);
+    const gddData: Record<string, string> | null = gddRaw ? JSON.parse(gddRaw) : null;
+
+    const features = gddData
+      ? Object.entries(gddData)
+          .filter(([, v]) => v)
+          .map(([k, v]) => `${k.replace(/([A-Z])/g, " $1").trim()}: ${v.slice(0, 120)}`)
+          .join("; ")
+      : "N/A";
+
+    const taskSummary = `${doneTasks}/${tasks.length} tasks complete, ${inProgressTasks} in progress, ${openBugs} open bugs`;
+
+    const prompt = `Write a GitHub README.md for an indie game called '${project.name}'. Genre: ${project.genre}. Engine: ${project.engine}. Description: ${project.description || "N/A"}. Features: ${features}. Task summary: ${taskSummary}. Include: project title with emoji, badges (genre, engine, status: ${project.status}), description, features list, getting started instructions, controls placeholder, credits section, and license. Format as proper markdown.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 1024,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+
+      const result = await response.json();
+      const content =
+        result.choices?.[0]?.message?.content ||
+        result.choices?.[0]?.message?.reasoning ||
+        "";
+
+      if (!content) throw new Error("No response from AI");
+
+      const blob = new Blob([content], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "README.md";
+      a.click();
+      URL.revokeObjectURL(url);
+      setExportOpen(false);
+    } catch {
+      // silently fail
+    } finally {
+      setReadmeLoading(false);
+    }
+  }, [project, projectId, tasks, doneTasks, inProgressTasks, openBugs, readmeLoading]);
+
   const runHealthReport = useCallback(async () => {
     setHealthOpen(true);
     setHealthLoading(true);
@@ -1187,6 +1247,19 @@ export default function ProjectDetailPage() {
                   >
                     <ScrollText className="h-4 w-4 text-[#3B82F6]" />
                     Export as Markdown
+                  </button>
+                  <div className="mx-3 border-t border-[#2A2A2A]" />
+                  <button
+                    onClick={generateReadme}
+                    disabled={readmeLoading}
+                    className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm text-[#D1D5DB] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5] disabled:opacity-50"
+                  >
+                    {readmeLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-[#F59E0B]" />
+                    ) : (
+                      <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+                    )}
+                    Generate README
                   </button>
                 </div>
               )}

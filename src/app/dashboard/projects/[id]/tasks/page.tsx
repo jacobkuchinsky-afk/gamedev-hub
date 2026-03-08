@@ -22,12 +22,17 @@ import {
   Timer,
   CalendarDays,
   AlertTriangle,
+  Trash2,
+  CheckSquare,
+  Square,
+  ArrowRight,
 } from "lucide-react";
 import {
   getProject,
   getTasks,
   addTask,
   updateTask,
+  deleteTasks,
   getPriorityColor,
   getSprints,
   addSprint,
@@ -159,6 +164,13 @@ export default function TaskBoardPage() {
   const [aiSprintLoading, setAiSprintLoading] = useState(false);
   const [aiSprintResult, setAiSprintResult] = useState<string | null>(null);
   const [showAiSprintPanel, setShowAiSprintPanel] = useState(false);
+
+  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
+  const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
+  const [bulkPriorityOpen, setBulkPriorityOpen] = useState(false);
+  const [bulkAssignInput, setBulkAssignInput] = useState("");
+  const [showBulkAssign, setShowBulkAssign] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
   const reload = useCallback(() => {
     setTasks(getTasks(projectId));
@@ -451,6 +463,62 @@ export default function TaskBoardPage() {
     };
     updateTask(taskId, { subtasks: [...existing, newSubtask] });
     setSubtaskInputs((p) => ({ ...p, [taskId]: "" }));
+    reload();
+  };
+
+  const toggleTaskSelection = (taskId: string) => {
+    setSelectedTasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  };
+
+  const toggleColumnSelection = (status: Task["status"]) => {
+    const columnTaskIds = sortedFilteredTasks
+      .filter((t) => t.status === status)
+      .map((t) => t.id);
+    const allSelected = columnTaskIds.every((id) => selectedTasks.has(id));
+
+    setSelectedTasks((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        columnTaskIds.forEach((id) => next.delete(id));
+      } else {
+        columnTaskIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const bulkMoveTo = (status: Task["status"]) => {
+    selectedTasks.forEach((id) => updateTask(id, { status }));
+    setSelectedTasks(new Set());
+    setBulkMoveOpen(false);
+    reload();
+  };
+
+  const bulkSetPriority = (priority: Task["priority"]) => {
+    selectedTasks.forEach((id) => updateTask(id, { priority }));
+    setSelectedTasks(new Set());
+    setBulkPriorityOpen(false);
+    reload();
+  };
+
+  const bulkDelete = () => {
+    deleteTasks(Array.from(selectedTasks));
+    setSelectedTasks(new Set());
+    setBulkDeleteConfirm(false);
+    reload();
+  };
+
+  const bulkAssign = () => {
+    if (!bulkAssignInput.trim()) return;
+    selectedTasks.forEach((id) => updateTask(id, { assignee: bulkAssignInput.trim() }));
+    setSelectedTasks(new Set());
+    setBulkAssignInput("");
+    setShowBulkAssign(false);
     reload();
   };
 
@@ -1453,6 +1521,17 @@ export default function TaskBoardPage() {
               {/* Column Header */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => toggleColumnSelection(column.key)}
+                    className="rounded p-0.5 text-[#6B7280] transition-colors hover:text-[#F59E0B]"
+                    title={`Select all ${column.label}`}
+                  >
+                    {columnTasks.length > 0 && columnTasks.every((t) => selectedTasks.has(t.id)) ? (
+                      <CheckSquare className="h-4 w-4 text-[#F59E0B]" />
+                    ) : (
+                      <Square className="h-4 w-4" />
+                    )}
+                  </button>
                   <div
                     className="h-2.5 w-2.5 rounded-full"
                     style={{ backgroundColor: column.color }}
@@ -1509,6 +1588,7 @@ export default function TaskBoardPage() {
                 {columnTasks.map((task) => {
                   const isEditing = editingTask === task.id;
                   const isExpanded = expandedTask === task.id;
+                  const isSelected = selectedTasks.has(task.id);
                   const blockingTask = task.blockedBy
                     ? tasks.find((t) => t.id === task.blockedBy)
                     : null;
@@ -1524,18 +1604,33 @@ export default function TaskBoardPage() {
                     >
                       <div
                         className={`rounded-lg border bg-[#1A1A1A] p-3 transition-all duration-500 ${
-                          flashingTask === task.id
-                            ? "border-[#F59E0B] ring-2 ring-[#F59E0B]/20 bg-[#F59E0B]/5"
-                            : dueDateInfo?.urgency === "overdue"
-                              ? "border-[#EF4444]/60 bg-[#EF4444]/5"
-                              : dueDateInfo?.urgency === "urgent"
-                                ? "border-[#F59E0B]/40 bg-[#F59E0B]/5"
-                                : isExpanded
-                                  ? "border-[#F59E0B]/30"
-                                  : "border-[#2A2A2A] hover:border-[#F59E0B]/20"
+                          isSelected
+                            ? "border-[#F59E0B]/60 bg-[#F59E0B]/5 ring-1 ring-[#F59E0B]/20"
+                            : flashingTask === task.id
+                              ? "border-[#F59E0B] ring-2 ring-[#F59E0B]/20 bg-[#F59E0B]/5"
+                              : dueDateInfo?.urgency === "overdue"
+                                ? "border-[#EF4444]/60 bg-[#EF4444]/5"
+                                : dueDateInfo?.urgency === "urgent"
+                                  ? "border-[#F59E0B]/40 bg-[#F59E0B]/5"
+                                  : isExpanded
+                                    ? "border-[#F59E0B]/30"
+                                    : "border-[#2A2A2A] hover:border-[#F59E0B]/20"
                         }`}
                       >
                         <div className="flex items-start gap-1.5">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleTaskSelection(task.id);
+                            }}
+                            className="mt-0.5 shrink-0 rounded p-0.5 text-[#6B7280] transition-colors hover:text-[#F59E0B]"
+                          >
+                            {isSelected ? (
+                              <CheckSquare className="h-3.5 w-3.5 text-[#F59E0B]" />
+                            ) : (
+                              <Square className="h-3.5 w-3.5" />
+                            )}
+                          </button>
                           {prevCol && (
                             <div className="group/left relative mt-0.5 shrink-0">
                               <button
@@ -2009,6 +2104,187 @@ export default function TaskBoardPage() {
           );
         })}
       </div>
+
+      {/* Floating Bulk Action Bar */}
+      {selectedTasks.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2">
+          <div className="flex items-center gap-2 rounded-xl border border-[#F59E0B]/30 bg-[#1A1A1A] px-4 py-3 shadow-2xl shadow-black/50">
+            <span className="mr-1 text-sm font-medium text-[#F5F5F5]">
+              {selectedTasks.size} selected
+            </span>
+
+            <div className="mx-1 h-5 w-px bg-[#2A2A2A]" />
+
+            {/* Move to */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setBulkMoveOpen(!bulkMoveOpen);
+                  setBulkPriorityOpen(false);
+                  setShowBulkAssign(false);
+                }}
+                className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs font-medium text-[#D1D5DB] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              >
+                <ArrowRight className="h-3.5 w-3.5" />
+                Move to...
+                <ChevronDown className={`h-3 w-3 transition-transform ${bulkMoveOpen ? "rotate-180" : ""}`} />
+              </button>
+              {bulkMoveOpen && (
+                <div className="absolute bottom-full left-0 mb-1.5 w-40 overflow-hidden rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] shadow-xl">
+                  {COLUMNS.map((c) => (
+                    <button
+                      key={c.key}
+                      onClick={() => bulkMoveTo(c.key)}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[#D1D5DB] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                    >
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c.color }} />
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Set Priority */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setBulkPriorityOpen(!bulkPriorityOpen);
+                  setBulkMoveOpen(false);
+                  setShowBulkAssign(false);
+                }}
+                className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs font-medium text-[#D1D5DB] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              >
+                <Target className="h-3.5 w-3.5" />
+                Priority...
+                <ChevronDown className={`h-3 w-3 transition-transform ${bulkPriorityOpen ? "rotate-180" : ""}`} />
+              </button>
+              {bulkPriorityOpen && (
+                <div className="absolute bottom-full left-0 mb-1.5 w-36 overflow-hidden rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] shadow-xl">
+                  {PRIORITIES.map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => bulkSetPriority(p)}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[#D1D5DB] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                    >
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: getPriorityColor(p) }} />
+                      <span className="capitalize">{p}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Assign to */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setShowBulkAssign(!showBulkAssign);
+                  setBulkMoveOpen(false);
+                  setBulkPriorityOpen(false);
+                }}
+                className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs font-medium text-[#D1D5DB] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              >
+                <User className="h-3.5 w-3.5" />
+                Assign...
+              </button>
+              {showBulkAssign && (
+                <div className="absolute bottom-full left-0 mb-1.5 w-48 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-2 shadow-xl">
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={bulkAssignInput}
+                      onChange={(e) => setBulkAssignInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") bulkAssign(); }}
+                      placeholder="Assignee name..."
+                      autoFocus
+                      className="min-w-0 flex-1 rounded-md border border-[#2A2A2A] bg-[#0F0F0F] px-2.5 py-1.5 text-xs text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/40"
+                    />
+                    <button
+                      onClick={bulkAssign}
+                      disabled={!bulkAssignInput.trim()}
+                      className="shrink-0 rounded-md bg-[#F59E0B] px-2 py-1.5 text-xs font-medium text-black transition-colors hover:bg-[#F59E0B]/90 disabled:opacity-40"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  {uniqueAssignees.length > 0 && (
+                    <div className="mt-1.5 border-t border-[#2A2A2A] pt-1.5">
+                      {uniqueAssignees.map((a) => (
+                        <button
+                          key={a}
+                          onClick={() => {
+                            setBulkAssignInput(a);
+                            selectedTasks.forEach((id) => updateTask(id, { assignee: a }));
+                            setSelectedTasks(new Set());
+                            setShowBulkAssign(false);
+                            reload();
+                          }}
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-[#9CA3AF] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                        >
+                          <span
+                            className="flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold"
+                            style={{ backgroundColor: `${getAvatarColor(a)}20`, color: getAvatarColor(a) }}
+                          >
+                            {getInitials(a)}
+                          </span>
+                          {a}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="mx-1 h-5 w-px bg-[#2A2A2A]" />
+
+            {/* Delete Selected */}
+            {bulkDeleteConfirm ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-[#EF4444]">Delete {selectedTasks.size}?</span>
+                <button
+                  onClick={bulkDelete}
+                  className="rounded-lg bg-[#EF4444] px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#DC2626]"
+                >
+                  Confirm
+                </button>
+                <button
+                  onClick={() => setBulkDeleteConfirm(false)}
+                  className="rounded-lg border border-[#2A2A2A] px-2.5 py-1.5 text-xs text-[#9CA3AF] transition-colors hover:text-[#F5F5F5]"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setBulkDeleteConfirm(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-[#EF4444]/20 px-3 py-1.5 text-xs font-medium text-[#EF4444]/70 transition-colors hover:border-[#EF4444]/40 hover:bg-[#EF4444]/5 hover:text-[#EF4444]"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </button>
+            )}
+
+            <div className="mx-1 h-5 w-px bg-[#2A2A2A]" />
+
+            {/* Clear Selection */}
+            <button
+              onClick={() => {
+                setSelectedTasks(new Set());
+                setBulkDeleteConfirm(false);
+                setBulkMoveOpen(false);
+                setBulkPriorityOpen(false);
+                setShowBulkAssign(false);
+              }}
+              className="rounded-lg border border-[#2A2A2A] p-1.5 text-[#9CA3AF] transition-colors hover:border-[#3A3A3A] hover:text-[#F5F5F5]"
+              title="Clear selection"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

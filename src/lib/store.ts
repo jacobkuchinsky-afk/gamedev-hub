@@ -511,6 +511,23 @@ export function updateTask(id: string, updates: Partial<Task>): Task | undefined
   return tasks[idx];
 }
 
+export function deleteTask(id: string): boolean {
+  const tasks = getTasks();
+  const filtered = tasks.filter((t) => t.id !== id);
+  if (filtered.length === tasks.length) return false;
+  save(TASKS_KEY, filtered);
+  return true;
+}
+
+export function deleteTasks(ids: string[]): number {
+  const tasks = getTasks();
+  const idSet = new Set(ids);
+  const filtered = tasks.filter((t) => !idSet.has(t.id));
+  const removed = tasks.length - filtered.length;
+  if (removed > 0) save(TASKS_KEY, filtered);
+  return removed;
+}
+
 export function getBugs(projectId?: string): Bug[] {
   const bugs = getOrSeed(BUGS_KEY, SEED_BUGS);
   return projectId ? bugs.filter((b) => b.projectId === projectId) : bugs;
