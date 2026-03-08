@@ -95,6 +95,13 @@ export default function ChangelogPage() {
 
   const [showDiff, setShowDiff] = useState(false);
 
+  const [showReleaseNotes, setShowReleaseNotes] = useState(false);
+  const [releaseNotes, setReleaseNotes] = useState<string | null>(null);
+  const [releaseNotesSocial, setReleaseNotesSocial] = useState<string | null>(null);
+  const [releaseNotesLoading, setReleaseNotesLoading] = useState(false);
+  const [copiedNotes, setCopiedNotes] = useState(false);
+  const [copiedSocial, setCopiedSocial] = useState(false);
+
   const expandedIds = Object.entries(expanded).filter(([, v]) => v).map(([k]) => k);
   const canCompareVersions = expandedIds.length === 2;
   const diffEntryA = canCompareVersions ? entries.find((e) => e.id === expandedIds[0]) : undefined;
@@ -197,6 +204,71 @@ Be specific and brief. Only include sections that have items.`;
       // silently fail
     } finally {
       setAiWriting(false);
+    }
+  };
+
+  const generateReleaseNotes = async () => {
+    if (releaseNotesLoading || entries.length === 0) return;
+    setReleaseNotesLoading(true);
+    setReleaseNotes(null);
+    setReleaseNotesSocial(null);
+    setShowReleaseNotes(true);
+    try {
+      const latestEntry = entries[0];
+      const allChanges: string[] = [];
+      for (const cat of CHANGE_CATEGORIES) {
+        const items = latestEntry.changes[cat];
+        if (items && items.length > 0) {
+          allChanges.push(`${cat}:`);
+          items.forEach((item) => allChanges.push(`- ${item}`));
+        }
+      }
+
+      const prompt = `Convert these developer changelog notes for game version ${latestEntry.version} "${latestEntry.title}" into player-facing release notes.\n\nDeveloper notes:\n${allChanges.join("\n")}\n\nFormat your response EXACTLY like this (keep the labels):\nWHATS_NEW:\n[Write friendly, exciting bullet points grouped by category. Use player-facing language, not developer jargon. Add category headers like "New Features", "Improvements", "Bug Fixes" as needed.]\n\nSOCIAL:\n[Write 1-2 exciting sentences for a social media post about this update. Keep it brief and hype.]`;
+
+      const response = await fetch(
+        "https://llm.chutes.ai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization:
+              "Bearer " +
+              (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "moonshotai/Kimi-K2.5-TEE",
+            messages: [{ role: "user", content: prompt }],
+            stream: false,
+            max_tokens: 512,
+            temperature: 0.7,
+          }),
+        }
+      );
+      const data = await response.json();
+      const content = (
+        data.choices?.[0]?.message?.content ||
+        data.choices?.[0]?.message?.reasoning ||
+        ""
+      ).trim();
+
+      const whatsNewMatch = content.match(
+        /WHATS_NEW:\s*\n([\s\S]*?)(?=SOCIAL:|$)/i
+      );
+      const socialMatch = content.match(/SOCIAL:\s*\n([\s\S]*?)$/i);
+
+      setReleaseNotes(
+        whatsNewMatch ? whatsNewMatch[1].trim() : content
+      );
+      setReleaseNotesSocial(
+        socialMatch ? socialMatch[1].trim() : null
+      );
+    } catch {
+      setReleaseNotes(
+        "Failed to generate release notes. Try again."
+      );
+    } finally {
+      setReleaseNotesLoading(false);
     }
   };
 
@@ -416,6 +488,14 @@ Be specific and brief. Only include sections that have items.`;
               Export .md
             </button>
             <button
+              onClick={generateReleaseNotes}
+              disabled={entries.length === 0}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-40"
+            >
+              <Sparkles className="h-4 w-4" />
+              Release Notes
+            </button>
+            <button
               onClick={openForm}
               className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-[#0F0F0F] transition-colors hover:bg-[#F59E0B]/90"
             >
@@ -560,6 +640,138 @@ Be specific and brief. Only include sections that have items.`;
           </div>
         );
       })()}
+
+      {/* Release Notes Modal */}
+      {showReleaseNotes &&
+        (() => {
+          const latestEntry = entries[0];
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4">
+              <div className="w-full max-w-2xl rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+                <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <Sparkles className="h-5 w-5 text-[#F59E0B]" />
+                    <h2 className="text-lg font-semibold text-[#F5F5F5]">
+                      Release Notes{" "}
+                      {latestEntry && (
+                        <span className="font-mono text-sm text-[#9CA3AF]">
+                          v{latestEntry.version}
+                        </span>
+                      )}
+                    </h2>
+                  </div>
+                  <button
+                    onClick={() => setShowReleaseNotes(false)}
+                    className="rounded-lg p-1.5 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="max-h-[65vh] space-y-5 overflow-y-auto px-6 py-5">
+                  {releaseNotesLoading && (
+                    <div className="flex flex-col items-center justify-center gap-3 py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-[#F59E0B]" />
+                      <p className="text-sm text-[#6B7280]">
+                        Generating player-facing release notes...
+                      </p>
+                    </div>
+                  )}
+
+                  {releaseNotes && !releaseNotesLoading && (
+                    <>
+                      <div>
+                        <div className="mb-2 flex items-center justify-between">
+                          <h3 className="text-sm font-semibold text-[#F59E0B]">
+                            What&apos;s New
+                          </h3>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(
+                                `What's New in v${latestEntry?.version}\n\n${releaseNotes}`
+                              );
+                              setCopiedNotes(true);
+                              setTimeout(() => setCopiedNotes(false), 2000);
+                            }}
+                            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-colors ${
+                              copiedNotes
+                                ? "bg-[#10B981]/10 text-[#10B981]"
+                                : "border border-[#2A2A2A] text-[#9CA3AF] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                            }`}
+                          >
+                            {copiedNotes ? (
+                              <Check className="h-3.5 w-3.5" />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5" />
+                            )}
+                            {copiedNotes
+                              ? "Copied!"
+                              : "Copy for Steam / itch.io"}
+                          </button>
+                        </div>
+                        <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4">
+                          <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">
+                            {releaseNotes}
+                          </div>
+                        </div>
+                      </div>
+
+                      {releaseNotesSocial && (
+                        <div>
+                          <div className="mb-2 flex items-center justify-between">
+                            <h3 className="text-sm font-semibold text-[#3B82F6]">
+                              Social Media
+                            </h3>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(
+                                  releaseNotesSocial
+                                );
+                                setCopiedSocial(true);
+                                setTimeout(
+                                  () => setCopiedSocial(false),
+                                  2000
+                                );
+                              }}
+                              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-colors ${
+                                copiedSocial
+                                  ? "bg-[#10B981]/10 text-[#10B981]"
+                                  : "border border-[#2A2A2A] text-[#9CA3AF] hover:border-[#3B82F6]/30 hover:text-[#3B82F6]"
+                              }`}
+                            >
+                              {copiedSocial ? (
+                                <Check className="h-3.5 w-3.5" />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5" />
+                              )}
+                              {copiedSocial
+                                ? "Copied!"
+                                : "Copy for social"}
+                            </button>
+                          </div>
+                          <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4">
+                            <p className="text-sm leading-relaxed text-[#D1D5DB]">
+                              {releaseNotesSocial}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <div className="border-t border-[#2A2A2A] px-6 py-3">
+                  <button
+                    onClick={() => setShowReleaseNotes(false)}
+                    className="w-full rounded-lg border border-[#2A2A2A] py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
       {/* Add Form Modal */}
       {showForm && (

@@ -17,6 +17,7 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
+  Activity,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -105,6 +106,12 @@ interface DesignerIncome {
   frequency: string;
 }
 
+interface DifficultyLevel {
+  id: string;
+  name: string;
+  difficulty: number;
+}
+
 // ── Constants ──
 
 const TABS = [
@@ -113,6 +120,7 @@ const TABS = [
   { id: "ttk", label: "TTK", icon: Crosshair },
   { id: "economy", label: "Economy", icon: Coins },
   { id: "economy-designer", label: "Economy Designer", icon: Gem },
+  { id: "difficulty", label: "Difficulty", icon: Activity },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -2182,6 +2190,356 @@ function EconomyDesigner() {
   );
 }
 
+// ── Difficulty Tab ──
+
+function DifficultyAnalyzer() {
+  const [levels, setLevels] = useState<DifficultyLevel[]>([
+    { id: uid(), name: "Tutorial", difficulty: 1 },
+    { id: uid(), name: "Forest Path", difficulty: 3 },
+    { id: uid(), name: "Dark Caves", difficulty: 5 },
+    { id: uid(), name: "Mountain Pass", difficulty: 4 },
+    { id: uid(), name: "Dragon's Lair", difficulty: 7 },
+    { id: uid(), name: "Shadow Realm", difficulty: 8 },
+    { id: uid(), name: "Final Boss", difficulty: 10 },
+  ]);
+
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+
+  const addLevel = () => {
+    setLevels((prev) => [
+      ...prev,
+      { id: uid(), name: `Level ${prev.length + 1}`, difficulty: 5 },
+    ]);
+  };
+
+  const removeLevel = (id: string) => {
+    if (levels.length <= 2) return;
+    setLevels((prev) => prev.filter((l) => l.id !== id));
+  };
+
+  const updateLevel = useCallback(
+    (id: string, field: keyof DifficultyLevel, value: string | number) => {
+      setLevels((prev) =>
+        prev.map((l) => (l.id === id ? { ...l, [field]: value } : l))
+      );
+    },
+    []
+  );
+
+  const analyzeCurve = async () => {
+    if (aiLoading) return;
+    setAiLoading(true);
+    setAiAnalysis(null);
+    try {
+      const levelList = levels
+        .map(
+          (l, i) =>
+            `${i + 1}. "${l.name}" - Difficulty: ${l.difficulty}/10`
+        )
+        .join("\n");
+
+      const response = await fetch(
+        "https://llm.chutes.ai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization:
+              "Bearer " +
+              (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "moonshotai/Kimi-K2.5-TEE",
+            messages: [
+              {
+                role: "user",
+                content: `Analyze this game's difficulty curve:\n${levelList}\n\nIdentify: pacing issues, difficulty spikes, too-easy sections. Suggest specific adjustments. Also recommend where to place checkpoints, rest areas, and difficulty options.`,
+              },
+            ],
+            stream: false,
+            max_tokens: 512,
+            temperature: 0.7,
+          }),
+        }
+      );
+      const data = await response.json();
+      const content =
+        data.choices?.[0]?.message?.content ||
+        data.choices?.[0]?.message?.reasoning ||
+        "";
+      setAiAnalysis(content || "No analysis returned from AI.");
+    } catch {
+      setAiAnalysis(
+        "AI advisor is currently unavailable. Try again later."
+      );
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const maxDiff = Math.max(...levels.map((l) => l.difficulty));
+  const avgDiff =
+    levels.reduce((s, l) => s + l.difficulty, 0) / levels.length;
+
+  const spikes = levels.filter(
+    (l, i) => i > 0 && l.difficulty - levels[i - 1].difficulty >= 3
+  );
+
+  const dips = levels.filter(
+    (l, i) => i > 0 && levels[i - 1].difficulty - l.difficulty >= 3
+  );
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+      {/* Level Inputs */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-neutral-300">Levels</h3>
+          <button
+            onClick={addLevel}
+            className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs text-neutral-400 transition hover:border-amber-500/40 hover:text-amber-400"
+          >
+            <Plus size={14} /> Add Level
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          {levels.map((level, idx) => (
+            <div
+              key={level.id}
+              className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-3"
+            >
+              <div className="flex items-center gap-3">
+                <span className="w-6 shrink-0 text-right font-mono text-xs text-neutral-500">
+                  {idx + 1}
+                </span>
+                <input
+                  type="text"
+                  value={level.name}
+                  onChange={(e) =>
+                    updateLevel(level.id, "name", e.target.value)
+                  }
+                  className="min-w-0 flex-1 border-none bg-transparent text-sm text-white outline-none"
+                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={1}
+                    max={10}
+                    value={level.difficulty}
+                    onChange={(e) =>
+                      updateLevel(
+                        level.id,
+                        "difficulty",
+                        Number(e.target.value)
+                      )
+                    }
+                    className="w-20 accent-amber-500"
+                  />
+                  <span
+                    className={`w-6 text-center font-mono text-sm font-semibold ${
+                      level.difficulty >= 8
+                        ? "text-red-400"
+                        : level.difficulty >= 5
+                          ? "text-amber-400"
+                          : "text-green-400"
+                    }`}
+                  >
+                    {level.difficulty}
+                  </span>
+                  {levels.length > 2 && (
+                    <button
+                      onClick={() => removeLevel(level.id)}
+                      className="text-neutral-500 transition hover:text-red-400"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Chart + Analysis */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-medium text-neutral-300">
+          Difficulty Curve
+        </h3>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-3 text-center">
+            <p className="font-mono text-lg font-semibold text-amber-400">
+              {avgDiff.toFixed(1)}
+            </p>
+            <p className="text-xs text-neutral-500">Avg Difficulty</p>
+          </div>
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-3 text-center">
+            <p className="font-mono text-lg font-semibold text-red-400">
+              {spikes.length}
+            </p>
+            <p className="text-xs text-neutral-500">Spikes</p>
+          </div>
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-3 text-center">
+            <p className="font-mono text-lg font-semibold text-blue-400">
+              {dips.length}
+            </p>
+            <p className="text-xs text-neutral-500">Dips</p>
+          </div>
+        </div>
+
+        {/* CSS Bar Chart */}
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+          <p className="mb-4 text-xs text-neutral-400">Difficulty by Level</p>
+          <div className="flex items-end gap-1" style={{ height: "200px" }}>
+            {levels.map((level, idx) => {
+              const pct = (level.difficulty / 10) * 100;
+              const isSpike =
+                idx > 0 &&
+                level.difficulty - levels[idx - 1].difficulty >= 3;
+              const isDip =
+                idx > 0 &&
+                levels[idx - 1].difficulty - level.difficulty >= 3;
+              const barColor =
+                level.difficulty >= 8
+                  ? "#EF4444"
+                  : level.difficulty >= 5
+                    ? "#F59E0B"
+                    : "#10B981";
+              return (
+                <div
+                  key={level.id}
+                  className="flex flex-1 flex-col items-center gap-1"
+                  style={{ height: "100%" }}
+                >
+                  <span className="font-mono text-[10px] text-neutral-500">
+                    {level.difficulty}
+                  </span>
+                  <div className="relative flex w-full flex-1 items-end">
+                    <div
+                      className={`w-full rounded-t transition-all duration-300 ${
+                        isSpike
+                          ? "ring-2 ring-red-500/60"
+                          : isDip
+                            ? "ring-2 ring-blue-500/60"
+                            : ""
+                      }`}
+                      style={{
+                        height: `${pct}%`,
+                        backgroundColor: barColor,
+                        opacity: 0.85,
+                      }}
+                    />
+                  </div>
+                  <span
+                    className="w-full truncate text-center text-[9px] text-neutral-600"
+                    title={level.name}
+                  >
+                    {level.name.length > 8
+                      ? level.name.slice(0, 7) + "\u2026"
+                      : level.name}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-3 flex items-center gap-4 text-[10px] text-neutral-600">
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+              Easy (1-4)
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+              Medium (5-7)
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
+              Hard (8-10)
+            </span>
+          </div>
+        </div>
+
+        {/* Warnings */}
+        {spikes.length > 0 && (
+          <div className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/5 p-3">
+            <AlertTriangle
+              size={16}
+              className="mt-0.5 shrink-0 text-red-400"
+            />
+            <p className="text-xs text-red-400">
+              Difficulty spike{spikes.length > 1 ? "s" : ""} detected at:{" "}
+              {spikes.map((s) => s.name).join(", ")}. Consider adding rest
+              areas or checkpoints before these levels.
+            </p>
+          </div>
+        )}
+
+        {dips.length > 0 && (
+          <div className="flex items-start gap-2 rounded-xl border border-blue-500/30 bg-blue-500/5 p-3">
+            <Info size={16} className="mt-0.5 shrink-0 text-blue-400" />
+            <p className="text-xs text-blue-400">
+              Difficulty dip{dips.length > 1 ? "s" : ""} detected at:{" "}
+              {dips.map((s) => s.name).join(", ")}. Sudden drops can feel
+              anticlimactic unless intentional rest areas.
+            </p>
+          </div>
+        )}
+
+        {/* AI Analysis */}
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-amber-400" />
+              <p className="text-sm font-medium text-neutral-300">
+                AI Difficulty Advisor
+              </p>
+            </div>
+            <button
+              onClick={analyzeCurve}
+              disabled={aiLoading || levels.length < 2}
+              className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20 disabled:opacity-40 disabled:hover:bg-amber-500/10"
+            >
+              {aiLoading ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" /> Analyzing...
+                </>
+              ) : (
+                <>
+                  <Sparkles size={14} /> Analyze Difficulty Curve
+                </>
+              )}
+            </button>
+          </div>
+
+          {aiLoading && !aiAnalysis && (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 size={24} className="animate-spin text-amber-400" />
+            </div>
+          )}
+
+          {aiAnalysis && (
+            <div className="rounded-lg border border-[#2A2A2A] bg-[#111] p-4">
+              <div className="whitespace-pre-wrap text-sm leading-relaxed text-neutral-300">
+                {aiAnalysis}
+              </div>
+            </div>
+          )}
+
+          {!aiLoading && !aiAnalysis && (
+            <p className="text-xs text-neutral-500">
+              Click &quot;Analyze Difficulty Curve&quot; to get AI feedback on
+              pacing, spikes, and checkpoint placement.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ──
 
 export default function BalanceCalculatorPage() {
@@ -2234,6 +2592,7 @@ export default function BalanceCalculatorPage() {
         {activeTab === "ttk" && <TTKCalculator />}
         {activeTab === "economy" && <EconomyBalance />}
         {activeTab === "economy-designer" && <EconomyDesigner />}
+        {activeTab === "difficulty" && <DifficultyAnalyzer />}
       </div>
     </div>
   );
