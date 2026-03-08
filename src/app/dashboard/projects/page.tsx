@@ -25,6 +25,7 @@ import {
   Download,
   Check,
   Loader2,
+  Target,
 } from "lucide-react";
 import {
   getProjects,
@@ -33,12 +34,15 @@ import {
   getDevlog,
   getSprints,
   getChangelog,
+  getMilestones,
   updateProject,
   addProject,
   addTask,
   addBug,
   addSprint,
   type Project,
+  type Sprint,
+  type Milestone,
 } from "@/lib/store";
 
 const STATUS_BADGE_STYLES: Record<Project["status"], string> = {
@@ -63,6 +67,8 @@ type SortKey = "name" | "status" | "updated";
 type ViewMode = "grid" | "list";
 type FilterMode = "active" | "all" | "archived";
 
+type HealthStatus = "green" | "amber" | "red";
+
 interface ProjectData {
   project: Project;
   taskCount: number;
@@ -79,6 +85,11 @@ interface ProjectData {
   activeSprintCount: number;
   completedSprintCount: number;
   changelogCount: number;
+  activeSprint: Sprint | null;
+  nextMilestone: Milestone | null;
+  health: HealthStatus;
+  criticalBugCount: number;
+  missedMilestoneCount: number;
 }
 
 interface CompareMetric {
@@ -320,13 +331,42 @@ export default function ProjectsPage() {
 
   const loadData = useCallback(() => {
     const allProjects = getProjects();
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+    const sevenDaysFromNow = now + 7 * 24 * 60 * 60 * 1000;
     const data: ProjectData[] = allProjects.map((p) => {
       const allTasks = getTasks(p.id);
       const allBugs = getBugs(p.id);
       const devlogEntries = getDevlog(p.id);
       const sprints = getSprints(p.id);
       const changelog = getChangelog(p.id);
+      const milestones = getMilestones(p.id);
+
+      const overdueBugCount = allBugs.filter(
+        (b) => b.status !== "closed" && new Date(b.created_at).getTime() < sevenDaysAgo
+      ).length;
+      const criticalBugCount = allBugs.filter(
+        (b) => b.status !== "closed" && (b.severity === "blocker" || b.severity === "critical")
+      ).length;
+
+      const missedMilestones = milestones.filter(
+        (m) => m.status !== "completed" && new Date(m.targetDate).getTime() < now
+      );
+
+      const activeSprint = sprints.find((s) => s.status === "active") || null;
+
+      const upcomingMilestones = milestones
+        .filter((m) => m.status !== "completed" && new Date(m.targetDate).getTime() >= now && new Date(m.targetDate).getTime() <= sevenDaysFromNow)
+        .sort((a, b) => new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime());
+      const nextMilestone = upcomingMilestones[0] || null;
+
+      let health: HealthStatus = "green";
+      if (criticalBugCount > 0 || missedMilestones.length > 0) {
+        health = "red";
+      } else if (overdueBugCount > 0) {
+        health = "amber";
+      }
+
       return {
         project: p,
         taskCount: allTasks.length,
@@ -335,11 +375,7 @@ export default function ProjectsPage() {
         bugCount: allBugs.filter((b) => b.status !== "closed").length,
         allBugCount: allBugs.length,
         closedBugCount: allBugs.filter((b) => b.status === "closed").length,
-        overdueBugCount: allBugs.filter(
-          (b) =>
-            b.status !== "closed" &&
-            new Date(b.created_at).getTime() < sevenDaysAgo
-        ).length,
+        overdueBugCount,
         devlogCount: devlogEntries.length,
         devlogWords: devlogEntries.reduce((s, e) => s + e.content.split(/\s+/).filter(Boolean).length, 0),
         loggedHours: allTasks.reduce((s, t) => s + (t.loggedHours || 0), 0),
@@ -347,6 +383,11 @@ export default function ProjectsPage() {
         activeSprintCount: sprints.filter((s) => s.status === "active").length,
         completedSprintCount: sprints.filter((s) => s.status === "completed").length,
         changelogCount: changelog.length,
+        activeSprint,
+        nextMilestone,
+        health,
+        criticalBugCount,
+        missedMilestoneCount: missedMilestones.length,
       };
     });
     setProjectData(data);
@@ -850,12 +891,25 @@ export default function ProjectsPage() {
               bugCount,
               overdueBugCount,
               devlogCount,
+              activeSprint,
+              nextMilestone,
+              health,
             }) => {
               const pct = taskCount
                 ? Math.round((completedTaskCount / taskCount) * 100)
                 : 0;
               const isSelected = compareSelection.includes(project.id);
               const CardWrapper = compareMode ? "div" : Link;
+              const healthColors: Record<HealthStatus, string> = {
+                green: "bg-[#10B981]",
+                amber: "bg-[#F59E0B]",
+                red: "bg-[#EF4444]",
+              };
+              const healthTitles: Record<HealthStatus, string> = {
+                green: "Healthy",
+                amber: "Has overdue bugs",
+                red: "Critical issues",
+              };
               const cardProps = compareMode
                 ? {
                     onClick: () => toggleCompareSelect(project.id),
@@ -893,9 +947,15 @@ export default function ProjectsPage() {
                   </div>
                   <div className="p-5">
                     <div className="flex items-start justify-between">
-                      <h3 className="font-semibold text-[#F5F5F5] transition-colors group-hover:text-[#F59E0B]">
-                        {project.name}
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${healthColors[health]}`}
+                          title={healthTitles[health]}
+                        />
+                        <h3 className="font-semibold text-[#F5F5F5] transition-colors group-hover:text-[#F59E0B]">
+                          {project.name}
+                        </h3>
+                      </div>
                       <span
                         className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium capitalize ${STATUS_BADGE_STYLES[project.status]}`}
                       >
@@ -905,7 +965,7 @@ export default function ProjectsPage() {
                     <p className="mt-2 line-clamp-2 text-sm text-[#9CA3AF]">
                       {project.description}
                     </p>
-                    <div className="mt-4 flex items-center gap-3 text-xs text-[#6B7280]">
+                    <div className="mt-3 flex items-center gap-2 text-xs text-[#6B7280]">
                       <span className="rounded bg-[#2A2A2A] px-2 py-0.5">
                         {project.engine}
                       </span>
@@ -913,8 +973,29 @@ export default function ProjectsPage() {
                         {project.genre}
                       </span>
                     </div>
+
+                    {(activeSprint || nextMilestone) && (
+                      <div className="mt-3 space-y-1.5">
+                        {activeSprint && (
+                          <div className="flex items-center gap-1.5 text-[10px] text-[#9CA3AF]">
+                            <Zap className="h-3 w-3 text-[#3B82F6]" />
+                            <span className="truncate">{activeSprint.name}</span>
+                          </div>
+                        )}
+                        {nextMilestone && (
+                          <div className="flex items-center gap-1.5 text-[10px] text-[#9CA3AF]">
+                            <Target className="h-3 w-3 text-[#F59E0B]" />
+                            <span className="truncate">{nextMilestone.name}</span>
+                            <span className="shrink-0 text-[#6B7280]">
+                              {new Date(nextMilestone.targetDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Progress Bar */}
-                    <div className="mt-4">
+                    <div className="mt-3">
                       <div className="flex items-center justify-between text-[10px] text-[#6B7280]">
                         <span>
                           {completedTaskCount}/{taskCount} tasks

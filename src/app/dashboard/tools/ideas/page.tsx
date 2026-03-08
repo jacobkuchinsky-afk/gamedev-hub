@@ -15,6 +15,9 @@ import {
   Star,
   Wand2,
   Clock,
+  Shuffle,
+  Merge,
+  Dices,
 } from "lucide-react";
 
 const GENRES = [
@@ -141,7 +144,10 @@ function generateFallbackIdea(genre: string, theme: string): string {
 3. Dynamic narrative that branches based on playstyle and choices made`;
 }
 
+type GeneratorMode = "custom" | "mashup";
+
 export default function IdeasPage() {
+  const [mode, setMode] = useState<GeneratorMode>("custom");
   const [genre, setGenre] = useState("");
   const [theme, setTheme] = useState("");
   const [audience, setAudience] = useState("");
@@ -158,6 +164,12 @@ export default function IdeasPage() {
   const [history, setHistory] = useState<IdeaHistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
 
+  const [mashupGenre1, setMashupGenre1] = useState("");
+  const [mashupGenre2, setMashupGenre2] = useState("");
+  const [mashupResult, setMashupResult] = useState("");
+  const [mashupLoading, setMashupLoading] = useState(false);
+  const [mashupError, setMashupError] = useState("");
+
   useEffect(() => {
     setSavedIdeas(getSavedIdeas());
     setHistory(getHistory());
@@ -173,6 +185,63 @@ export default function IdeasPage() {
     const updated = [entry, ...history].slice(0, 5);
     setHistory(updated);
     saveHistory(updated);
+  };
+
+  const randomizeGenres = () => {
+    const shuffled = [...GENRES].sort(() => Math.random() - 0.5);
+    setMashupGenre1(shuffled[0]);
+    setMashupGenre2(shuffled[1]);
+  };
+
+  const handleMashup = async () => {
+    if (!mashupGenre1 || !mashupGenre2) return;
+    setMashupLoading(true);
+    setMashupError("");
+    setMashupResult("");
+
+    const prompt = `Create a unique game concept that mashes up ${mashupGenre1} and ${mashupGenre2}. Include: game title, elevator pitch (2 sentences), how the genres combine, core mechanic, and what makes it unique. Be creative. Format with markdown bold headers for each section.`;
+
+    try {
+      const response = await fetch(
+        "https://llm.chutes.ai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization:
+              "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "moonshotai/Kimi-K2.5-TEE",
+            messages: [{ role: "user", content: prompt }],
+            stream: false,
+            max_tokens: 256,
+            temperature: 0.9,
+          }),
+        }
+      );
+
+      const data = await response.json();
+      const content =
+        data.choices?.[0]?.message?.content ||
+        data.choices?.[0]?.message?.reasoning ||
+        "";
+
+      if (content) {
+        setMashupResult(content);
+        addToHistory(content);
+      } else {
+        throw new Error("No content");
+      }
+    } catch {
+      setMashupError("AI unavailable — try again!");
+      const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
+      const fallback = `**Game Title:** ${pick(FALLBACK_TITLES)}\n\n**Elevator Pitch:** Imagine ${mashupGenre1.toLowerCase()} meets ${mashupGenre2.toLowerCase()} in a world where ${pick(FALLBACK_SETTINGS)}. ${pick(FALLBACK_HOOKS).charAt(0).toUpperCase() + pick(FALLBACK_HOOKS).slice(1)}.\n\n**How the Genres Combine:** The ${mashupGenre1.toLowerCase()} elements provide the core gameplay structure while ${mashupGenre2.toLowerCase()} mechanics add depth and replayability.\n\n**Core Mechanic:** ${pick(FALLBACK_MECHANICS).charAt(0).toUpperCase() + pick(FALLBACK_MECHANICS).slice(1)}\n\n**What Makes It Unique:** The fusion of ${mashupGenre1.toLowerCase()} and ${mashupGenre2.toLowerCase()} creates emergent gameplay that neither genre achieves alone.`;
+      setMashupResult(fallback);
+      addToHistory(fallback);
+    } finally {
+      setMashupLoading(false);
+    }
   };
 
   const handleGenerate = async () => {
@@ -345,9 +414,106 @@ export default function IdeasPage() {
         </div>
       </div>
 
+      {/* Mode Toggle */}
+      <div className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-1 w-fit">
+        <button
+          onClick={() => setMode("custom")}
+          className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            mode === "custom"
+              ? "bg-[#F59E0B]/10 text-[#F59E0B]"
+              : "text-[#9CA3AF] hover:text-[#F5F5F5]"
+          }`}
+        >
+          <Sparkles className="h-4 w-4" />
+          Custom
+        </button>
+        <button
+          onClick={() => setMode("mashup")}
+          className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            mode === "mashup"
+              ? "bg-[#F59E0B]/10 text-[#F59E0B]"
+              : "text-[#9CA3AF] hover:text-[#F5F5F5]"
+          }`}
+        >
+          <Merge className="h-4 w-4" />
+          Genre Mashup
+        </button>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-5">
         {/* Input Panel */}
         <div className="lg:col-span-2 space-y-4">
+          {mode === "mashup" ? (
+            <div className="rounded-xl border border-[#F59E0B]/20 bg-[#1A1A1A] p-5 space-y-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-[#F59E0B]">
+                <Merge className="h-4 w-4" />
+                Genre Mashup
+              </div>
+              <p className="text-xs text-[#6B7280]">
+                Pick two genres and let AI create something totally new
+              </p>
+
+              <div>
+                <label className="mb-1 block text-sm text-[#9CA3AF]">Genre 1</label>
+                <select
+                  value={mashupGenre1}
+                  onChange={(e) => setMashupGenre1(e.target.value)}
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+                >
+                  <option value="">Select a genre...</option>
+                  {GENRES.filter((g) => g !== mashupGenre2).map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-center">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[#2A2A2A] bg-[#0F0F0F]">
+                  <span className="text-xs font-bold text-[#F59E0B]">+</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm text-[#9CA3AF]">Genre 2</label>
+                <select
+                  value={mashupGenre2}
+                  onChange={(e) => setMashupGenre2(e.target.value)}
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+                >
+                  <option value="">Select a genre...</option>
+                  {GENRES.filter((g) => g !== mashupGenre1).map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                onClick={randomizeGenres}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#2A2A2A] py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              >
+                <Dices className="h-4 w-4" />
+                Random Genres
+              </button>
+
+              <button
+                onClick={handleMashup}
+                disabled={mashupLoading || !mashupGenre1 || !mashupGenre2}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#F59E0B] py-3 text-sm font-semibold text-black transition-colors hover:bg-[#D97706] disabled:opacity-50"
+              >
+                {mashupLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Mashing up...
+                  </>
+                ) : (
+                  <>
+                    <Shuffle className="h-4 w-4" />
+                    Mashup!
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 space-y-4">
             <div>
               <label className="mb-1 block text-sm text-[#9CA3AF]">Genre</label>
@@ -437,6 +603,7 @@ export default function IdeasPage() {
               )}
             </button>
           </div>
+          )}
 
           {/* Saved Ideas Toggle */}
           <button
@@ -563,6 +730,65 @@ export default function IdeasPage() {
 
         {/* Results Panel */}
         <div className="lg:col-span-3">
+          {/* Mashup Result */}
+          {mode === "mashup" && (mashupResult || mashupLoading) && (
+            <div className="mb-4 rounded-xl border border-[#F59E0B]/30 bg-gradient-to-br from-[#F59E0B]/5 to-[#1A1A1A] p-6">
+              {mashupLoading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#F59E0B]" />
+                  <p className="mt-4 text-sm text-[#9CA3AF]">
+                    Fusing {mashupGenre1} + {mashupGenre2}...
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <div className="mb-4 flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 rounded-md bg-[#F59E0B]/10 px-2.5 py-1 text-xs font-medium text-[#F59E0B]">
+                      <Merge className="h-3 w-3" />
+                      {mashupGenre1} + {mashupGenre2}
+                    </div>
+                  </div>
+                  {mashupError && (
+                    <div className="mb-3 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-4 py-2 text-xs text-[#F59E0B]">
+                      {mashupError}
+                    </div>
+                  )}
+                  <div className="space-y-1">{renderMarkdown(mashupResult)}</div>
+                  <div className="mt-5 flex flex-wrap gap-2 border-t border-[#2A2A2A] pt-4">
+                    <button
+                      onClick={() => {
+                        setResult(mashupResult);
+                        setCurrentRating(0);
+                      }}
+                      className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] px-4 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#10B981]/30 hover:text-[#10B981]"
+                    >
+                      <Save className="h-4 w-4" />
+                      Use as Idea
+                    </button>
+                    <button
+                      onClick={handleMashup}
+                      disabled={mashupLoading}
+                      className="flex items-center gap-2 rounded-lg border border-[#F59E0B]/30 px-4 py-2 text-sm text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10"
+                    >
+                      <Shuffle className="h-4 w-4" />
+                      Mashup Again
+                    </button>
+                    <button
+                      onClick={() => {
+                        randomizeGenres();
+                        setTimeout(handleMashup, 50);
+                      }}
+                      className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] px-4 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                    >
+                      <Dices className="h-4 w-4" />
+                      Random Mashup
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6 min-h-[400px]">
             {!result && !loading && (
               <div className="flex h-full min-h-[360px] flex-col items-center justify-center text-center">
@@ -570,7 +796,9 @@ export default function IdeasPage() {
                   <Lightbulb className="h-8 w-8 text-[#F59E0B]" />
                 </div>
                 <p className="mt-4 text-sm font-medium text-[#9CA3AF]">
-                  Set your parameters and hit Generate
+                  {mode === "mashup"
+                    ? "Pick two genres and hit Mashup!"
+                    : "Set your parameters and hit Generate"}
                 </p>
                 <p className="mt-1 text-xs text-[#6B7280]">
                   The AI will create a unique game concept for you
