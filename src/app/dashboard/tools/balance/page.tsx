@@ -18,6 +18,8 @@ import {
   ChevronDown,
   ChevronUp,
   Activity,
+  Package,
+  Download,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -112,6 +114,28 @@ interface DifficultyLevel {
   difficulty: number;
 }
 
+interface LootItem {
+  id: string;
+  name: string;
+  dropChance: number;
+  rarity: string;
+  description: string;
+}
+
+interface LootPool {
+  id: string;
+  name: string;
+  items: LootItem[];
+}
+
+interface SimResult {
+  id: string;
+  name: string;
+  rarity: string;
+  expected: number;
+  actual: number;
+}
+
 // ── Constants ──
 
 const TABS = [
@@ -121,6 +145,7 @@ const TABS = [
   { id: "economy", label: "Economy", icon: Coins },
   { id: "economy-designer", label: "Economy Designer", icon: Gem },
   { id: "difficulty", label: "Difficulty", icon: Activity },
+  { id: "loot", label: "Loot Tables", icon: Package },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -1510,6 +1535,14 @@ const RARITY_COLORS: Record<string, string> = {
   legendary: "text-amber-400",
 };
 
+const RARITY_BAR_COLORS: Record<string, string> = {
+  common: "bg-neutral-500",
+  uncommon: "bg-green-500",
+  rare: "bg-blue-500",
+  epic: "bg-purple-500",
+  legendary: "bg-amber-500",
+};
+
 const GENRE_OPTIONS = [
   "RPG",
   "MMORPG",
@@ -2540,6 +2573,643 @@ function DifficultyAnalyzer() {
   );
 }
 
+// ── Loot Table Designer ──
+
+function LootTableDesigner() {
+  const [pools, setPools] = useState<LootPool[]>([
+    {
+      id: uid(),
+      name: "Common Drops",
+      items: [
+        { id: uid(), name: "Gold Coin", dropChance: 40, rarity: "common", description: "" },
+        { id: uid(), name: "Health Potion", dropChance: 25, rarity: "common", description: "" },
+        { id: uid(), name: "Iron Ore", dropChance: 15, rarity: "uncommon", description: "" },
+        { id: uid(), name: "Magic Scroll", dropChance: 12, rarity: "rare", description: "" },
+        { id: uid(), name: "Enchanted Ring", dropChance: 5, rarity: "epic", description: "" },
+        { id: uid(), name: "Diamond Shard", dropChance: 3, rarity: "legendary", description: "" },
+      ],
+    },
+  ]);
+  const [selectedPool, setSelectedPool] = useState(0);
+  const [genre, setGenre] = useState("RPG");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [simResults, setSimResults] = useState<SimResult[] | null>(null);
+  const [simRolls, setSimRolls] = useState(100);
+  const [copied, setCopied] = useState(false);
+
+  const currentPool = pools[selectedPool] || pools[0];
+  const currentItems = currentPool?.items || [];
+  const totalChance = currentItems.reduce((s, i) => s + i.dropChance, 0);
+
+  const addPool = () => {
+    setPools((prev) => [
+      ...prev,
+      {
+        id: uid(),
+        name: `Pool ${prev.length + 1}`,
+        items: [
+          { id: uid(), name: "New Item", dropChance: 100, rarity: "common", description: "" },
+        ],
+      },
+    ]);
+    setSelectedPool(pools.length);
+  };
+
+  const removePool = (idx: number) => {
+    if (pools.length <= 1) return;
+    setPools((prev) => prev.filter((_, i) => i !== idx));
+    setSelectedPool((prev) => Math.min(prev, pools.length - 2));
+  };
+
+  const renamePool = (idx: number, name: string) => {
+    setPools((prev) => prev.map((p, i) => (i === idx ? { ...p, name } : p)));
+  };
+
+  const addItem = () => {
+    setPools((prev) =>
+      prev.map((p, i) =>
+        i === selectedPool
+          ? {
+              ...p,
+              items: [
+                ...p.items,
+                { id: uid(), name: "New Item", dropChance: 10, rarity: "common", description: "" },
+              ],
+            }
+          : p
+      )
+    );
+  };
+
+  const removeItem = (itemId: string) => {
+    if (currentItems.length <= 1) return;
+    setPools((prev) =>
+      prev.map((p, i) =>
+        i === selectedPool
+          ? { ...p, items: p.items.filter((item) => item.id !== itemId) }
+          : p
+      )
+    );
+  };
+
+  const updateItem = useCallback(
+    (itemId: string, field: keyof LootItem, value: string | number) => {
+      setPools((prev) =>
+        prev.map((p, i) =>
+          i === selectedPool
+            ? {
+                ...p,
+                items: p.items.map((item) =>
+                  item.id === itemId ? { ...item, [field]: value } : item
+                ),
+              }
+            : p
+        )
+      );
+    },
+    [selectedPool]
+  );
+
+  const pieGradient = useMemo(() => {
+    if (currentItems.length === 0 || totalChance === 0)
+      return "conic-gradient(#2A2A2A 0% 100%)";
+    let cumulative = 0;
+    const stops = currentItems.map((item, i) => {
+      const start = cumulative;
+      const normalized = (item.dropChance / totalChance) * 100;
+      cumulative += normalized;
+      return `${CHART_COLORS[i % CHART_COLORS.length]} ${start}% ${cumulative}%`;
+    });
+    return `conic-gradient(${stops.join(", ")})`;
+  }, [currentItems, totalChance]);
+
+  const runSimulation = useCallback(() => {
+    if (currentItems.length === 0 || totalChance === 0) return;
+    const counts = new Map<string, number>();
+    currentItems.forEach((i) => counts.set(i.id, 0));
+
+    for (let r = 0; r < simRolls; r++) {
+      const roll = Math.random() * totalChance;
+      let cum = 0;
+      for (const item of currentItems) {
+        cum += item.dropChance;
+        if (roll < cum) {
+          counts.set(item.id, (counts.get(item.id) || 0) + 1);
+          break;
+        }
+      }
+    }
+
+    setSimResults(
+      currentItems.map((item) => ({
+        id: item.id,
+        name: item.name,
+        rarity: item.rarity,
+        expected: (item.dropChance / totalChance) * simRolls,
+        actual: counts.get(item.id) || 0,
+      }))
+    );
+  }, [currentItems, totalChance, simRolls]);
+
+  const designLootTable = async () => {
+    if (aiLoading) return;
+    setAiLoading(true);
+    try {
+      const prompt = `Design a loot table for a ${genre} game. Pool name: ${currentPool.name}. Create 8 items with realistic drop rates. Include: item name, drop chance %, rarity (Common/Uncommon/Rare/Epic/Legendary), and a brief description. Format as JSON array: [{"name": "string", "dropChance": number, "rarity": "string", "description": "string"}]. Drop chances should sum to 100.`;
+
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.8,
+        }),
+      });
+
+      const data = await response.json();
+      const content =
+        data.choices?.[0]?.message?.content ||
+        data.choices?.[0]?.message?.reasoning ||
+        "";
+
+      if (!content) return;
+
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) return;
+
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const newItems: LootItem[] = parsed.map(
+          (item: { name?: string; dropChance?: number; drop_chance?: number; rarity?: string; description?: string }) => ({
+            id: uid(),
+            name: item.name || "Unknown",
+            dropChance: item.dropChance ?? item.drop_chance ?? 10,
+            rarity: (item.rarity || "common").toLowerCase(),
+            description: item.description || "",
+          })
+        );
+
+        setPools((prev) =>
+          prev.map((p, i) => (i === selectedPool ? { ...p, items: newItems } : p))
+        );
+        setSimResults(null);
+      }
+    } catch {
+      // AI parse failure — items unchanged
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const exportJSON = () => {
+    const exportData = pools.map((p) => ({
+      name: p.name,
+      items: p.items.map((i) => ({
+        name: i.name,
+        dropChance: i.dropChance,
+        rarity: i.rarity,
+        ...(i.description ? { description: i.description } : {}),
+      })),
+    }));
+    navigator.clipboard.writeText(JSON.stringify(exportData, null, 2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Pool tabs + Export */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          {pools.map((pool, idx) => (
+            <div key={pool.id} className="flex items-center">
+              <button
+                onClick={() => {
+                  setSelectedPool(idx);
+                  setSimResults(null);
+                }}
+                className={`rounded-lg border px-3 py-1.5 text-xs transition ${
+                  selectedPool === idx
+                    ? "border-amber-500/50 bg-amber-500/10 text-amber-400"
+                    : "border-[#2A2A2A] text-neutral-400 hover:border-neutral-600"
+                } ${pools.length > 1 ? "rounded-r-none" : ""}`}
+              >
+                {pool.name}
+              </button>
+              {pools.length > 1 && (
+                <button
+                  onClick={() => removePool(idx)}
+                  className={`rounded-r-lg border border-l-0 px-1.5 py-1.5 text-xs transition ${
+                    selectedPool === idx
+                      ? "border-amber-500/50 bg-amber-500/5 text-neutral-500 hover:text-red-400"
+                      : "border-[#2A2A2A] text-neutral-600 hover:text-red-400"
+                  }`}
+                >
+                  <Trash2 size={12} />
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            onClick={addPool}
+            className="flex items-center gap-1 rounded-lg border border-dashed border-[#2A2A2A] px-3 py-1.5 text-xs text-neutral-500 transition hover:border-amber-500/40 hover:text-amber-400"
+          >
+            <Plus size={12} /> Pool
+          </button>
+        </div>
+        <button
+          onClick={exportJSON}
+          className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs text-neutral-400 transition hover:border-amber-500/40 hover:text-amber-400"
+        >
+          <Download size={14} /> {copied ? "Copied!" : "Export JSON"}
+        </button>
+      </div>
+
+      {/* Pool name + genre + AI */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+        <div className="flex-1">
+          <TextInput
+            label="Pool Name"
+            value={currentPool.name}
+            onChange={(v) => renamePool(selectedPool, v)}
+          />
+        </div>
+        <div className="flex-1">
+          <label className="mb-1 block text-xs text-neutral-400">Genre</label>
+          <select
+            value={genre}
+            onChange={(e) => setGenre(e.target.value)}
+            className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-white outline-none focus:border-amber-500/50"
+          >
+            {GENRE_OPTIONS.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          onClick={designLootTable}
+          disabled={aiLoading}
+          className="flex shrink-0 items-center gap-2 rounded-xl bg-amber-500/10 px-5 py-2.5 text-sm font-medium text-amber-400 transition hover:bg-amber-500/20 disabled:opacity-40"
+        >
+          {aiLoading ? (
+            <>
+              <Loader2 size={16} className="animate-spin" /> Designing...
+            </>
+          ) : (
+            <>
+              <Sparkles size={16} /> Design Loot Table
+            </>
+          )}
+        </button>
+      </div>
+
+      {aiLoading && (
+        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-12">
+          <Loader2 size={32} className="animate-spin text-amber-400" />
+          <p className="text-sm text-neutral-400">
+            AI is designing loot for {currentPool.name}...
+          </p>
+          <p className="text-xs text-neutral-600">This may take a few seconds</p>
+        </div>
+      )}
+
+      {/* Drop chance warning */}
+      {totalChance !== 100 && currentItems.length > 0 && !aiLoading && (
+        <div
+          className={`flex items-center gap-2 rounded-xl border p-3 ${
+            Math.abs(totalChance - 100) > 5
+              ? "border-red-500/30 bg-red-500/5"
+              : "border-amber-500/30 bg-amber-500/5"
+          }`}
+        >
+          <AlertTriangle
+            size={16}
+            className={
+              Math.abs(totalChance - 100) > 5 ? "text-red-400" : "text-amber-400"
+            }
+          />
+          <p
+            className={`text-xs ${
+              Math.abs(totalChance - 100) > 5 ? "text-red-400" : "text-amber-400"
+            }`}
+          >
+            Drop chances total {totalChance.toFixed(1)}% (should be 100%). Rolls
+            will be normalized.
+          </p>
+        </div>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+        {/* Left: Items */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-neutral-300">
+              Items in {currentPool.name}
+            </h3>
+            <button
+              onClick={addItem}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs text-neutral-400 transition hover:border-amber-500/40 hover:text-amber-400"
+            >
+              <Plus size={14} /> Add Item
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {currentItems.map((item, idx) => (
+              <div
+                key={item.id}
+                className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-3"
+              >
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="h-3 w-3 shrink-0 rounded-full"
+                      style={{
+                        backgroundColor: CHART_COLORS[idx % CHART_COLORS.length],
+                      }}
+                    />
+                    <input
+                      type="text"
+                      value={item.name}
+                      onChange={(e) => updateItem(item.id, "name", e.target.value)}
+                      className="border-none bg-transparent text-sm font-medium text-white outline-none"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={item.rarity}
+                      onChange={(e) =>
+                        updateItem(item.id, "rarity", e.target.value)
+                      }
+                      className={`rounded-md border border-[#2A2A2A] bg-[#111] px-2 py-1 text-xs capitalize outline-none ${RARITY_COLORS[item.rarity] || "text-neutral-400"}`}
+                    >
+                      {Object.keys(RARITY_COLORS).map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                    {currentItems.length > 1 && (
+                      <button
+                        onClick={() => removeItem(item.id)}
+                        className="text-neutral-500 transition hover:text-red-400"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <label className="mb-1 block text-[10px] text-neutral-500">
+                      Drop Chance
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min={0.1}
+                        max={100}
+                        step={0.1}
+                        value={item.dropChance}
+                        onChange={(e) =>
+                          updateItem(item.id, "dropChance", Number(e.target.value))
+                        }
+                        className="flex-1 accent-amber-500"
+                      />
+                      <span className="w-14 text-right font-mono text-sm text-amber-400">
+                        {item.dropChance.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                {item.description && (
+                  <p className="mt-1 text-[11px] italic text-neutral-500">
+                    {item.description}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Right: Pie chart + Simulation + Summary */}
+        <div className="space-y-4">
+          {/* Pie Chart */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            <p className="mb-4 text-xs text-neutral-400">
+              Drop Rate Distribution
+            </p>
+            <div className="flex items-center gap-6">
+              <div className="relative shrink-0">
+                <div
+                  className="h-44 w-44 rounded-full"
+                  style={{ background: pieGradient }}
+                />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="flex h-20 w-20 flex-col items-center justify-center rounded-full bg-[#1A1A1A]">
+                    <span className="font-mono text-lg font-semibold text-white">
+                      {currentItems.length}
+                    </span>
+                    <span className="text-[10px] text-neutral-500">items</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex-1 space-y-1.5">
+                {currentItems.map((item, idx) => (
+                  <div key={item.id} className="flex items-center gap-2">
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{
+                        backgroundColor: CHART_COLORS[idx % CHART_COLORS.length],
+                      }}
+                    />
+                    <span className="flex-1 truncate text-xs text-neutral-300">
+                      {item.name}
+                    </span>
+                    <span className="font-mono text-xs text-neutral-500">
+                      {((item.dropChance / totalChance) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Simulation */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-xs text-neutral-400">Loot Simulation</p>
+              <div className="flex items-center gap-2">
+                {[100, 1000, 10000].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setSimRolls(n)}
+                    className={`rounded-lg border px-2 py-1 font-mono text-[10px] transition ${
+                      simRolls === n
+                        ? "border-amber-500/50 bg-amber-500/10 text-amber-400"
+                        : "border-[#2A2A2A] text-neutral-500 hover:border-neutral-600"
+                    }`}
+                  >
+                    {n >= 1000 ? `${n / 1000}K` : n}
+                  </button>
+                ))}
+                <button
+                  onClick={runSimulation}
+                  disabled={currentItems.length === 0}
+                  className="flex items-center gap-1.5 rounded-lg bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20 disabled:opacity-40"
+                >
+                  Roll {simRolls >= 1000 ? `${simRolls / 1000}K` : simRolls}x
+                </button>
+              </div>
+            </div>
+
+            {simResults ? (
+              <div className="space-y-2">
+                {simResults.map((r) => {
+                  const maxActual = Math.max(
+                    ...simResults.map((s) => s.actual),
+                    1
+                  );
+                  const deviation =
+                    r.expected > 0
+                      ? ((r.actual - r.expected) / r.expected) * 100
+                      : 0;
+                  return (
+                    <div key={r.id}>
+                      <div className="mb-1 flex items-center justify-between">
+                        <span
+                          className={`text-xs capitalize ${RARITY_COLORS[r.rarity] || "text-neutral-400"}`}
+                        >
+                          {r.name}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono text-[10px] text-neutral-500">
+                            exp: {r.expected.toFixed(0)}
+                          </span>
+                          <span className="font-mono text-xs text-white">
+                            {r.actual}
+                          </span>
+                          <span
+                            className={`font-mono text-[10px] ${
+                              deviation > 0
+                                ? "text-green-400"
+                                : deviation < 0
+                                  ? "text-red-400"
+                                  : "text-neutral-500"
+                            }`}
+                          >
+                            {deviation > 0 ? "+" : ""}
+                            {deviation.toFixed(0)}%
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex gap-0.5">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#2A2A2A]">
+                          <div
+                            className="h-full rounded-full bg-amber-500/40 transition-all"
+                            style={{
+                              width: `${(r.expected / maxActual) * 100}%`,
+                            }}
+                          />
+                        </div>
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#2A2A2A]">
+                          <div
+                            className={`h-full rounded-full transition-all ${RARITY_BAR_COLORS[r.rarity] || "bg-neutral-500"}`}
+                            style={{
+                              width: `${(r.actual / maxActual) * 100}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="mt-2 flex items-center gap-4 text-[10px] text-neutral-600">
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-1.5 w-4 rounded-full bg-amber-500/40" />
+                    Expected
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-1.5 w-4 rounded-full bg-neutral-500" />
+                    Actual
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="py-4 text-center text-xs text-neutral-500">
+                Click a roll button to simulate drops and see statistical results.
+              </p>
+            )}
+          </div>
+
+          {/* Loot Table Summary */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            <h3 className="mb-3 text-sm font-medium text-neutral-300">
+              Loot Table Summary
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-[#2A2A2A] text-neutral-500">
+                    <th className="pb-2 pr-4 font-medium">Item</th>
+                    <th className="pb-2 pr-4 font-medium">Drop %</th>
+                    <th className="pb-2 pr-4 font-medium">Rarity</th>
+                    <th className="pb-2 font-medium">1-in-X</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentItems
+                    .slice()
+                    .sort((a, b) => b.dropChance - a.dropChance)
+                    .map((item) => {
+                      const normalizedChance =
+                        totalChance > 0
+                          ? (item.dropChance / totalChance) * 100
+                          : 0;
+                      const oneInX =
+                        normalizedChance > 0
+                          ? Math.round(100 / normalizedChance)
+                          : Infinity;
+                      return (
+                        <tr
+                          key={item.id}
+                          className="border-b border-[#2A2A2A]/50 last:border-0"
+                        >
+                          <td className="py-2 pr-4 text-neutral-300">
+                            {item.name}
+                          </td>
+                          <td className="py-2 pr-4 font-mono text-amber-400">
+                            {normalizedChance.toFixed(1)}%
+                          </td>
+                          <td
+                            className={`py-2 pr-4 capitalize ${RARITY_COLORS[item.rarity] || "text-neutral-400"}`}
+                          >
+                            {item.rarity}
+                          </td>
+                          <td className="py-2 font-mono text-neutral-500">
+                            {isFinite(oneInX) ? `1 in ${oneInX}` : "--"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ──
 
 export default function BalanceCalculatorPage() {
@@ -2593,6 +3263,7 @@ export default function BalanceCalculatorPage() {
         {activeTab === "economy" && <EconomyBalance />}
         {activeTab === "economy-designer" && <EconomyDesigner />}
         {activeTab === "difficulty" && <DifficultyAnalyzer />}
+        {activeTab === "loot" && <LootTableDesigner />}
       </div>
     </div>
   );
