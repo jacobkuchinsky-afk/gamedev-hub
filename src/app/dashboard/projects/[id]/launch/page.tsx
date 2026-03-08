@@ -37,6 +37,8 @@ import {
   Music,
   Gamepad2,
   Share2,
+  DollarSign,
+  MousePointerClick,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -332,6 +334,78 @@ function AccessibilityResults({ text }: { text: string }) {
   );
 }
 
+function UxReviewResults({ text }: { text: string }) {
+  const sections: { category: string; rating: "good" | "needs_work" | "critical"; lines: string[] }[] = [];
+  let current: { category: string; rating: "good" | "needs_work" | "critical"; lines: string[] } | null = null;
+
+  for (const line of text.split("\n")) {
+    const ratingMatch = line.match(/\*\*(.+?)\*\*[:\s\-–]*(Good|Needs\s*Work|Critical)/i)
+      || line.match(/^#{1,4}\s*(.+?)[:\s\-–]+(Good|Needs\s*Work|Critical)/i)
+      || line.match(/^(.+?)[:\s\-–]+(Good|Needs\s*Work|Critical)\s*$/i);
+
+    if (ratingMatch) {
+      if (current) sections.push(current);
+      const raw = ratingMatch[2].toLowerCase().replace(/\s+/g, "_");
+      const rating = raw === "good" ? "good" : raw.startsWith("needs") ? "needs_work" : "critical";
+      current = {
+        category: ratingMatch[1].replace(/[*#]/g, "").trim(),
+        rating,
+        lines: [],
+      };
+    } else if (current && line.trim()) {
+      current.lines.push(line.replace(/^[-*]\s*/, "").trim());
+    }
+  }
+  if (current) sections.push(current);
+
+  if (sections.length === 0) {
+    return (
+      <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">
+        {text}
+      </div>
+    );
+  }
+
+  const ratingConfig = {
+    good: { icon: CheckCircle2, color: "#10B981", bg: "bg-[#10B981]/10", label: "Good" },
+    needs_work: { icon: TriangleAlert, color: "#F59E0B", bg: "bg-[#F59E0B]/10", label: "Needs Work" },
+    critical: { icon: XCircle, color: "#EF4444", bg: "bg-[#EF4444]/10", label: "Critical" },
+  };
+
+  return (
+    <div className="space-y-3">
+      {sections.map((s) => {
+        const cfg = ratingConfig[s.rating];
+        const Icon = cfg.icon;
+        return (
+          <div key={s.category} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4">
+            <div className="flex items-center gap-3">
+              <Icon className="h-5 w-5 shrink-0" style={{ color: cfg.color }} />
+              <span className="flex-1 text-sm font-semibold text-[#F5F5F5]">{s.category}</span>
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${cfg.bg}`}
+                style={{ color: cfg.color }}
+              >
+                {cfg.label}
+              </span>
+            </div>
+            {s.lines.length > 0 && (
+              <ul className="mt-2.5 space-y-1.5 pl-8">
+                {s.lines.map((l, i) => (
+                  <li key={i} className="text-sm leading-relaxed text-[#9CA3AF]">
+                    <span className="mr-1.5 text-[#4B5563]">&bull;</span>
+                    {l}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function LaunchChecklistPage() {
   const params = useParams();
   const router = useRouter();
@@ -366,6 +440,12 @@ export default function LaunchChecklistPage() {
   const [aiSocial, setAiSocial] = useState<string>("");
   const [aiSocialLoading, setAiSocialLoading] = useState(false);
   const [aiSocialOpen, setAiSocialOpen] = useState(false);
+  const [aiMonetization, setAiMonetization] = useState<string>("");
+  const [aiMonetizationLoading, setAiMonetizationLoading] = useState(false);
+  const [aiMonetizationOpen, setAiMonetizationOpen] = useState(false);
+  const [aiUxReview, setAiUxReview] = useState<string>("");
+  const [aiUxReviewLoading, setAiUxReviewLoading] = useState(false);
+  const [aiUxReviewOpen, setAiUxReviewOpen] = useState(false);
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -652,6 +732,68 @@ export default function LaunchChecklistPage() {
     }
   }, [project, aiSocialLoading]);
 
+  const generateMonetizationAdvice = useCallback(async () => {
+    if (!project || aiMonetizationLoading) return;
+    setAiMonetizationLoading(true);
+    setAiMonetizationOpen(true);
+    setAiMonetization("");
+    try {
+      const prompt = `Advise on monetization strategy for '${project.name}', a ${project.genre || "unknown genre"} indie game. Consider: pricing (free, $5-$20, $20+), platform (Steam, itch.io, mobile stores), monetization model (premium, F2P with IAP, DLC, subscription). Recommend the best approach with reasoning. Also suggest: price point, launch discount, wishlist strategy, and early access considerations. Be practical and specific. Format each section with bold headers like **Section Name**`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "Could not generate monetization advice. Please try again.";
+      setAiMonetization(content);
+    } catch {
+      setAiMonetization("Failed to generate monetization advice. Check your API key and try again.");
+    } finally {
+      setAiMonetizationLoading(false);
+    }
+  }, [project, aiMonetizationLoading]);
+
+  const generateUxReview = useCallback(async () => {
+    if (!project || aiUxReviewLoading) return;
+    setAiUxReviewLoading(true);
+    setAiUxReviewOpen(true);
+    setAiUxReview("");
+    try {
+      const prompt = `Review the UX (user experience) of a ${project.genre || "unknown genre"} game called '${project.name}'. Check for: onboarding clarity, control intuitiveness, UI information density, feedback quality (visual/audio), menu navigation, loading times perception, and first-time user experience. Rate each area Good/Needs Work/Critical and give one specific suggestion per area. Format each area as: **Area Name**: Rating\n- suggestion`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "Could not generate UX review. Please try again.";
+      setAiUxReview(content);
+    } catch {
+      setAiUxReview("Failed to generate UX review. Check your API key and try again.");
+    } finally {
+      setAiUxReviewLoading(false);
+    }
+  }, [project, aiUxReviewLoading]);
+
   const copyToClipboard = useCallback((text: string, sectionTitle: string) => {
     navigator.clipboard.writeText(text);
     setCopiedSection(sectionTitle);
@@ -850,6 +992,30 @@ export default function LaunchChecklistPage() {
                 <Share2 className="h-3.5 w-3.5" />
               )}
               {aiSocialLoading ? "Generating..." : "AI Social Posts"}
+            </button>
+            <button
+              onClick={generateMonetizationAdvice}
+              disabled={aiMonetizationLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/40 bg-[#F59E0B]/10 px-3 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20 disabled:opacity-50"
+            >
+              {aiMonetizationLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <DollarSign className="h-3.5 w-3.5" />
+              )}
+              {aiMonetizationLoading ? "Analyzing..." : "AI Monetization"}
+            </button>
+            <button
+              onClick={generateUxReview}
+              disabled={aiUxReviewLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#A855F7]/40 bg-[#A855F7]/10 px-3 py-2 text-sm font-medium text-[#A855F7] transition-colors hover:bg-[#A855F7]/20 disabled:opacity-50"
+            >
+              {aiUxReviewLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <MousePointerClick className="h-3.5 w-3.5" />
+              )}
+              {aiUxReviewLoading ? "Reviewing..." : "AI UX Review"}
             </button>
             <button
               onClick={handleReset}
@@ -1262,6 +1428,99 @@ export default function LaunchChecklistPage() {
                   );
                 })}
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AI Monetization Advisor Panel */}
+      {aiMonetizationOpen && (
+        <div className="rounded-xl border border-[#F59E0B]/30 bg-[#1A1A1A] overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3">
+            <div className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-[#F59E0B]" />
+              <h3 className="text-sm font-semibold text-[#F59E0B]">AI Monetization Advisor</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              {!aiMonetizationLoading && aiMonetization && (
+                <button
+                  onClick={() => copyToClipboard(aiMonetization, "__monetization_all__")}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#9CA3AF] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                >
+                  {copiedSection === "__monetization_all__" ? (
+                    <Check className="h-3 w-3 text-[#10B981]" />
+                  ) : (
+                    <Copy className="h-3 w-3" />
+                  )}
+                  {copiedSection === "__monetization_all__" ? "Copied!" : "Copy All"}
+                </button>
+              )}
+              <button
+                onClick={() => setAiMonetizationOpen(false)}
+                className="rounded-md p-1 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          <div className="px-5 py-4">
+            {aiMonetizationLoading ? (
+              <div className="flex items-center gap-3 py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-[#F59E0B]" />
+                <p className="text-sm text-[#9CA3AF]">Analyzing monetization strategies for {project.name}...</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {parseMarketingSections(aiMonetization).map((section) => (
+                  <div key={section.title} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-[#F59E0B]">{section.title}</h4>
+                      <button
+                        onClick={() => copyToClipboard(section.content, `mon_${section.title}`)}
+                        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                      >
+                        {copiedSection === `mon_${section.title}` ? (
+                          <Check className="h-3 w-3 text-[#10B981]" />
+                        ) : (
+                          <Copy className="h-3 w-3" />
+                        )}
+                        {copiedSection === `mon_${section.title}` ? "Copied!" : "Copy"}
+                      </button>
+                    </div>
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">
+                      {section.content}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AI UX Review Panel */}
+      {aiUxReviewOpen && (
+        <div className="rounded-xl border border-[#A855F7]/30 bg-[#1A1A1A] overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3">
+            <div className="flex items-center gap-2">
+              <MousePointerClick className="h-4 w-4 text-[#A855F7]" />
+              <h3 className="text-sm font-semibold text-[#A855F7]">AI UX Review</h3>
+            </div>
+            <button
+              onClick={() => setAiUxReviewOpen(false)}
+              className="rounded-md p-1 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="px-5 py-4">
+            {aiUxReviewLoading ? (
+              <div className="flex items-center gap-3 py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-[#A855F7]" />
+                <p className="text-sm text-[#9CA3AF]">Running UX review for {project.name}...</p>
+              </div>
+            ) : (
+              <UxReviewResults text={aiUxReview} />
             )}
           </div>
         </div>
