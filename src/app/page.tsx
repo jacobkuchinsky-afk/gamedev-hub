@@ -244,13 +244,13 @@ export default function LandingPage() {
           <div className="mb-14 text-center">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#F59E0B]/20 bg-[#F59E0B]/[0.06] px-4 py-1.5 text-sm font-medium text-[#F59E0B]">
               <Sparkles className="h-3.5 w-3.5" />
-              24 AI features built in
+              200 AI features
             </div>
             <h2 className="text-3xl font-bold md:text-4xl">
               <span className="text-[#F59E0B]">AI-Powered</span> Game Development
             </h2>
             <p className="mx-auto mt-4 max-w-2xl text-[#9CA3AF]">
-              24 AI features built into every tool. Generate ideas, write documentation, design levels, analyze balance, and more.
+              200 AI features built into every tool. Generate ideas, write documentation, design levels, analyze balance, and more.
             </p>
           </div>
 
@@ -285,7 +285,7 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-5xl px-6">
           <div className="grid gap-8 sm:grid-cols-3">
             {[
-              { value: "100+", label: "AI Features", desc: "Built into every tool and workflow" },
+              { value: "200+", label: "AI Features", desc: "Built into every tool and workflow" },
               { value: "23", label: "Game Dev Tools", desc: "Sprites, sound, dialogue, and more" },
               { value: "10+", label: "Project Templates", desc: "Hit the ground running instantly" },
             ].map((stat) => (

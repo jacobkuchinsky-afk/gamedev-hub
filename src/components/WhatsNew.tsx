@@ -3,12 +3,12 @@
 import { useState, useEffect } from "react";
 import { X, Sparkles, Globe, Timer, Download, Keyboard, BarChart3, Bug } from "lucide-react";
 
-const CURRENT_VERSION = "1.2.0";
+const CURRENT_VERSION = "2.0.0";
 const STORAGE_KEY = "gameforge_changelog_version";
 
 const HIGHLIGHTS = [
-  { icon: Sparkles, text: "24 AI-powered features across every tool" },
-  { icon: Globe, text: "World Builder for creating game lore" },
+  { icon: Sparkles, text: "200+ AI features across every tool" },
+  { icon: Globe, text: "23 game dev tools" },
   { icon: BarChart3, text: "Sprint tracking and productivity analytics" },
   { icon: Timer, text: "Focus Timer / Pomodoro in the header" },
   { icon: Download, text: "Full project export (JSON + Markdown)" },
