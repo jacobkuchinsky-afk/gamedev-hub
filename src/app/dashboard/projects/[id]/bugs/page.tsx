@@ -14,6 +14,8 @@ import {
   Zap,
   Sparkles,
   Loader2,
+  MessageSquare,
+  Send,
 } from "lucide-react";
 import {
   getProject,
@@ -23,6 +25,7 @@ import {
   getSeverityColor,
   type Project,
   type Bug,
+  type BugComment,
 } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
 
@@ -96,6 +99,8 @@ export default function BugTrackerPage() {
   const [aiSuggestingPriority, setAiSuggestingPriority] = useState(false);
   const [aiSuggestFlash, setAiSuggestFlash] = useState(false);
   const [aiImprovingDesc, setAiImprovingDesc] = useState(false);
+
+  const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
 
   const reload = useCallback(() => {
     setBugsState(getBugs(projectId));
@@ -254,6 +259,22 @@ Be concise and professional. Fill in any missing sections based on the title and
     reload();
   };
 
+  const addComment = (bugId: string) => {
+    const text = commentInputs[bugId]?.trim();
+    if (!text) return;
+    const bug = bugs.find((b) => b.id === bugId);
+    const existing: BugComment[] = bug?.comments || [];
+    const newComment: BugComment = {
+      id: `bc_${Date.now()}`,
+      text,
+      author: "JacobK",
+      timestamp: new Date().toISOString(),
+    };
+    updateBug(bugId, { comments: [...existing, newComment] });
+    setCommentInputs((p) => ({ ...p, [bugId]: "" }));
+    reload();
+  };
+
   const openBugs = useMemo(() => bugs.filter((b) => b.status !== "closed"), [bugs]);
   const closedBugs = useMemo(() => bugs.filter((b) => b.status === "closed"), [bugs]);
 
@@ -356,6 +377,12 @@ Be concise and professional. Fill in any missing sections based on the title and
         >
           {bug.status}
         </span>
+        {bug.comments && bug.comments.length > 0 && (
+          <span className="flex shrink-0 items-center gap-1 rounded-md bg-[#2A2A2A] px-2 py-0.5 text-xs font-medium text-[#9CA3AF]">
+            <MessageSquare className="h-3 w-3" />
+            {bug.comments.length}
+          </span>
+        )}
       </div>
 
       {expandedBug === bug.id && (
@@ -402,6 +429,48 @@ Be concise and professional. Fill in any missing sections based on the title and
               )}
             </div>
           )}
+          {/* Comment Thread */}
+          <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 space-y-3">
+            <div className="flex items-center gap-1.5">
+              <MessageSquare className="h-3.5 w-3.5 text-[#F59E0B]" />
+              <span className="text-xs font-medium text-[#9CA3AF]">
+                Discussion
+                {bug.comments && bug.comments.length > 0 && (
+                  <span className="ml-1 text-[#6B7280]">({bug.comments.length})</span>
+                )}
+              </span>
+            </div>
+            {bug.comments && bug.comments.length > 0 && (
+              <div className="space-y-2">
+                {bug.comments.map((comment) => (
+                  <div key={comment.id} className="rounded-md bg-[#1A1A1A] px-3 py-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] font-semibold text-[#F59E0B]">{comment.author}</span>
+                      <span className="text-[10px] text-[#6B7280]">{timeAgo(comment.timestamp)}</span>
+                    </div>
+                    <p className="text-xs leading-relaxed text-[#D1D5DB]">{comment.text}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                value={commentInputs[bug.id] || ""}
+                onChange={(e) => setCommentInputs((p) => ({ ...p, [bug.id]: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === "Enter") addComment(bug.id); }}
+                placeholder="Add a comment..."
+                className="min-w-0 flex-1 rounded-md border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-xs text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/40"
+              />
+              <button
+                onClick={() => addComment(bug.id)}
+                disabled={!commentInputs[bug.id]?.trim()}
+                className="flex shrink-0 items-center gap-1 rounded-md bg-[#F59E0B] px-2.5 py-1.5 text-xs font-medium text-black transition-colors hover:bg-[#F59E0B]/90 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Send className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
           <div>
             <p className="text-xs font-medium text-[#6B7280] mb-2">
               Change Status

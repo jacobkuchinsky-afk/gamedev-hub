@@ -35,6 +35,7 @@ import {
   type Task,
   type TaskTag,
   type Sprint,
+  type Subtask,
 } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
 
@@ -107,6 +108,8 @@ export default function TaskBoardPage() {
   const [csGoal, setCsGoal] = useState("");
   const [csStart, setCsStart] = useState("");
   const [csEnd, setCsEnd] = useState("");
+
+  const [subtaskInputs, setSubtaskInputs] = useState<Record<string, string>>({});
 
   const reload = useCallback(() => {
     setTasks(getTasks(projectId));
@@ -272,6 +275,31 @@ export default function TaskBoardPage() {
       delete next[taskId];
       return next;
     });
+    reload();
+  };
+
+  const toggleSubtask = (taskId: string, subtaskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task?.subtasks) return;
+    const updated = task.subtasks.map((st) =>
+      st.id === subtaskId ? { ...st, done: !st.done } : st
+    );
+    updateTask(taskId, { subtasks: updated });
+    reload();
+  };
+
+  const addSubtask = (taskId: string) => {
+    const text = subtaskInputs[taskId]?.trim();
+    if (!text) return;
+    const task = tasks.find((t) => t.id === taskId);
+    const existing: Subtask[] = task?.subtasks || [];
+    const newSubtask: Subtask = {
+      id: `st_${Date.now()}`,
+      title: text,
+      done: false,
+    };
+    updateTask(taskId, { subtasks: [...existing, newSubtask] });
+    setSubtaskInputs((p) => ({ ...p, [taskId]: "" }));
     reload();
   };
 
@@ -1309,6 +1337,17 @@ export default function TaskBoardPage() {
                                   {task.assignee}
                                 </span>
                               )}
+                              {task.subtasks && task.subtasks.length > 0 && (() => {
+                                const done = task.subtasks.filter((s) => s.done).length;
+                                const total = task.subtasks.length;
+                                const allDone = done === total;
+                                return (
+                                  <span className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${allDone ? "bg-[#10B981]/15 text-[#10B981]" : "bg-[#2A2A2A] text-[#9CA3AF]"}`}>
+                                    {allDone && <Check className="h-2.5 w-2.5" />}
+                                    {done}/{total} subtasks
+                                  </span>
+                                );
+                              })()}
                             </div>
                           </div>
 
@@ -1529,6 +1568,69 @@ export default function TaskBoardPage() {
                                   </div>
                                 )}
                               </div>
+                              {/* Subtasks Checklist */}
+                              {(task.subtasks && task.subtasks.length > 0 || expandedTask === task.id) && (
+                                <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-medium text-[#9CA3AF]">
+                                      Subtasks
+                                      {task.subtasks && task.subtasks.length > 0 && (
+                                        <span className="ml-1.5 text-[#6B7280]">
+                                          ({task.subtasks.filter((s) => s.done).length}/{task.subtasks.length})
+                                        </span>
+                                      )}
+                                    </span>
+                                    {task.subtasks && task.subtasks.length > 0 && task.subtasks.every((s) => s.done) && (
+                                      <span className="flex items-center gap-1 text-[10px] font-semibold text-[#10B981]">
+                                        <Check className="h-3 w-3" />
+                                        All done
+                                      </span>
+                                    )}
+                                  </div>
+                                  {task.subtasks && task.subtasks.length > 0 && (
+                                    <>
+                                      <div className="h-1 overflow-hidden rounded-full bg-[#2A2A2A]">
+                                        <div
+                                          className="h-full rounded-full bg-[#10B981] transition-all"
+                                          style={{ width: `${(task.subtasks.filter((s) => s.done).length / task.subtasks.length) * 100}%` }}
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        {task.subtasks.map((st) => (
+                                          <button
+                                            key={st.id}
+                                            onClick={() => toggleSubtask(task.id, st.id)}
+                                            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-[#1A1A1A]"
+                                          >
+                                            <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${st.done ? "border-[#10B981] bg-[#10B981]" : "border-[#3A3A3A]"}`}>
+                                              {st.done && <Check className="h-2.5 w-2.5 text-black" />}
+                                            </div>
+                                            <span className={`text-xs ${st.done ? "text-[#6B7280] line-through" : "text-[#D1D5DB]"}`}>
+                                              {st.title}
+                                            </span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </>
+                                  )}
+                                  <div className="flex gap-1.5 pt-1">
+                                    <input
+                                      type="text"
+                                      value={subtaskInputs[task.id] || ""}
+                                      onChange={(e) => setSubtaskInputs((p) => ({ ...p, [task.id]: e.target.value }))}
+                                      onKeyDown={(e) => { if (e.key === "Enter") addSubtask(task.id); }}
+                                      placeholder="Add subtask..."
+                                      className="min-w-0 flex-1 rounded-md border border-[#2A2A2A] bg-[#1A1A1A] px-2.5 py-1.5 text-xs text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/40"
+                                    />
+                                    <button
+                                      onClick={() => addSubtask(task.id)}
+                                      className="shrink-0 rounded-md border border-[#2A2A2A] px-2 py-1.5 text-[#6B7280] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                               <div className="flex items-center gap-3 text-xs text-[#6B7280]">
                                 <span>Sprint: {task.sprint}</span>
                                 {task.assignee && (

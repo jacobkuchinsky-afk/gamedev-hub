@@ -26,6 +26,12 @@ export const TASK_TAG_COLORS: Record<TaskTag, string> = {
 
 export const ALL_TASK_TAGS: TaskTag[] = ["UI", "Gameplay", "Art", "Audio", "Backend", "Polish", "Bugfix", "Feature", "Optimization"];
 
+export interface Subtask {
+  id: string;
+  title: string;
+  done: boolean;
+}
+
 export interface Task {
   id: string;
   projectId: string;
@@ -39,7 +45,15 @@ export interface Task {
   blockedBy?: string;
   estimatedHours?: number;
   loggedHours?: number;
+  subtasks?: Subtask[];
   created_at: string;
+}
+
+export interface BugComment {
+  id: string;
+  text: string;
+  author: string;
+  timestamp: string;
 }
 
 export interface Bug {
@@ -53,6 +67,7 @@ export interface Bug {
   reproSteps: string;
   expectedBehavior?: string;
   actualBehavior?: string;
+  comments?: BugComment[];
   created_at: string;
 }
 
@@ -122,6 +137,12 @@ const SEED_TASKS: Task[] = [
     tags: ["Art", "Bugfix"],
     estimatedHours: 6,
     loggedHours: 3.5,
+    subtasks: [
+      { id: "st_001", title: "Profile current particle system", done: true },
+      { id: "st_002", title: "Write replacement shader", done: true },
+      { id: "st_003", title: "Test on low-end hardware", done: false },
+      { id: "st_004", title: "Update shield color parameters", done: false },
+    ],
     created_at: "2026-03-05T10:00:00Z",
   },
   {
@@ -164,6 +185,13 @@ const SEED_TASKS: Task[] = [
     tags: ["UI", "Gameplay", "Feature"],
     estimatedHours: 12,
     loggedHours: 0,
+    subtasks: [
+      { id: "st_010", title: "Design tutorial flow document", done: false },
+      { id: "st_011", title: "Movement tutorial step", done: false },
+      { id: "st_012", title: "Scanning tutorial step", done: false },
+      { id: "st_013", title: "Docking tutorial step", done: false },
+      { id: "st_014", title: "Combat basics tutorial step", done: false },
+    ],
     created_at: "2026-03-06T09:00:00Z",
   },
   {
@@ -220,6 +248,14 @@ const SEED_TASKS: Task[] = [
     tags: ["Gameplay", "Feature", "Backend"],
     estimatedHours: 20,
     loggedHours: 12,
+    subtasks: [
+      { id: "st_020", title: "Resource data model", done: true },
+      { id: "st_021", title: "Buy/sell UI", done: true },
+      { id: "st_022", title: "Dynamic pricing algorithm", done: true },
+      { id: "st_023", title: "Trade history log", done: false },
+      { id: "st_024", title: "Profit/loss indicators", done: false },
+      { id: "st_025", title: "Station inventory refresh cycle", done: false },
+    ],
     created_at: "2026-03-03T08:00:00Z",
   },
   {
@@ -262,6 +298,10 @@ const SEED_BUGS: Bug[] = [
     reproSteps: "1. Approach station at max speed\n2. Boost into docking bay entrance\n3. Player passes through wall",
     expectedBehavior: "Player should collide with station walls and be stopped or deflected regardless of speed.",
     actualBehavior: "Player passes through station geometry entirely and ends up inside or behind the station mesh.",
+    comments: [
+      { id: "bc_001", text: "Confirmed. This is a classic CCD issue — we need continuous collision detection for high-velocity objects.", author: "JacobK", timestamp: "2026-03-06T15:30:00Z" },
+      { id: "bc_002", text: "Happens more frequently with the boost upgrade equipped. Speed threshold seems to be around 200 units/s.", author: "AlexC", timestamp: "2026-03-06T16:15:00Z" },
+    ],
     created_at: "2026-03-06T15:00:00Z",
   },
   {
@@ -275,6 +315,11 @@ const SEED_BUGS: Bug[] = [
     reproSteps: "1. Open station storage\n2. Click transfer rapidly on any item\n3. Item count increases in both inventories",
     expectedBehavior: "Item should transfer from one inventory to the other with correct counts on both sides.",
     actualBehavior: "Item count increases in both inventories simultaneously, creating duplicates out of thin air.",
+    comments: [
+      { id: "bc_003", text: "Adding a debounce on the transfer button click should fix this. 200ms cooldown.", author: "JacobK", timestamp: "2026-03-05T12:00:00Z" },
+      { id: "bc_004", text: "Also need to lock the inventory state during transfer to prevent race conditions.", author: "JacobK", timestamp: "2026-03-05T14:30:00Z" },
+      { id: "bc_005", text: "Fix is in Sprint 14 branch. Need to test with rapid clicking macro before closing.", author: "JacobK", timestamp: "2026-03-06T09:00:00Z" },
+    ],
     created_at: "2026-03-05T11:00:00Z",
   },
   {
