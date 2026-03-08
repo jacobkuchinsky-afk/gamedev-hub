@@ -442,6 +442,10 @@ export default function DashboardPage() {
   const [aiWeeklySummary, setAiWeeklySummary] = useState("");
   const [aiWeeklyLoading, setAiWeeklyLoading] = useState(false);
 
+  const [tipsCategory, setTipsCategory] = useState("motivation");
+  const [tipsResult, setTipsResult] = useState<Record<string, string>>({});
+  const [tipsLoading, setTipsLoading] = useState(false);
+
   const [badgeStats, setBadgeStats] = useState<ReturnType<typeof getGamificationStats>>({ projects: 0, bugs: 0, devlogs: 0, completedSprints: 0, toolsUsed: 0, aiUses: 0 });
   const [streak, setStreak] = useState<StreakData>({ lastActiveDate: "", currentStreak: 0, longestStreak: 0 });
 
@@ -627,6 +631,69 @@ export default function DashboardPage() {
       setAiWeeklySummary("Failed to generate summary.");
     } finally {
       setAiWeeklyLoading(false);
+    }
+  };
+
+  const tipsMap: Record<string, string> = {
+    motivation: "Give a game dev motivational quote. 1 sentence.",
+    project_idea: "Suggest a quick game project idea I could build this weekend. 1 sentence.",
+    learning: "Suggest one game dev skill to learn today. 1 sentence.",
+    productivity: "Give a productivity tip for game developers. 1 sentence.",
+    creative_block: "I'm stuck on game dev. Suggest a creative exercise. 1 sentence.",
+    bug_hunting: "Give a tip for finding game bugs efficiently. 1 sentence.",
+    performance: "Give a game performance optimization tip. 1 sentence.",
+    art_direction: "Give a pixel art/game art tip. 1 sentence.",
+    sound_design: "Give a game sound design tip. 1 sentence.",
+    marketing: "Give an indie game marketing tip. 1 sentence.",
+    community: "Give a tip for building a game dev community. 1 sentence.",
+    testing: "Suggest a testing strategy for game devs. 1 sentence.",
+    time_mgmt: "Give a time management tip for solo game devs. 1 sentence.",
+    code_quality: "Give a code quality tip for game programming. 1 sentence.",
+    design_pattern: "Suggest a game design pattern to learn. 1 sentence.",
+    genre_insight: "Give an interesting insight about game genres. 1 sentence.",
+    player_psych: "Share a player psychology insight for game design. 1 sentence.",
+    monetization: "Give a monetization insight for indie games. 1 sentence.",
+    polish: "Give a game polish tip. 1 sentence.",
+    launch: "Give a tip for launching an indie game. 1 sentence.",
+  };
+  const tipsLabels: Record<string, string> = {
+    motivation: "Daily Motivation",
+    project_idea: "Project Idea",
+    learning: "Learning Suggestion",
+    productivity: "Productivity Tip",
+    creative_block: "Creative Block Breaker",
+    bug_hunting: "Bug Hunting Tip",
+    performance: "Performance Tip",
+    art_direction: "Art Direction Tip",
+    sound_design: "Sound Design Tip",
+    marketing: "Marketing Tip",
+    community: "Community Building",
+    testing: "Testing Strategy",
+    time_mgmt: "Time Management",
+    code_quality: "Code Quality",
+    design_pattern: "Design Pattern",
+    genre_insight: "Genre Insight",
+    player_psych: "Player Psychology",
+    monetization: "Monetization Insight",
+    polish: "Polish Tip",
+    launch: "Launch Tip",
+  };
+  const handleGetTip = async () => {
+    setTipsLoading(true);
+    try {
+      const prompt = tipsMap[tipsCategory] || tipsMap.motivation;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: prompt }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setTipsResult((prev) => ({ ...prev, [tipsCategory]: content || "No tip available." }));
+    } catch {
+      setTipsResult((prev) => ({ ...prev, [tipsCategory]: "Failed to generate tip." }));
+    } finally {
+      setTipsLoading(false);
     }
   };
 
@@ -2714,6 +2781,62 @@ export default function DashboardPage() {
         {aiWeeklySummary && !aiWeeklyLoading && (
           <div className="rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] p-4">
             <p className="text-sm leading-relaxed text-[#D1D5DB]">{aiWeeklySummary}</p>
+          </div>
+        )}
+      </div>
+
+      {/* AI Tips Hub — 20 AI micro-features */}
+      <div className="rounded-xl border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-5 py-4">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+            <Lightbulb className="h-4 w-4 text-[#F59E0B]" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-[#F5F5F5]">AI Tips Hub</h3>
+            <p className="text-[10px] text-[#6B7280]">20 AI-powered tips across every game dev topic</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={tipsCategory}
+            onChange={(e) => setTipsCategory(e.target.value)}
+            className="flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-xs text-[#D1D5DB] outline-none focus:border-[#F59E0B]/50"
+          >
+            {Object.entries(tipsLabels).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+          <button
+            onClick={handleGetTip}
+            disabled={tipsLoading}
+            className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-xs font-semibold text-black transition-colors hover:bg-[#F59E0B]/90 disabled:opacity-50"
+          >
+            {tipsLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            Get Tip
+          </button>
+        </div>
+        {tipsResult[tipsCategory] && !tipsLoading && (
+          <div className="mt-3 rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] p-3">
+            <p className="text-sm leading-relaxed text-[#D1D5DB]">{tipsResult[tipsCategory]}</p>
+          </div>
+        )}
+        {tipsLoading && (
+          <div className="mt-3 flex items-center gap-2 py-2">
+            <Loader2 className="h-4 w-4 animate-spin text-[#F59E0B]" />
+            <span className="text-xs text-[#9CA3AF]">Generating {tipsLabels[tipsCategory]}...</span>
+          </div>
+        )}
+        {Object.keys(tipsResult).length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {Object.keys(tipsResult).map((key) => (
+              <button
+                key={key}
+                onClick={() => setTipsCategory(key)}
+                className={`rounded-md px-2 py-0.5 text-[10px] transition-colors ${tipsCategory === key ? "bg-[#F59E0B]/20 text-[#F59E0B] border border-[#F59E0B]/30" : "bg-[#1A1A1A] text-[#6B7280] border border-[#2A2A2A] hover:text-[#9CA3AF]"}`}
+              >
+                {tipsLabels[key]}
+              </button>
+            ))}
           </div>
         )}
       </div>
