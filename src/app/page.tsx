@@ -175,8 +175,40 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* How It Works */}
+      <section className="border-t border-[#2A2A2A] py-24">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="mb-16 text-center">
+            <h2 className="text-3xl font-bold md:text-4xl">
+              Get Started in <span className="text-[#F59E0B]">Minutes</span>
+            </h2>
+            <p className="mt-4 text-[#9CA3AF]">
+              Three steps. Zero friction. Start building your game today.
+            </p>
+          </div>
+
+          <div className="relative mx-auto grid max-w-3xl gap-12 md:grid-cols-3 md:gap-8">
+            <div className="absolute left-[calc(16.67%-0.5px)] right-[calc(16.67%-0.5px)] top-7 hidden h-px bg-gradient-to-r from-[#F59E0B]/40 via-[#F59E0B]/20 to-[#F59E0B]/40 md:block" />
+
+            {[
+              { step: "1", title: "Sign Up", desc: "Create your free account in seconds. No credit card, no strings." },
+              { step: "2", title: "Create a Project", desc: "Name your game, pick a genre, and your workspace is ready to go." },
+              { step: "3", title: "Start Building", desc: "Use tools, track progress, write your GDD, and ship your game." },
+            ].map((item) => (
+              <div key={item.step} className="relative flex flex-col items-center text-center">
+                <div className="relative z-10 mb-5 flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#F59E0B] bg-[#0F0F0F] text-xl font-bold text-[#F59E0B]">
+                  {item.step}
+                </div>
+                <h3 className="mb-2 text-lg font-bold">{item.title}</h3>
+                <p className="text-sm leading-relaxed text-[#9CA3AF]">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Social Proof */}
-      <section className="border-t border-[#2A2A2A] py-20">
+      <section className="border-t border-[#2A2A2A] bg-[#0A0A0A] py-20">
         <div className="mx-auto max-w-6xl px-6 text-center">
           <div className="mx-auto max-w-lg">
             <BookOpen className="mx-auto mb-4 h-8 w-8 text-[#F59E0B]" />
@@ -190,46 +222,60 @@ export default function LandingPage() {
       </section>
 
       {/* CTA */}
-      <section className="border-t border-[#2A2A2A] bg-[#0A0A0A] py-20">
+      <section className="border-t border-[#2A2A2A] py-24">
         <div className="mx-auto max-w-6xl px-6 text-center">
           <h2 className="text-3xl font-bold md:text-4xl">Ready to forge your next game?</h2>
-          <p className="mt-4 text-[#9CA3AF]">
+          <p className="mt-4 text-lg text-[#9CA3AF]">
             Join game developers who ship faster with GameForge.
           </p>
-          <Link
-            href="/signup"
-            className="mt-8 inline-flex items-center gap-2 rounded-xl bg-[#F59E0B] px-8 py-3.5 text-base font-bold text-[#0F0F0F] shadow-lg shadow-[#F59E0B]/20 transition-all hover:bg-[#D97706]"
-          >
-            Get Started Free
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <Link
+              href="/signup"
+              className="group flex items-center gap-2 rounded-xl bg-[#F59E0B] px-8 py-3.5 text-base font-bold text-[#0F0F0F] shadow-lg shadow-[#F59E0B]/20 transition-all hover:bg-[#D97706] hover:shadow-[#F59E0B]/30"
+            >
+              Get Started Free
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </Link>
+            <Link
+              href="#tools"
+              className="flex items-center gap-2 rounded-xl border border-[#2A2A2A] px-8 py-3.5 text-base font-medium text-[#F5F5F5] transition-all hover:border-[#F59E0B]/40 hover:bg-[#1A1A1A]"
+            >
+              See Tools
+            </Link>
+          </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-[#2A2A2A] py-12">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 px-6 md:flex-row">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
-              <Gamepad2 className="h-4 w-4 text-[#F59E0B]" />
+      <footer className="border-t border-[#2A2A2A] bg-[#0A0A0A] py-12">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="flex flex-col items-center justify-between gap-8 md:flex-row">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                <Gamepad2 className="h-4 w-4 text-[#F59E0B]" />
+              </div>
+              <span className="font-bold">GameForge</span>
             </div>
-            <span className="font-bold">GameForge</span>
+            <div className="flex flex-wrap justify-center gap-8 text-sm text-[#9CA3AF]">
+              <Link href="/login" className="transition-colors hover:text-[#F59E0B]">
+                Sign In
+              </Link>
+              <Link href="/signup" className="transition-colors hover:text-[#F59E0B]">
+                Sign Up
+              </Link>
+              <Link href="/dashboard" className="transition-colors hover:text-[#F59E0B]">
+                Dashboard
+              </Link>
+              <Link href="/dashboard/tools" className="transition-colors hover:text-[#F59E0B]">
+                Tools
+              </Link>
+            </div>
           </div>
-          <div className="flex gap-8 text-sm text-[#9CA3AF]">
-            <Link href="/dashboard" className="transition-colors hover:text-[#F5F5F5]">
-              Dashboard
-            </Link>
-            <Link href="/dashboard/tools" className="transition-colors hover:text-[#F5F5F5]">
-              Tools
-            </Link>
-            <Link href="/login" className="transition-colors hover:text-[#F5F5F5]">
-              Sign In
-            </Link>
-            <Link href="/signup" className="transition-colors hover:text-[#F5F5F5]">
-              Sign Up
-            </Link>
+          <div className="mt-8 border-t border-[#2A2A2A] pt-8 text-center">
+            <p className="text-sm text-[#6B7280]">
+              Built for game developers &middot; &copy; 2026 GameForge
+            </p>
           </div>
-          <p className="text-sm text-[#9CA3AF]">&copy; 2026 GameForge. Ship it.</p>
         </div>
       </footer>
     </div>
