@@ -41,6 +41,10 @@ import {
   ChevronLeft,
   CalendarDays,
   StickyNote,
+  FileBarChart,
+  ThumbsUp,
+  ThumbsDown,
+  Lightbulb,
 } from "lucide-react";
 import {
   getProject,
@@ -476,6 +480,172 @@ function HealthReportModal({
       </div>
     </div>
   );
+}
+
+function PostmortemModal({
+  open,
+  onClose,
+  report,
+  loading,
+  error,
+}: {
+  open: boolean;
+  onClose: () => void;
+  report: string | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  if (!open) return null;
+
+  const handleCopy = () => {
+    if (!report) return;
+    navigator.clipboard.writeText(report);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleExportMd = () => {
+    if (!report) return;
+    const blob = new Blob([report], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "postmortem.md";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/60" />
+      <div
+        className="relative z-10 w-full max-w-2xl overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+              <FileBarChart className="h-4 w-4 text-[#F59E0B]" />
+            </div>
+            <h2 className="text-lg font-semibold">Project Postmortem</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            {!loading && report && (
+              <>
+                <button
+                  onClick={handleCopy}
+                  className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                >
+                  <Copy className="h-3 w-3" />
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+                <button
+                  onClick={handleExportMd}
+                  className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                >
+                  <Download className="h-3 w-3" />
+                  Export .md
+                </button>
+              </>
+            )}
+            <button onClick={onClose} className="rounded-lg p-1 text-[#9CA3AF] transition-colors hover:text-[#F5F5F5]">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="max-h-[70vh] overflow-y-auto p-6">
+          {loading && (
+            <div className="flex flex-col items-center gap-3 py-16">
+              <Loader2 className="h-8 w-8 animate-spin text-[#F59E0B]" />
+              <p className="text-sm text-[#9CA3AF]">Writing postmortem analysis...</p>
+              <p className="text-xs text-[#6B7280]">Reviewing tasks, bugs, sprints, and milestones...</p>
+            </div>
+          )}
+          {error && (
+            <div className="rounded-lg border border-[#EF4444]/20 bg-[#EF4444]/5 px-4 py-3">
+              <p className="text-sm text-[#EF4444]">{error}</p>
+            </div>
+          )}
+          {!loading && !error && report && (
+            <div className="space-y-3 text-sm leading-relaxed text-[#D1D5DB]">
+              {report.split("\n").map((line, i) => {
+                if (!line.trim()) return <div key={i} className="h-2" />;
+                if (line.startsWith("# ") || line.startsWith("## ") || line.startsWith("### ")) {
+                  const level = line.startsWith("### ") ? "text-sm" : line.startsWith("## ") ? "text-base" : "text-lg";
+                  return (
+                    <h3 key={i} className={`mt-4 font-semibold text-[#F5F5F5] ${level}`}>
+                      {line.replace(/^#+\s*/, "")}
+                    </h3>
+                  );
+                }
+                if (line.startsWith("- ") || line.startsWith("* ")) {
+                  return (
+                    <div key={i} className="flex gap-2 pl-1">
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#F59E0B]" />
+                      <span>{line.replace(/^[-*]\s*/, "")}</span>
+                    </div>
+                  );
+                }
+                if (line.match(/^\d+\.\s/)) {
+                  return (
+                    <div key={i} className="flex gap-2 pl-1">
+                      <span className="shrink-0 font-semibold text-[#F59E0B]">{line.match(/^\d+/)?.[0]}.</span>
+                      <span>{line.replace(/^\d+\.\s*/, "")}</span>
+                    </div>
+                  );
+                }
+                if (line.startsWith("**") && line.endsWith("**")) {
+                  return (
+                    <p key={i} className="mt-2 font-semibold text-[#F5F5F5]">
+                      {line.replace(/\*\*/g, "")}
+                    </p>
+                  );
+                }
+                return <p key={i}>{line}</p>;
+              })}
+            </div>
+          )}
+          {!loading && !error && !report && (
+            <p className="py-8 text-center text-sm text-[#6B7280]">No postmortem generated yet.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface FeatureIdea {
+  id: string;
+  title: string;
+  description: string;
+  votes: number;
+  userVote: "up" | "down" | null;
+  status: "idea" | "planned" | "in-progress" | "done" | "rejected";
+  createdAt: string;
+}
+
+const FEATURE_STATUS_STYLES: Record<FeatureIdea["status"], { bg: string; text: string; label: string }> = {
+  idea: { bg: "bg-[#9CA3AF]/10", text: "text-[#9CA3AF]", label: "Idea" },
+  planned: { bg: "bg-[#3B82F6]/10", text: "text-[#3B82F6]", label: "Planned" },
+  "in-progress": { bg: "bg-[#F59E0B]/10", text: "text-[#F59E0B]", label: "In Progress" },
+  done: { bg: "bg-[#10B981]/10", text: "text-[#10B981]", label: "Done" },
+  rejected: { bg: "bg-[#EF4444]/10", text: "text-[#EF4444]", label: "Rejected" },
+};
+
+function getFeatureIdeas(projectId: string): FeatureIdea[] {
+  try {
+    const raw = localStorage.getItem(`gameforge_features_${projectId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveFeatureIdeas(projectId: string, ideas: FeatureIdea[]) {
+  localStorage.setItem(`gameforge_features_${projectId}`, JSON.stringify(ideas));
 }
 
 interface ProjectSettings {
@@ -1264,6 +1434,17 @@ export default function ProjectDetailPage() {
   const [quickNotesOpen, setQuickNotesOpen] = useState(false);
   const quickNoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [postmortemOpen, setPostmortemOpen] = useState(false);
+  const [postmortemReport, setPostmortemReport] = useState<string | null>(null);
+  const [postmortemLoading, setPostmortemLoading] = useState(false);
+  const [postmortemError, setPostmortemError] = useState<string | null>(null);
+
+  const [featureIdeas, setFeatureIdeas] = useState<FeatureIdea[]>([]);
+  const [showAddFeature, setShowAddFeature] = useState(false);
+  const [newFeatureTitle, setNewFeatureTitle] = useState("");
+  const [newFeatureDesc, setNewFeatureDesc] = useState("");
+  const [featureSortBy, setFeatureSortBy] = useState<"votes" | "newest">("votes");
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
@@ -1289,6 +1470,7 @@ export default function ProjectDetailPage() {
     setMilestones(getMilestones(projectId));
     const savedNotes = localStorage.getItem(`gameforge_quicknotes_${projectId}`);
     if (savedNotes) setQuickNotes(savedNotes);
+    setFeatureIdeas(getFeatureIdeas(projectId));
   }, [projectId, router]);
 
   const handleQuickNoteChange = useCallback(
@@ -1881,6 +2063,141 @@ export default function ProjectDetailPage() {
     }
   }, [project, projectId, taskPct, aiMilestoneLoading]);
 
+  const generatePostmortem = useCallback(async () => {
+    if (!project || postmortemLoading) return;
+    setPostmortemOpen(true);
+    setPostmortemLoading(true);
+    setPostmortemError(null);
+    setPostmortemReport(null);
+
+    const now = new Date();
+    const overdueTasks = tasks.filter((t) => {
+      if (t.status === "done" || !t.dueDate) return false;
+      return new Date(t.dueDate) < now;
+    }).length;
+
+    const fixedBugs = bugs.filter((b) => b.status === "closed").length;
+    const critBugs = bugs.filter(
+      (b) => b.severity === "blocker" || b.severity === "critical"
+    ).length;
+
+    const completedSprints = sprints.filter((s) => s.status === "completed");
+    const velocity =
+      completedSprints.length > 0
+        ? Math.round(
+            completedSprints.reduce(
+              (sum, s) =>
+                sum + tasks.filter((t) => t.sprint === s.name && t.status === "done").length,
+              0
+            ) / completedSprints.length
+          )
+        : 0;
+
+    const totalWords = devlog.reduce((sum, d) => sum + (d.content?.split(/\s+/).length || 0), 0);
+
+    const milestoneMet = milestones.filter((m) => m.status === "completed").length;
+
+    const prompt = `Write a game development postmortem for '${project.name}'. Stats: ${tasks.length} tasks (${doneTasks} done, ${overdueTasks} overdue), ${bugs.length} bugs (${fixedBugs} fixed, ${critBugs} critical), ${completedSprints.length} sprints completed (avg velocity: ${velocity} tasks/sprint), ${devlog.length} devlog entries (${totalWords} words), ${milestoneMet}/${milestones.length} milestones met. Analyze: What went well (3 points), What went wrong (3 points), What to do differently next time (3 points), Key metrics summary. Be honest and constructive.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 1024,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+
+      const result = await response.json();
+      const content =
+        result.choices?.[0]?.message?.content ||
+        result.choices?.[0]?.message?.reasoning ||
+        "";
+
+      if (!content) throw new Error("No response from AI");
+      setPostmortemReport(content);
+    } catch (err) {
+      setPostmortemError(
+        err instanceof Error ? err.message : "Failed to generate postmortem."
+      );
+    } finally {
+      setPostmortemLoading(false);
+    }
+  }, [project, tasks, bugs, sprints, devlog, milestones, doneTasks, postmortemLoading]);
+
+  const addFeatureIdea = useCallback(() => {
+    if (!newFeatureTitle.trim()) return;
+    const idea: FeatureIdea = {
+      id: crypto.randomUUID(),
+      title: newFeatureTitle.trim(),
+      description: newFeatureDesc.trim(),
+      votes: 0,
+      userVote: null,
+      status: "idea",
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [...featureIdeas, idea];
+    setFeatureIdeas(updated);
+    saveFeatureIdeas(projectId, updated);
+    setNewFeatureTitle("");
+    setNewFeatureDesc("");
+    setShowAddFeature(false);
+  }, [newFeatureTitle, newFeatureDesc, featureIdeas, projectId]);
+
+  const voteFeature = useCallback(
+    (id: string, direction: "up" | "down") => {
+      const updated = featureIdeas.map((f) => {
+        if (f.id !== id) return f;
+        if (f.userVote === direction) {
+          return { ...f, votes: f.votes + (direction === "up" ? -1 : 1), userVote: null };
+        }
+        const delta = direction === "up" ? 1 : -1;
+        const prevDelta = f.userVote === "up" ? -1 : f.userVote === "down" ? 1 : 0;
+        return { ...f, votes: f.votes + delta + prevDelta, userVote: direction };
+      });
+      setFeatureIdeas(updated);
+      saveFeatureIdeas(projectId, updated);
+    },
+    [featureIdeas, projectId]
+  );
+
+  const setFeatureStatus = useCallback(
+    (id: string, status: FeatureIdea["status"]) => {
+      const updated = featureIdeas.map((f) => (f.id === id ? { ...f, status } : f));
+      setFeatureIdeas(updated);
+      saveFeatureIdeas(projectId, updated);
+    },
+    [featureIdeas, projectId]
+  );
+
+  const deleteFeature = useCallback(
+    (id: string) => {
+      const updated = featureIdeas.filter((f) => f.id !== id);
+      setFeatureIdeas(updated);
+      saveFeatureIdeas(projectId, updated);
+    },
+    [featureIdeas, projectId]
+  );
+
+  const sortedFeatures = useMemo(() => {
+    const sorted = [...featureIdeas];
+    if (featureSortBy === "votes") {
+      sorted.sort((a, b) => b.votes - a.votes);
+    } else {
+      sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    return sorted;
+  }, [featureIdeas, featureSortBy]);
+
   const handleProjectSave = (updated: Project) => {
     setProject(updated);
   };
@@ -1933,6 +2250,14 @@ export default function ProjectDetailPage() {
         projectId={projectId}
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+      />
+
+      <PostmortemModal
+        open={postmortemOpen}
+        onClose={() => setPostmortemOpen(false)}
+        report={postmortemReport}
+        loading={postmortemLoading}
+        error={postmortemError}
       />
 
       {/* Back + Header */}
@@ -2058,6 +2383,18 @@ export default function ProjectDetailPage() {
                 <ShieldAlert className="h-3.5 w-3.5" />
               )}
               Risk Analysis
+            </button>
+            <button
+              onClick={generatePostmortem}
+              disabled={postmortemLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/40 hover:bg-[#F59E0B]/10 disabled:opacity-50"
+            >
+              {postmortemLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FileBarChart className="h-3.5 w-3.5" />
+              )}
+              Postmortem
             </button>
             <button
               onClick={handleDuplicateProject}
@@ -2685,6 +3022,157 @@ export default function ProjectDetailPage() {
                 <div className="py-10 text-center">
                   <Bug className="mx-auto h-8 w-8 text-[#6B7280]" />
                   <p className="mt-2 text-sm text-[#6B7280]">No open bugs</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Feature Ideas */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-4">
+              <div className="flex items-center gap-2">
+                <Lightbulb className="h-4 w-4 text-[#F59E0B]" />
+                <h2 className="font-semibold">Feature Ideas</h2>
+                {featureIdeas.length > 0 && (
+                  <span className="rounded-full bg-[#F59E0B]/10 px-2 py-0.5 text-xs font-medium text-[#F59E0B]">
+                    {featureIdeas.length}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {featureIdeas.length > 1 && (
+                  <select
+                    value={featureSortBy}
+                    onChange={(e) => setFeatureSortBy(e.target.value as "votes" | "newest")}
+                    className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-2 py-1 text-xs text-[#9CA3AF] outline-none"
+                  >
+                    <option value="votes">Top Voted</option>
+                    <option value="newest">Newest</option>
+                  </select>
+                )}
+                <button
+                  onClick={() => setShowAddFeature(!showAddFeature)}
+                  className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] px-2.5 py-1 text-xs text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                >
+                  <Plus className="h-3 w-3" />
+                  Add
+                </button>
+              </div>
+            </div>
+
+            {showAddFeature && (
+              <div className="border-b border-[#2A2A2A] px-5 py-4 space-y-3">
+                <input
+                  type="text"
+                  value={newFeatureTitle}
+                  onChange={(e) => setNewFeatureTitle(e.target.value)}
+                  placeholder="Feature title..."
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/40"
+                  onKeyDown={(e) => { if (e.key === "Enter" && newFeatureTitle.trim()) addFeatureIdea(); }}
+                />
+                <textarea
+                  value={newFeatureDesc}
+                  onChange={(e) => setNewFeatureDesc(e.target.value)}
+                  placeholder="Brief description (optional)..."
+                  rows={2}
+                  className="w-full resize-none rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/40"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => { setShowAddFeature(false); setNewFeatureTitle(""); setNewFeatureDesc(""); }}
+                    className="rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs text-[#9CA3AF] transition-colors hover:bg-[#2A2A2A]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={addFeatureIdea}
+                    disabled={!newFeatureTitle.trim()}
+                    className="rounded-lg bg-[#F59E0B] px-3 py-1.5 text-xs font-medium text-[#0F0F0F] transition-colors hover:bg-[#D97706] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Add Idea
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="divide-y divide-[#2A2A2A]">
+              {sortedFeatures.map((idea) => {
+                const st = FEATURE_STATUS_STYLES[idea.status];
+                return (
+                  <div
+                    key={idea.id}
+                    className="group flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-[#1F1F1F]"
+                  >
+                    <div className="flex flex-col items-center gap-0.5 pt-0.5">
+                      <button
+                        onClick={() => voteFeature(idea.id, "up")}
+                        className={`rounded p-0.5 transition-colors ${
+                          idea.userVote === "up"
+                            ? "text-[#F59E0B]"
+                            : "text-[#6B7280] hover:text-[#F59E0B]"
+                        }`}
+                      >
+                        <ThumbsUp className="h-3.5 w-3.5" />
+                      </button>
+                      <span className={`text-xs font-semibold tabular-nums ${
+                        idea.votes > 0 ? "text-[#10B981]" : idea.votes < 0 ? "text-[#EF4444]" : "text-[#6B7280]"
+                      }`}>
+                        {idea.votes}
+                      </span>
+                      <button
+                        onClick={() => voteFeature(idea.id, "down")}
+                        className={`rounded p-0.5 transition-colors ${
+                          idea.userVote === "down"
+                            ? "text-[#EF4444]"
+                            : "text-[#6B7280] hover:text-[#EF4444]"
+                        }`}
+                      >
+                        <ThumbsDown className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-[#F5F5F5]">{idea.title}</p>
+                      {idea.description && (
+                        <p className="mt-0.5 text-xs text-[#6B7280] line-clamp-2">{idea.description}</p>
+                      )}
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <select
+                          value={idea.status}
+                          onChange={(e) => setFeatureStatus(idea.id, e.target.value as FeatureIdea["status"])}
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-medium outline-none cursor-pointer ${st.bg} ${st.text}`}
+                          style={{ backgroundColor: "transparent" }}
+                        >
+                          <option value="idea" className="bg-[#1A1A1A] text-[#D1D5DB]">Idea</option>
+                          <option value="planned" className="bg-[#1A1A1A] text-[#D1D5DB]">Planned</option>
+                          <option value="in-progress" className="bg-[#1A1A1A] text-[#D1D5DB]">In Progress</option>
+                          <option value="done" className="bg-[#1A1A1A] text-[#D1D5DB]">Done</option>
+                          <option value="rejected" className="bg-[#1A1A1A] text-[#D1D5DB]">Rejected</option>
+                        </select>
+                        <span className="text-[10px] text-[#4B5563]">
+                          {timeAgo(idea.createdAt)}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => deleteFeature(idea.id)}
+                      className="shrink-0 rounded p-1 text-[#6B7280] opacity-0 transition-all group-hover:opacity-100 hover:text-[#EF4444]"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+              {featureIdeas.length === 0 && (
+                <div className="py-10 text-center">
+                  <Lightbulb className="mx-auto h-8 w-8 text-[#6B7280]" />
+                  <p className="mt-2 text-sm text-[#6B7280]">No feature ideas yet</p>
+                  <button
+                    onClick={() => setShowAddFeature(true)}
+                    className="mt-3 inline-flex items-center gap-1 text-xs text-[#F59E0B] hover:underline"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add your first idea
+                  </button>
                 </div>
               )}
             </div>
