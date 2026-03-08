@@ -375,6 +375,43 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   color: #3B82F6;
 }
 
+/* Button utilities - base + variants */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 150ms ease;
+  cursor: pointer;
+}
+.btn-primary {
+  background: #F59E0B;
+  color: #0F0F0F;
+}
+.btn-primary:hover {
+  background: #D97706;
+}
+.btn-secondary {
+  background: transparent;
+  border: 1px solid #2A2A2A;
+  color: #E5E7EB;
+}
+.btn-secondary:hover {
+  border-color: #F59E0B;
+  color: #F59E0B;
+}
+.btn-ghost {
+  background: transparent;
+  color: #9CA3AF;
+}
+.btn-ghost:hover {
+  background: rgba(245, 158, 11, 0.1);
+  color: #F59E0B;
+}
+
 @keyframes slideInRight {
   from { opacity: 0; transform: translateX(100%); }
   to { opacity: 1; transform: translateX(0); }
