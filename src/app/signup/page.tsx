@@ -24,7 +24,7 @@ export default function SignupPage() {
     if (user) router.replace("/dashboard");
   }, [router]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -44,15 +44,18 @@ export default function SignupPage() {
     }
 
     setSubmitting(true);
-    setTimeout(() => {
-      const result = signup(username, email, password, gameType || "Other");
+    try {
+      const result = await signup(username, email, password, gameType || "Other");
       if (result.success) {
         router.push("/dashboard");
       } else {
         setError(result.error || "Signup failed.");
         setSubmitting(false);
       }
-    }, 500);
+    } catch {
+      setError("Signup failed. Please try again.");
+      setSubmitting(false);
+    }
   };
 
   return (

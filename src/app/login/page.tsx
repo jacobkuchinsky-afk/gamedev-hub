@@ -19,7 +19,7 @@ export default function LoginPage() {
     if (user) router.replace("/dashboard");
   }, [router]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -29,15 +29,18 @@ export default function LoginPage() {
     }
 
     setSubmitting(true);
-    setTimeout(() => {
-      const result = login(email, password);
+    try {
+      const result = await login(email, password);
       if (result.success) {
         router.push("/dashboard");
       } else {
         setError(result.error || "Login failed.");
         setSubmitting(false);
       }
-    }, 400);
+    } catch {
+      setError("Login failed. Please try again.");
+      setSubmitting(false);
+    }
   };
 
   return (

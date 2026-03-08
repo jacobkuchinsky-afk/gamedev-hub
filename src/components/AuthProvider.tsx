@@ -13,13 +13,13 @@ import { getCurrentUser, login, signup, logout, type User } from "@/lib/auth";
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => { success: boolean; error?: string };
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signup: (
     username: string,
     email: string,
     password: string,
     gameType: string
-  ) => { success: boolean; error?: string };
+  ) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
 }
 
@@ -36,8 +36,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  const handleLogin = useCallback((email: string, password: string) => {
-    const result = login(email, password);
+  const handleLogin = useCallback(async (email: string, password: string) => {
+    const result = await login(email, password);
     if (result.success && result.user) {
       setUser(result.user);
     }
@@ -45,8 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const handleSignup = useCallback(
-    (username: string, email: string, password: string, gameType: string) => {
-      const result = signup(username, email, password, gameType);
+    async (username: string, email: string, password: string, gameType: string) => {
+      const result = await signup(username, email, password, gameType);
       if (result.success && result.user) {
         setUser(result.user);
       }
@@ -55,8 +55,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const handleLogout = useCallback(() => {
-    logout();
+  const handleLogout = useCallback(async () => {
+    await logout();
     setUser(null);
   }, []);
 
