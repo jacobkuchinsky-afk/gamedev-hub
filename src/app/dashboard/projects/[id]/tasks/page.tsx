@@ -230,6 +230,9 @@ export default function TaskBoardPage() {
   const [kebabDeleteConfirm, setKebabDeleteConfirm] = useState(false);
   const kebabRef = useRef<HTMLDivElement>(null);
 
+  const [retroNotes, setRetroNotes] = useState<Record<string, { wentWell: string; didntGoWell: string; improve: string }>>({});
+  const [aiRetroLoading, setAiRetroLoading] = useState(false);
+
   const handleConvertToBug = (taskId: string) => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
@@ -274,6 +277,13 @@ export default function TaskBoardPage() {
   useEffect(() => {
     setNewSprint(defaultSprint);
   }, [defaultSprint]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`retro_${projectId}`);
+      if (saved) setRetroNotes(JSON.parse(saved));
+    } catch { /* ignore */ }
+  }, [projectId]);
 
   const nextSprintNum = useMemo(() => {
     const nums = sprints
@@ -749,6 +759,80 @@ export default function TaskBoardPage() {
       healthColor,
     };
   }, [tasks, selectedSprint, currentSprintInfo]);
+
+  const retroStats = useMemo(() => {
+    if (!currentSprintInfo || currentSprintInfo.status !== "completed") return null;
+    const sprintTasks = tasks.filter((t) => t.sprint === currentSprintInfo.name);
+    const completed = sprintTasks.filter((t) => t.status === "done").length;
+    const total = sprintTasks.length;
+    const totalEstimated = sprintTasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+    const totalLogged = sprintTasks.reduce((sum, t) => sum + (t.loggedHours || 0), 0);
+    const avgTime = completed > 0 && totalLogged > 0 ? totalLogged / completed : 0;
+    const bugsFound = sprintTasks.filter((t) => t.tags?.includes("Bugfix")).length;
+    return { completed, total, totalEstimated, totalLogged, avgTime, bugsFound, velocity: completed };
+  }, [tasks, currentSprintInfo]);
+
+  const saveRetro = (sprintName: string, field: "wentWell" | "didntGoWell" | "improve", value: string) => {
+    setRetroNotes((prev) => {
+      const updated = {
+        ...prev,
+        [sprintName]: {
+          wentWell: "",
+          didntGoWell: "",
+          improve: "",
+          ...prev[sprintName],
+          [field]: value,
+        },
+      };
+      localStorage.setItem(`retro_${projectId}`, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleAiWriteRetro = async () => {
+    if (aiRetroLoading || !currentSprintInfo || !retroStats) return;
+    setAiRetroLoading(true);
+    try {
+      const sprintTasks = tasks.filter((t) => t.sprint === currentSprintInfo.name);
+      const doneList = sprintTasks.filter((t) => t.status === "done").map((t) => t.title).join(", ");
+      const notDone = sprintTasks.filter((t) => t.status !== "done").map((t) => `${t.title} (${t.status})`).join(", ");
+      const prompt = `Write a sprint retrospective for sprint "${currentSprintInfo.name}" (goal: "${currentSprintInfo.goal || "none"}"). Stats: ${retroStats.completed}/${retroStats.total} tasks completed, velocity ${retroStats.velocity}, ${retroStats.totalLogged}h logged${retroStats.avgTime > 0 ? `, avg ${retroStats.avgTime.toFixed(1)}h/task` : ""}, ${retroStats.bugsFound} bugs found.\nDone: ${doneList || "none"}.\nNot done: ${notDone || "all completed"}.\nWrite in this EXACT format:\nWENT_WELL:\n- point 1\n- point 2\nDIDNT_GO_WELL:\n- point 1\n- point 2\nIMPROVE:\n- point 1\n- point 2\nBe specific to the data. Keep each section to 2-3 bullet points.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      if (content) {
+        const wellMatch = content.match(/WENT_WELL:\s*([\s\S]*?)(?=\nDIDNT_GO_WELL:|$)/i);
+        const badMatch = content.match(/DIDNT_GO_WELL:\s*([\s\S]*?)(?=\nIMPROVE:|$)/i);
+        const improveMatch = content.match(/IMPROVE:\s*([\s\S]*?)$/i);
+        const name = currentSprintInfo.name;
+        const updated = {
+          ...retroNotes,
+          [name]: {
+            wentWell: wellMatch?.[1]?.trim() || retroNotes[name]?.wentWell || "",
+            didntGoWell: badMatch?.[1]?.trim() || retroNotes[name]?.didntGoWell || "",
+            improve: improveMatch?.[1]?.trim() || retroNotes[name]?.improve || "",
+          },
+        };
+        setRetroNotes(updated);
+        localStorage.setItem(`retro_${projectId}`, JSON.stringify(updated));
+      }
+    } catch { /* silently fail */ } finally {
+      setAiRetroLoading(false);
+    }
+  };
 
   const sortedFilteredTasks = useMemo(() => {
     let filtered = tasks;
@@ -1359,6 +1443,86 @@ export default function TaskBoardPage() {
                   Day {burndownData.elapsedDays} / {burndownData.totalDays}
                 </p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sprint Retrospective */}
+      {currentSprintInfo?.status === "completed" && retroStats && (
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-[#F59E0B]" />
+              <h3 className="text-sm font-semibold text-[#F5F5F5]">Sprint Retrospective</h3>
+              <span className="rounded-full bg-[#10B981]/10 px-2 py-0.5 text-[10px] font-medium text-[#10B981]">Completed</span>
+            </div>
+            <button
+              onClick={handleAiWriteRetro}
+              disabled={aiRetroLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-1.5 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {aiRetroLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              AI Write Retro
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 text-center">
+              <p className="text-xl font-bold text-[#10B981]">{retroStats.completed}</p>
+              <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">Completed</p>
+            </div>
+            <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 text-center">
+              <p className="text-xl font-bold text-[#F59E0B]">{retroStats.velocity}</p>
+              <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">Velocity</p>
+            </div>
+            <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 text-center">
+              <p className="text-xl font-bold text-[#F5F5F5]">{retroStats.avgTime > 0 ? `${retroStats.avgTime.toFixed(1)}h` : "N/A"}</p>
+              <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">Avg/Task</p>
+            </div>
+            <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 text-center">
+              <p className="text-xl font-bold text-[#EF4444]">{retroStats.bugsFound}</p>
+              <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">Bugs Found</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-[#10B981]" />
+                <label className="text-xs font-medium text-[#10B981]">What Went Well</label>
+              </div>
+              <textarea
+                value={retroNotes[currentSprintInfo.name]?.wentWell || ""}
+                onChange={(e) => saveRetro(currentSprintInfo.name, "wentWell", e.target.value)}
+                placeholder="Things that worked great..."
+                rows={4}
+                className="w-full resize-none rounded-lg border border-[#10B981]/20 bg-[#0F0F0F] px-3 py-2 text-sm text-[#D1D5DB] placeholder-[#4B5563] outline-none focus:border-[#10B981]/50"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-[#EF4444]" />
+                <label className="text-xs font-medium text-[#EF4444]">What Didn&apos;t Go Well</label>
+              </div>
+              <textarea
+                value={retroNotes[currentSprintInfo.name]?.didntGoWell || ""}
+                onChange={(e) => saveRetro(currentSprintInfo.name, "didntGoWell", e.target.value)}
+                placeholder="Challenges and blockers..."
+                rows={4}
+                className="w-full resize-none rounded-lg border border-[#EF4444]/20 bg-[#0F0F0F] px-3 py-2 text-sm text-[#D1D5DB] placeholder-[#4B5563] outline-none focus:border-[#EF4444]/50"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-[#3B82F6]" />
+                <label className="text-xs font-medium text-[#3B82F6]">What to Improve</label>
+              </div>
+              <textarea
+                value={retroNotes[currentSprintInfo.name]?.improve || ""}
+                onChange={(e) => saveRetro(currentSprintInfo.name, "improve", e.target.value)}
+                placeholder="Action items for next sprint..."
+                rows={4}
+                className="w-full resize-none rounded-lg border border-[#3B82F6]/20 bg-[#0F0F0F] px-3 py-2 text-sm text-[#D1D5DB] placeholder-[#4B5563] outline-none focus:border-[#3B82F6]/50"
+              />
             </div>
           </div>
         </div>

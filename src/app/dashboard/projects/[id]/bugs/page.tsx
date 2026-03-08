@@ -121,6 +121,8 @@ export default function BugTrackerPage() {
   const [aiImprovingDesc, setAiImprovingDesc] = useState(false);
 
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
+  const [aiAnalysis, setAiAnalysis] = useState<Record<string, string>>({});
+  const [aiAnalyzingBug, setAiAnalyzingBug] = useState<string | null>(null);
 
   const similarBugs = useMemo(() => {
     const q = newTitle.trim().toLowerCase();
@@ -307,6 +309,35 @@ Be concise and professional. Fill in any missing sections based on the title and
     reload();
   };
 
+  const handleAiAnalyze = async (bug: Bug) => {
+    if (aiAnalyzingBug === bug.id) return;
+    setAiAnalyzingBug(bug.id);
+    try {
+      const prompt = `Analyze this game bug: Title: '${bug.title}'.${bug.description ? ` Description: '${bug.description}'.` : ""}${bug.reproSteps ? ` Steps: '${bug.reproSteps}'.` : ""} Platform: ${bug.platform}. Suggest the most likely root cause, where to look in the code, and a potential fix approach. Be brief and technical.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setAiAnalysis((prev) => ({ ...prev, [bug.id]: content || "No analysis available." }));
+    } catch {
+      setAiAnalysis((prev) => ({ ...prev, [bug.id]: "Failed to get analysis. Try again." }));
+    } finally {
+      setAiAnalyzingBug(null);
+    }
+  };
+
   const openBugs = useMemo(() => bugs.filter((b) => b.status !== "closed"), [bugs]);
   const closedBugs = useMemo(() => bugs.filter((b) => b.status === "closed"), [bugs]);
 
@@ -461,6 +492,38 @@ Be concise and professional. Fill in any missing sections based on the title and
               )}
             </div>
           )}
+          {/* AI Root Cause Analysis */}
+          <div className="space-y-2">
+            <button
+              onClick={() => handleAiAnalyze(bug)}
+              disabled={aiAnalyzingBug === bug.id}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-1.5 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {aiAnalyzingBug === bug.id ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              {aiAnalysis[bug.id] ? "Re-analyze" : "AI Analyze Root Cause"}
+            </button>
+            {aiAnalyzingBug === bug.id && (
+              <div className="flex items-center gap-3 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-4 py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-[#F59E0B]" />
+                <span className="text-sm text-[#9CA3AF]">Analyzing root cause...</span>
+              </div>
+            )}
+            {aiAnalysis[bug.id] && aiAnalyzingBug !== bug.id && (
+              <div className="rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-3 space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-[#F59E0B]" />
+                  <span className="text-xs font-semibold text-[#F59E0B]">Root Cause Analysis</span>
+                </div>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">
+                  {aiAnalysis[bug.id]}
+                </p>
+              </div>
+            )}
+          </div>
           {/* Comment Thread */}
           <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 space-y-3">
             <div className="flex items-center gap-1.5">
