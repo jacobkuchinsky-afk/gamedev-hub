@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Plus,
   FolderKanban,
@@ -18,6 +19,12 @@ import {
   ArchiveRestore,
   GitCompare,
   X,
+  Gamepad2,
+  Shield,
+  Zap,
+  Download,
+  Check,
+  Loader2,
 } from "lucide-react";
 import {
   getProjects,
@@ -27,6 +34,10 @@ import {
   getSprints,
   getChangelog,
   updateProject,
+  addProject,
+  addTask,
+  addBug,
+  addSprint,
   type Project,
 } from "@/lib/store";
 
@@ -120,7 +131,181 @@ function relativeTime(dateStr: string): string {
   return `${weeks}w ago`;
 }
 
+interface TemplateTask {
+  title: string;
+  description: string;
+  status: "todo" | "in-progress" | "testing" | "done";
+  priority: "critical" | "high" | "medium" | "low";
+  sprint: string;
+  assignee: string;
+}
+
+interface TemplateBug {
+  title: string;
+  description: string;
+  severity: "blocker" | "critical" | "major" | "minor" | "trivial";
+  status: "open" | "investigating" | "in-progress" | "fixed" | "closed";
+  platform: string;
+  reproSteps: string;
+}
+
+interface TemplateSprint {
+  name: string;
+  goal: string;
+  startDate: string;
+  endDate: string;
+  status: "active" | "completed" | "planned";
+}
+
+interface ProjectTemplate {
+  id: string;
+  name: string;
+  description: string;
+  icon: React.ElementType;
+  color: string;
+  stats: string;
+  project: Omit<Project, "id" | "created_at" | "updated_at">;
+  tasks: TemplateTask[];
+  bugs: TemplateBug[];
+  sprints: TemplateSprint[];
+  gdd?: Record<string, string>;
+}
+
+const PROJECT_TEMPLATES: ProjectTemplate[] = [
+  {
+    id: "platformer",
+    name: "Platformer Starter",
+    description: "Side-scrolling platformer with movement, enemies, and levels pre-configured.",
+    icon: Gamepad2,
+    color: "#3B82F6",
+    stats: "15 tasks \u00b7 5 bugs \u00b7 3 sprints",
+    project: { name: "My Platformer", description: "A 2D platformer with tight controls and challenging levels.", engine: "Unity", genre: "Platformer", status: "prototype", coverColor: "#3B82F6" },
+    tasks: [
+      { title: "Player movement system", description: "Horizontal movement with acceleration curves", status: "done", priority: "critical", sprint: "Sprint 1", assignee: "" },
+      { title: "Jump mechanics", description: "Variable height jump with coyote time", status: "done", priority: "critical", sprint: "Sprint 1", assignee: "" },
+      { title: "Wall slide & wall jump", description: "Wall detection and directional wall jumps", status: "done", priority: "high", sprint: "Sprint 1", assignee: "" },
+      { title: "Level 1 - Tutorial", description: "Teach basic movement and jumping", status: "done", priority: "high", sprint: "Sprint 1", assignee: "" },
+      { title: "Level 2 - Forest", description: "Introduce enemies and hazards", status: "done", priority: "high", sprint: "Sprint 2", assignee: "" },
+      { title: "Level 3 - Caves", description: "Underground level with limited visibility", status: "in-progress", priority: "medium", sprint: "Sprint 2", assignee: "" },
+      { title: "Level 4 - Castle", description: "Final level with boss encounter", status: "todo", priority: "medium", sprint: "Sprint 3", assignee: "" },
+      { title: "Basic enemy AI", description: "Patrol and chase behaviors", status: "done", priority: "high", sprint: "Sprint 1", assignee: "" },
+      { title: "Flying enemy AI", description: "Airborne enemies with swooping attacks", status: "in-progress", priority: "medium", sprint: "Sprint 2", assignee: "" },
+      { title: "Checkpoint system", description: "Save progress at checkpoint flags", status: "done", priority: "critical", sprint: "Sprint 1", assignee: "" },
+      { title: "Health & damage system", description: "Hearts, damage, invincibility frames", status: "done", priority: "critical", sprint: "Sprint 1", assignee: "" },
+      { title: "Collectibles", description: "Coins and power-ups throughout levels", status: "in-progress", priority: "medium", sprint: "Sprint 2", assignee: "" },
+      { title: "Main menu", description: "Title screen with play, options, quit", status: "done", priority: "medium", sprint: "Sprint 1", assignee: "" },
+      { title: "Sound effects", description: "Jump, land, damage, collect SFX", status: "todo", priority: "low", sprint: "Sprint 3", assignee: "" },
+      { title: "Background music", description: "Unique tracks for each level", status: "todo", priority: "low", sprint: "Sprint 3", assignee: "" },
+    ],
+    bugs: [
+      { title: "Player clips through corners", description: "At high speeds, player passes through corner tiles", severity: "major", status: "open", platform: "All", reproSteps: "Run into a corner tile at full speed" },
+      { title: "Double jump not registering", description: "Second jump input occasionally ignored", severity: "critical", status: "open", platform: "All", reproSteps: "Rapidly press jump twice" },
+      { title: "Checkpoint not saving", description: "Respawn at level start instead of checkpoint", severity: "major", status: "open", platform: "All", reproSteps: "Touch checkpoint, die, observe spawn" },
+      { title: "Enemy stuck in wall", description: "Patrol enemy gets stuck at platform edges", severity: "minor", status: "investigating", platform: "All", reproSteps: "Watch enemy reach end of platform" },
+      { title: "Menu animation glitch", description: "Buttons flicker on first load", severity: "trivial", status: "open", platform: "PC", reproSteps: "Launch game, observe main menu" },
+    ],
+    sprints: [
+      { name: "Core Mechanics", goal: "Player movement, combat, and basic level", startDate: "2026-03-01", endDate: "2026-03-07", status: "completed" },
+      { name: "Level Design", goal: "Build all 4 levels with enemies and collectibles", startDate: "2026-03-08", endDate: "2026-03-14", status: "active" },
+      { name: "Polish & Audio", goal: "SFX, music, particles, and bug fixes", startDate: "2026-03-15", endDate: "2026-03-21", status: "planned" },
+    ],
+    gdd: {
+      elevatorPitch: "A fast-paced 2D platformer where tight controls and creative level design create a satisfying challenge.",
+      tagline: "Run. Jump. Conquer.",
+      coreVerbs: "Run, Jump, Wall-slide, Collect",
+      gameplayLoop: "Enter level -> Navigate obstacles -> Defeat enemies -> Reach exit -> Unlock next",
+      visualStyle: "Pixel art with modern lighting and particle effects",
+      setting: "A colorful fantasy world with forests, caves, and castles",
+    },
+  },
+  {
+    id: "rpg",
+    name: "RPG Starter",
+    description: "Turn-based RPG with inventory, quests, dialogue, and dungeon crawling ready to build on.",
+    icon: Shield,
+    color: "#8B5CF6",
+    stats: "20 tasks \u00b7 8 bugs \u00b7 4 sprints",
+    project: { name: "My RPG", description: "A classic turn-based RPG with deep character progression and an engaging story.", engine: "Godot", genre: "RPG", status: "alpha", coverColor: "#8B5CF6" },
+    tasks: [
+      { title: "Character creation", description: "Name, class, and stat allocation", status: "done", priority: "critical", sprint: "Sprint 1", assignee: "" },
+      { title: "Inventory system", description: "Grid-based inventory with drag and drop", status: "done", priority: "critical", sprint: "Sprint 1", assignee: "" },
+      { title: "Quest log", description: "Track active, completed, and failed quests", status: "done", priority: "critical", sprint: "Sprint 1", assignee: "" },
+      { title: "Dialogue system", description: "Branching dialogue with NPC portraits", status: "done", priority: "high", sprint: "Sprint 1", assignee: "" },
+      { title: "Melee combat", description: "Sword, axe, and mace attack types", status: "done", priority: "critical", sprint: "Sprint 2", assignee: "" },
+      { title: "Ranged combat", description: "Bow mechanics with arrow physics", status: "done", priority: "high", sprint: "Sprint 2", assignee: "" },
+      { title: "Magic system", description: "Spell casting with mana costs and cooldowns", status: "in-progress", priority: "high", sprint: "Sprint 3", assignee: "" },
+      { title: "XP and leveling", description: "Experience curve and stat growth", status: "done", priority: "critical", sprint: "Sprint 1", assignee: "" },
+      { title: "Equipment stats", description: "Weapons and armor affect character stats", status: "done", priority: "high", sprint: "Sprint 2", assignee: "" },
+      { title: "NPC schedules", description: "NPCs move between locations by time of day", status: "in-progress", priority: "medium", sprint: "Sprint 3", assignee: "" },
+      { title: "Town hub map", description: "Central town with shops, inn, and quest givers", status: "done", priority: "high", sprint: "Sprint 2", assignee: "" },
+      { title: "Dungeon 1 - Forest Crypt", description: "Introductory dungeon with undead enemies", status: "done", priority: "high", sprint: "Sprint 2", assignee: "" },
+      { title: "Dungeon 2 - Ice Caverns", description: "Slippery floors and frost enemies", status: "in-progress", priority: "medium", sprint: "Sprint 3", assignee: "" },
+      { title: "Overworld map", description: "Navigate between locations with random encounters", status: "in-progress", priority: "medium", sprint: "Sprint 3", assignee: "" },
+      { title: "Crafting system", description: "Combine materials to create items", status: "todo", priority: "medium", sprint: "Sprint 4", assignee: "" },
+      { title: "Skill tree UI", description: "Visual skill tree with unlock paths", status: "todo", priority: "medium", sprint: "Sprint 4", assignee: "" },
+      { title: "Save/load system", description: "Multiple save slots with auto-save", status: "done", priority: "critical", sprint: "Sprint 1", assignee: "" },
+      { title: "Tutorial sequence", description: "Guided intro teaching core mechanics", status: "in-progress", priority: "high", sprint: "Sprint 3", assignee: "" },
+      { title: "Boss encounters", description: "Unique boss mechanics and patterns", status: "todo", priority: "high", sprint: "Sprint 4", assignee: "" },
+      { title: "Cutscene system", description: "Scripted camera and dialogue sequences", status: "todo", priority: "low", sprint: "Sprint 4", assignee: "" },
+    ],
+    bugs: [
+      { title: "Inventory overflow crash", description: "Game crashes when inventory exceeds 99 items", severity: "blocker", status: "open", platform: "All", reproSteps: "Add 100+ items to inventory" },
+      { title: "Quest log not updating", description: "Completed quests stay in active tab", severity: "major", status: "open", platform: "All", reproSteps: "Complete any quest, check log" },
+      { title: "Dialogue skipping lines", description: "Fast clicking skips dialogue branches", severity: "major", status: "investigating", platform: "All", reproSteps: "Click rapidly through dialogue" },
+      { title: "Damage calculation off", description: "Defense stat not reducing damage correctly", severity: "critical", status: "open", platform: "All", reproSteps: "Equip armor, take damage, compare" },
+      { title: "Equipment won't unequip", description: "Clicking unequip does nothing", severity: "major", status: "open", platform: "All", reproSteps: "Equip item, try to unequip" },
+      { title: "XP bar not updating", description: "XP bar stays at 0 despite gaining XP", severity: "critical", status: "open", platform: "All", reproSteps: "Kill enemy, check XP bar" },
+      { title: "Map transition stutter", description: "1-2 second freeze when changing maps", severity: "minor", status: "investigating", platform: "PC", reproSteps: "Walk between any two maps" },
+      { title: "NPC clipping through walls", description: "NPCs walk through solid objects", severity: "minor", status: "open", platform: "All", reproSteps: "Observe NPCs near walls" },
+    ],
+    sprints: [
+      { name: "Core Systems", goal: "Character, inventory, quests, dialogue, saves", startDate: "2026-02-09", endDate: "2026-02-22", status: "completed" },
+      { name: "World Building", goal: "Town, first dungeon, overworld, combat basics", startDate: "2026-02-23", endDate: "2026-03-08", status: "completed" },
+      { name: "Combat & Balance", goal: "Magic, skills, second dungeon, balancing", startDate: "2026-03-09", endDate: "2026-03-22", status: "active" },
+      { name: "Polish & Testing", goal: "Crafting, skill tree, bosses, bug fixes", startDate: "2026-03-23", endDate: "2026-04-05", status: "planned" },
+    ],
+    gdd: {
+      elevatorPitch: "A classic turn-based RPG with deep character progression, branching quests, and a living world that reacts to your choices.",
+      tagline: "Your story. Your choices. Your legend.",
+      coreVerbs: "Explore, Fight, Talk, Craft, Level Up",
+      gameplayLoop: "Accept quest -> Explore dungeon -> Fight enemies -> Collect loot -> Return to town -> Level up -> Repeat",
+      visualStyle: "Hand-painted 2D art with detailed character portraits",
+      setting: "A medieval fantasy realm threatened by an ancient evil awakening",
+    },
+  },
+  {
+    id: "gamejam",
+    name: "Game Jam Project",
+    description: "Minimal setup for a 48-hour game jam. Just the essentials to start building fast.",
+    icon: Zap,
+    color: "#F59E0B",
+    stats: "8 tasks \u00b7 1 sprint (48h)",
+    project: { name: "Jam Entry", description: "A game jam entry - build fast, break things, ship it.", engine: "Godot", genre: "Action", status: "concept", coverColor: "#F59E0B" },
+    tasks: [
+      { title: "Core mechanic prototype", description: "Get the main gameplay loop working", status: "in-progress", priority: "critical", sprint: "Jam Sprint", assignee: "" },
+      { title: "Art style & sprites", description: "Quick art pass - consistent style over polish", status: "todo", priority: "high", sprint: "Jam Sprint", assignee: "" },
+      { title: "Sound design", description: "SFX and a simple music loop", status: "todo", priority: "medium", sprint: "Jam Sprint", assignee: "" },
+      { title: "3 levels minimum", description: "Intro, main challenge, finale", status: "todo", priority: "high", sprint: "Jam Sprint", assignee: "" },
+      { title: "Main menu & UI", description: "Title screen, HUD, game over screen", status: "todo", priority: "medium", sprint: "Jam Sprint", assignee: "" },
+      { title: "Win/lose conditions", description: "Clear victory and failure states", status: "todo", priority: "critical", sprint: "Jam Sprint", assignee: "" },
+      { title: "Build & export", description: "Web build or desktop executable", status: "todo", priority: "high", sprint: "Jam Sprint", assignee: "" },
+      { title: "Submit to jam", description: "Upload, write description, add screenshots", status: "todo", priority: "critical", sprint: "Jam Sprint", assignee: "" },
+    ],
+    bugs: [],
+    sprints: [
+      { name: "Jam Sprint", goal: "Ship a complete game in 48 hours", startDate: "2026-03-08", endDate: "2026-03-10", status: "active" },
+    ],
+    gdd: {
+      elevatorPitch: "A fast-paced jam game built in 48 hours. Focus on one core mechanic and polish it.",
+      tagline: "Made in 48 hours.",
+      coreVerbs: "TBD - pick one core verb and build around it",
+      gameplayLoop: "TBD - keep it simple: action -> feedback -> repeat",
+    },
+  },
+];
+
 export default function ProjectsPage() {
+  const router = useRouter();
   const [projectData, setProjectData] = useState<ProjectData[]>([]);
   const [view, setView] = useState<ViewMode>("grid");
   const [search, setSearch] = useState("");
@@ -129,6 +314,9 @@ export default function ProjectsPage() {
   const [compareMode, setCompareMode] = useState(false);
   const [compareSelection, setCompareSelection] = useState<string[]>([]);
   const [showCompare, setShowCompare] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [confirmTemplate, setConfirmTemplate] = useState<string | null>(null);
+  const [importingTemplate, setImportingTemplate] = useState(false);
 
   const loadData = useCallback(() => {
     const allProjects = getProjects();
@@ -180,6 +368,30 @@ export default function ProjectsPage() {
       return [...prev, projectId];
     });
   };
+
+  const importTemplate = useCallback((templateId: string) => {
+    const template = PROJECT_TEMPLATES.find((t) => t.id === templateId);
+    if (!template) return;
+    setImportingTemplate(true);
+    const newProject = addProject(template.project);
+    for (const t of template.tasks) {
+      addTask({ ...t, projectId: newProject.id });
+    }
+    for (const b of template.bugs) {
+      addBug({ ...b, projectId: newProject.id });
+    }
+    for (const s of template.sprints) {
+      addSprint({ ...s, projectId: newProject.id });
+    }
+    if (template.gdd) {
+      localStorage.setItem(`gameforge_gdd_${newProject.id}`, JSON.stringify(template.gdd));
+    }
+    setImportingTemplate(false);
+    setShowTemplates(false);
+    setConfirmTemplate(null);
+    loadData();
+    router.push(`/dashboard/projects/${newProject.id}`);
+  }, [loadData, router]);
 
   const compareA = projectData.find((d) => d.project.id === compareSelection[0]);
   const compareB = projectData.find((d) => d.project.id === compareSelection[1]);
@@ -260,6 +472,13 @@ export default function ProjectsPage() {
           >
             <GitCompare className="h-4 w-4" />
             {compareMode ? "Cancel" : "Compare"}
+          </button>
+          <button
+            onClick={() => { setShowTemplates(true); setConfirmTemplate(null); }}
+            className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] px-4 py-2.5 text-sm font-medium text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+          >
+            <Download className="h-4 w-4" />
+            Import Template
           </button>
           <Link
             href="/dashboard/projects/new"
@@ -509,6 +728,113 @@ export default function ProjectsPage() {
                 Close Comparison
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Template Selection Modal */}
+      {showTemplates && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4">
+          <div className="w-full max-w-2xl rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
+              <div className="flex items-center gap-3">
+                <Download className="h-5 w-5 text-[#F59E0B]" />
+                <h2 className="text-lg font-semibold text-[#F5F5F5]">Import from Template</h2>
+              </div>
+              <button
+                onClick={() => { setShowTemplates(false); setConfirmTemplate(null); }}
+                className="rounded-lg p-1.5 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {!confirmTemplate ? (
+              <div className="p-6">
+                <p className="mb-5 text-sm text-[#9CA3AF]">
+                  Start with a pre-built project including tasks, bugs, sprints, and GDD content.
+                </p>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  {PROJECT_TEMPLATES.map((tmpl) => (
+                    <button
+                      key={tmpl.id}
+                      onClick={() => setConfirmTemplate(tmpl.id)}
+                      className="group rounded-xl border border-[#2A2A2A] bg-[#0F0F0F] p-5 text-left transition-all hover:border-[#F59E0B]/30"
+                    >
+                      <div
+                        className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg"
+                        style={{ backgroundColor: `${tmpl.color}15` }}
+                      >
+                        <tmpl.icon className="h-5 w-5" style={{ color: tmpl.color }} />
+                      </div>
+                      <h3 className="text-sm font-semibold text-[#F5F5F5] transition-colors group-hover:text-[#F59E0B]">
+                        {tmpl.name}
+                      </h3>
+                      <p className="mt-1.5 text-xs leading-relaxed text-[#9CA3AF]">{tmpl.description}</p>
+                      <p className="mt-3 text-[10px] font-medium text-[#6B7280]">{tmpl.stats}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              (() => {
+                const tmpl = PROJECT_TEMPLATES.find((t) => t.id === confirmTemplate);
+                if (!tmpl) return null;
+                return (
+                  <div className="p-6">
+                    <div className="mb-6 flex items-center gap-4">
+                      <div
+                        className="flex h-12 w-12 items-center justify-center rounded-xl"
+                        style={{ backgroundColor: `${tmpl.color}15` }}
+                      >
+                        <tmpl.icon className="h-6 w-6" style={{ color: tmpl.color }} />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-semibold text-[#F5F5F5]">{tmpl.name}</h3>
+                        <p className="mt-0.5 text-sm text-[#9CA3AF]">{tmpl.description}</p>
+                      </div>
+                    </div>
+                    <div className="mb-6 grid grid-cols-3 gap-3">
+                      <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 text-center">
+                        <p className="text-lg font-bold text-[#F5F5F5]">{tmpl.tasks.length}</p>
+                        <p className="text-[10px] text-[#6B7280]">Tasks</p>
+                      </div>
+                      <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 text-center">
+                        <p className="text-lg font-bold text-[#F5F5F5]">{tmpl.bugs.length}</p>
+                        <p className="text-[10px] text-[#6B7280]">Bugs</p>
+                      </div>
+                      <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 text-center">
+                        <p className="text-lg font-bold text-[#F5F5F5]">{tmpl.sprints.length}</p>
+                        <p className="text-[10px] text-[#6B7280]">Sprints</p>
+                      </div>
+                    </div>
+                    <p className="mb-4 text-sm text-[#9CA3AF]">
+                      This will create a new project called <span className="font-medium text-[#F5F5F5]">&ldquo;{tmpl.project.name}&rdquo;</span> with all seed data. You can rename and customize it after import.
+                    </p>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setConfirmTemplate(null)}
+                        className="flex-1 rounded-lg border border-[#2A2A2A] py-2.5 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F5F5F5]"
+                      >
+                        Back
+                      </button>
+                      <button
+                        onClick={() => importTemplate(confirmTemplate)}
+                        disabled={importingTemplate}
+                        className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#F59E0B] py-2.5 text-sm font-medium text-black transition-colors hover:bg-[#F59E0B]/90 disabled:opacity-50"
+                      >
+                        {importingTemplate ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Check className="h-4 w-4" />
+                        )}
+                        {importingTemplate ? "Importing..." : "Create Project"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()
+            )}
           </div>
         </div>
       )}

@@ -39,6 +39,7 @@ import {
   Share2,
   DollarSign,
   MousePointerClick,
+  Star,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -264,6 +265,65 @@ function parseSocialPosts(text: string): { platform: string; content: string }[]
   return posts;
 }
 
+interface MockReview {
+  reviewer: string;
+  score: number;
+  text: string;
+}
+
+function parseReviews(raw: string): MockReview[] {
+  const reviews: MockReview[] = [];
+  const chunks = raw.split(/\n(?=\d[\.\)]\s|\*\*\d|\*\*(?:Positive|Mixed|Negative|Review))/i).filter(s => s.trim());
+  for (const chunk of chunks) {
+    const scoreMatch = chunk.match(/(\d+)\s*\/\s*10/);
+    if (!scoreMatch) continue;
+    const score = Math.min(10, Math.max(1, parseInt(scoreMatch[1])));
+    let reviewer = "";
+    const namePatterns = [
+      /[-\u2013\u2014]\s*([A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)*)/,
+      /(?:Reviewer|Name|By)[:\s]+([A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)*)/i,
+      /\*\*([A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)+)\*\*/,
+    ];
+    for (const p of namePatterns) {
+      const m = chunk.match(p);
+      if (m && !m[1].match(/^(Positive|Mixed|Negative|Review|Score)/i)) {
+        reviewer = m[1].trim();
+        break;
+      }
+    }
+    if (!reviewer) reviewer = `Reviewer ${reviews.length + 1}`;
+    const text = chunk
+      .replace(/^\d[\.\)]\s*/, "")
+      .replace(/\*\*[^*]*\*\*/g, "")
+      .replace(/(\d+)\s*\/\s*10/g, "")
+      .split("\n")
+      .map(l => l.replace(/^[-*]\s*/, "").trim())
+      .filter(l => l && !l.match(/^(Reviewer|Name|By|Score)[:\s]/i))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (text) reviews.push({ reviewer, score, text });
+  }
+  if (reviews.length === 0 && raw.trim()) {
+    reviews.push({ reviewer: "Anonymous Reviewer", score: 7, text: raw.trim() });
+  }
+  return reviews;
+}
+
+function StarRating({ score }: { score: number }) {
+  const stars = Math.round(score / 2);
+  return (
+    <div className="flex items-center gap-0.5">
+      {Array.from({ length: 5 }, (_, i) => (
+        <Star
+          key={i}
+          className={`h-3.5 w-3.5 ${i < stars ? "fill-[#F59E0B] text-[#F59E0B]" : "text-[#4B5563]"}`}
+        />
+      ))}
+    </div>
+  );
+}
+
 function AccessibilityResults({ text }: { text: string }) {
   const sections: { category: string; rating: "pass" | "warning" | "fail"; lines: string[] }[] = [];
   let current: { category: string; rating: "pass" | "warning" | "fail"; lines: string[] } | null = null;
@@ -446,6 +506,9 @@ export default function LaunchChecklistPage() {
   const [aiUxReview, setAiUxReview] = useState<string>("");
   const [aiUxReviewLoading, setAiUxReviewLoading] = useState(false);
   const [aiUxReviewOpen, setAiUxReviewOpen] = useState(false);
+  const [aiReviews, setAiReviews] = useState<string>("");
+  const [aiReviewsLoading, setAiReviewsLoading] = useState(false);
+  const [aiReviewsOpen, setAiReviewsOpen] = useState(false);
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -794,6 +857,37 @@ export default function LaunchChecklistPage() {
     }
   }, [project, aiUxReviewLoading]);
 
+  const generateMockReviews = useCallback(async () => {
+    if (!project || aiReviewsLoading) return;
+    setAiReviewsLoading(true);
+    setAiReviewsOpen(true);
+    setAiReviews("");
+    try {
+      const prompt = `Write 3 simulated game reviews for '${project.name}', a ${project.genre || "unknown genre"} indie game. Include: 1) A positive review (8/10, 3 sentences, highlights strengths), 2) A mixed review (6/10, 3 sentences, praises gameplay but critiques polish), 3) A negative review (4/10, 3 sentences, identifies major issues). For each include: reviewer name (made up), score, and text. These help developers anticipate feedback.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "Could not generate reviews. Please try again.";
+      setAiReviews(content);
+    } catch {
+      setAiReviews("Failed to generate mock reviews. Check your API key and try again.");
+    } finally {
+      setAiReviewsLoading(false);
+    }
+  }, [project, aiReviewsLoading]);
+
   const copyToClipboard = useCallback((text: string, sectionTitle: string) => {
     navigator.clipboard.writeText(text);
     setCopiedSection(sectionTitle);
@@ -1016,6 +1110,18 @@ export default function LaunchChecklistPage() {
                 <MousePointerClick className="h-3.5 w-3.5" />
               )}
               {aiUxReviewLoading ? "Reviewing..." : "AI UX Review"}
+            </button>
+            <button
+              onClick={generateMockReviews}
+              disabled={aiReviewsLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F97316]/40 bg-[#F97316]/10 px-3 py-2 text-sm font-medium text-[#F97316] transition-colors hover:bg-[#F97316]/20 disabled:opacity-50"
+            >
+              {aiReviewsLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Star className="h-3.5 w-3.5" />
+              )}
+              {aiReviewsLoading ? "Generating..." : "AI Mock Reviews"}
             </button>
             <button
               onClick={handleReset}
@@ -1521,6 +1627,79 @@ export default function LaunchChecklistPage() {
               </div>
             ) : (
               <UxReviewResults text={aiUxReview} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AI Mock Reviews Panel */}
+      {aiReviewsOpen && (
+        <div className="rounded-xl border border-[#F97316]/30 bg-[#1A1A1A] overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3">
+            <div className="flex items-center gap-2">
+              <Star className="h-4 w-4 text-[#F97316]" />
+              <h3 className="text-sm font-semibold text-[#F97316]">AI Mock Reviews</h3>
+            </div>
+            <button
+              onClick={() => setAiReviewsOpen(false)}
+              className="rounded-md p-1 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="px-5 py-4">
+            {aiReviewsLoading ? (
+              <div className="flex items-center gap-3 py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-[#F97316]" />
+                <p className="text-sm text-[#9CA3AF]">Generating mock reviews for {project.name}...</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {parseReviews(aiReviews).map((review, idx) => {
+                  const reviewColor = review.score >= 7 ? "#10B981" : review.score >= 5 ? "#F59E0B" : "#EF4444";
+                  const reviewLabel = review.score >= 7 ? "Positive" : review.score >= 5 ? "Mixed" : "Negative";
+                  return (
+                    <div key={idx} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="flex h-10 w-10 items-center justify-center rounded-full"
+                            style={{ backgroundColor: `${reviewColor}15` }}
+                          >
+                            <span className="text-sm font-bold" style={{ color: reviewColor }}>
+                              {review.score}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-[#F5F5F5]">{review.reviewer}</p>
+                            <div className="mt-0.5 flex items-center gap-2">
+                              <StarRating score={review.score} />
+                              <span
+                                className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                style={{ backgroundColor: `${reviewColor}15`, color: reviewColor }}
+                              >
+                                {reviewLabel}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => copyToClipboard(review.text, `review_${idx}`)}
+                          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                        >
+                          {copiedSection === `review_${idx}` ? (
+                            <Check className="h-3 w-3 text-[#10B981]" />
+                          ) : (
+                            <Copy className="h-3 w-3" />
+                          )}
+                          {copiedSection === `review_${idx}` ? "Copied!" : "Copy"}
+                        </button>
+                      </div>
+                      <p className="text-sm leading-relaxed text-[#D1D5DB]">{review.text}</p>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
