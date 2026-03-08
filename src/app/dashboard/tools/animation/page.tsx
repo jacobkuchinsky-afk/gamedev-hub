@@ -129,6 +129,9 @@ export default function AnimationPage() {
   const [aiTips, setAiTips] = useState("");
   const [aiTipsLoading, setAiTipsLoading] = useState(false);
   const [aiTipsOpen, setAiTipsOpen] = useState(false);
+  const [aiFrameDesc, setAiFrameDesc] = useState("");
+  const [aiFrameResult, setAiFrameResult] = useState("");
+  const [aiFrameLoading, setAiFrameLoading] = useState(false);
 
   const fetchAiTips = async () => {
     setAiTipsLoading(true);
@@ -158,6 +161,53 @@ export default function AnimationPage() {
       setAiTips("Failed to fetch tips. Check your connection and try again.");
     } finally {
       setAiTipsLoading(false);
+    }
+  };
+
+  const fetchAiFrameSuggest = async () => {
+    const desc = aiFrameDesc.trim();
+    if (!desc || aiFrameLoading) return;
+    setAiFrameLoading(true);
+    setAiFrameResult("");
+    try {
+      const prompt = `For a pixel art animation of '${desc}', suggest the ideal number of frames, FPS, and loop mode (loop/once/ping-pong). Also describe what each frame should show as a brief shot-by-shot guide. Respond in 5 lines max.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "No suggestion available.";
+      setAiFrameResult(content);
+
+      const fpsMatch = content.match(/(\d{1,2})\s*(?:fps|FPS|frames?\s*per\s*second)/i);
+      if (fpsMatch) {
+        const suggestedFps = Math.min(30, Math.max(1, parseInt(fpsMatch[1])));
+        setFps(suggestedFps);
+        const ms = Math.round(1000 / suggestedFps);
+        setFrameDurations(frames.map(() => ms));
+      }
+
+      const loopMatch = content.match(/\b(ping[\s-]?pong|once|loop)\b/i);
+      if (loopMatch) {
+        const mode = loopMatch[1].toLowerCase().replace(/[\s-]/g, "");
+        if (mode === "pingpong") setLoopMode("pingpong");
+        else if (mode === "once") setLoopMode("once");
+        else if (mode === "loop") setLoopMode("loop");
+      }
+    } catch {
+      setAiFrameResult("Failed to get suggestion. Check your connection and try again.");
+    } finally {
+      setAiFrameLoading(false);
     }
   };
 
@@ -594,6 +644,39 @@ export default function AnimationPage() {
                     )}
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 space-y-3">
+            <p className="text-xs font-medium text-[#9CA3AF]">AI FRAME SUGGEST</p>
+            <input
+              type="text"
+              placeholder='e.g. "idle breathing", "sword swing"...'
+              value={aiFrameDesc}
+              onChange={(e) => setAiFrameDesc(e.target.value)}
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-xs text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+            />
+            <button
+              onClick={fetchAiFrameSuggest}
+              disabled={aiFrameLoading || !aiFrameDesc.trim()}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-3 py-2 text-xs font-medium text-[#F59E0B] hover:bg-[#F59E0B]/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {aiFrameLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              {aiFrameLoading ? "Analyzing..." : "AI Frame Suggest"}
+            </button>
+            {aiFrameResult && (
+              <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-[#F59E0B]">
+                  <Sparkles className="h-3 w-3" />
+                  Suggestion
+                </div>
+                <p className="whitespace-pre-wrap text-xs leading-relaxed text-[#D1D5DB]">{aiFrameResult}</p>
+                <p className="text-[10px] text-[#6B7280]">FPS and loop mode auto-applied from suggestion</p>
               </div>
             )}
           </div>

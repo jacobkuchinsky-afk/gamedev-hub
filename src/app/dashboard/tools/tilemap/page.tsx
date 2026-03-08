@@ -99,6 +99,8 @@ export default function TilemapPage() {
   const [redoStack, setRedoStack] = useState<Record<LayerName, number[][]>[]>([]);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiDecorateLoading, setAiDecorateLoading] = useState(false);
+  const [aiDecorateResult, setAiDecorateResult] = useState("");
 
   const layersRef = useRef(layers);
   layersRef.current = layers;
@@ -216,6 +218,80 @@ export default function TilemapPage() {
       setAiLoading(false);
     }
   }, [aiPrompt, aiLoading, gridW, gridH, pushUndo, generateFallbackPattern]);
+
+  const aiDecorate = async () => {
+    if (aiDecorateLoading) return;
+    setAiDecorateLoading(true);
+    setAiDecorateResult("");
+    pushUndo();
+    try {
+      const groundLayer = layers.Ground;
+      const tileNames: Record<number, string> = {};
+      TILE_TYPES.forEach((t) => { tileNames[t.id] = t.name; });
+
+      const counts: Record<string, number> = {};
+      for (let y = 0; y < gridH; y++) {
+        for (let x = 0; x < gridW; x++) {
+          const id = groundLayer[y]?.[x] ?? 0;
+          const name = tileNames[id] || "Empty";
+          counts[name] = (counts[name] || 0) + 1;
+        }
+      }
+      const summary = Object.entries(counts)
+        .filter(([n]) => n !== "Empty")
+        .map(([n, c]) => `${n}: ${c} tiles`)
+        .join(", ");
+
+      const prompt = `Given this ${gridW}x${gridH} tilemap, suggest placement for decorative elements. The ground layer has: ${summary || "mostly empty tiles"}. Suggest where to place: trees (id=9), flowers (id=10), and bridges (id=11). Return as JSON array: [{x, y, tile}] where tile is the id number. Only suggest 10-15 decorations. Place trees and flowers on grass tiles, bridges over water adjacent to land. Return ONLY the JSON array, no explanation.`;
+
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+
+      const data = await response.json();
+      const content =
+        data.choices?.[0]?.message?.content ||
+        data.choices?.[0]?.message?.reasoning ||
+        "";
+
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) throw new Error("No JSON found");
+
+      const decorations: { x: number; y: number; tile: number }[] = JSON.parse(jsonMatch[0]);
+      if (!Array.isArray(decorations)) throw new Error("Invalid format");
+
+      const valid = decorations.filter(
+        (d) => d.x >= 0 && d.x < gridW && d.y >= 0 && d.y < gridH && [9, 10, 11].includes(d.tile)
+      );
+
+      setLayers((prev) => {
+        const objectsGrid = prev.Objects.map((r) => [...r]);
+        for (const d of valid) {
+          objectsGrid[d.y][d.x] = d.tile;
+        }
+        return { ...prev, Objects: objectsGrid };
+      });
+
+      setAiDecorateResult(`Placed ${valid.length} decorations on the Objects layer.`);
+      setActiveLayer("Objects");
+      setLayerVisibility((prev) => ({ ...prev, Objects: true }));
+    } catch {
+      setAiDecorateResult("Failed to generate decorations. Try again.");
+    } finally {
+      setAiDecorateLoading(false);
+    }
+  };
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -626,6 +702,38 @@ export default function TilemapPage() {
                 </>
               )}
             </button>
+          </div>
+
+          {/* AI Decorate */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-3">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              <Sparkles className="inline h-3 w-3 mr-1" /> AI Decorate
+            </h3>
+            <p className="mb-2 text-[10px] text-[#6B7280]">
+              Auto-place trees, flowers &amp; bridges on the Objects layer based on your ground terrain.
+            </p>
+            <button
+              onClick={aiDecorate}
+              disabled={aiDecorateLoading}
+              className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-3 py-2 text-xs font-semibold text-[#F59E0B] hover:bg-[#F59E0B]/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {aiDecorateLoading ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Decorating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3.5 w-3.5" />
+                  AI Decorate
+                </>
+              )}
+            </button>
+            {aiDecorateResult && (
+              <div className="mt-2 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-2">
+                <p className="text-[11px] text-[#F59E0B]">{aiDecorateResult}</p>
+              </div>
+            )}
           </div>
 
           {/* Tile Palette */}
