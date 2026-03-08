@@ -1173,6 +1173,15 @@ export function addReference(ref: Omit<Reference, "id" | "created_at">): Referen
   return newRef;
 }
 
+export function updateReference(id: string, updates: Partial<Omit<Reference, "id" | "projectId" | "created_at">>): Reference | null {
+  const refs = getReferences();
+  const idx = refs.findIndex((r) => r.id === id);
+  if (idx === -1) return null;
+  refs[idx] = { ...refs[idx], ...updates };
+  save(REFERENCES_KEY, refs);
+  return refs[idx];
+}
+
 export function deleteReference(id: string): boolean {
   const refs = getReferences();
   const filtered = refs.filter((r) => r.id !== id);

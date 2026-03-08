@@ -13,12 +13,17 @@ import {
   ChevronDown,
   Sparkles,
   Loader2,
+  Download,
+  Copy,
+  Check,
+  Tags,
 } from "lucide-react";
 import {
   getProject,
   getReferences,
   addReference,
   deleteReference,
+  updateReference,
   REFERENCE_CATEGORY_COLORS,
   type Project,
   type Reference,
@@ -47,6 +52,8 @@ export default function ReferenceBoardPage() {
   const [formNotes, setFormNotes] = useState("");
   const [formColor, setFormColor] = useState(COLOR_OPTIONS[0]);
   const [aiLoading, setAiLoading] = useState(false);
+  const [categorizingProgress, setCategorizingProgress] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const fetchAiSuggestions = async () => {
     if (!project) return;
@@ -91,6 +98,97 @@ export default function ReferenceBoardPage() {
     } finally {
       setAiLoading(false);
     }
+  };
+
+  const handleAiCategorize = async () => {
+    const uncategorized = references.filter(
+      (r) => !CATEGORIES.includes(r.category) || r.category === ("Other" as ReferenceCategory)
+    );
+    if (uncategorized.length === 0) {
+      setCategorizingProgress("No uncategorized references found");
+      setTimeout(() => setCategorizingProgress(null), 2000);
+      return;
+    }
+    setCategorizingProgress(`Categorizing 0/${uncategorized.length}...`);
+    for (let i = 0; i < uncategorized.length; i++) {
+      const ref = uncategorized[i];
+      setCategorizingProgress(`Categorizing ${i + 1}/${uncategorized.length}...`);
+      try {
+        const prompt = `This game reference is titled '${ref.title}' from URL '${ref.url}' with notes: '${ref.notes}'. What category fits best: Art, Gameplay, UI, Audio, Story, or Marketing? Respond with just the category name.`;
+        const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "moonshotai/Kimi-K2.5-TEE",
+            messages: [{ role: "user", content: prompt }],
+            stream: false,
+            max_tokens: 256,
+            temperature: 0.7,
+          }),
+        });
+        const data = await response.json();
+        const raw = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+        const matched = CATEGORIES.find((c) => raw.toLowerCase().includes(c.toLowerCase()));
+        if (matched) {
+          updateReference(ref.id, { category: matched });
+          setReferences((prev) =>
+            prev.map((r) => (r.id === ref.id ? { ...r, category: matched } : r))
+          );
+        }
+      } catch {
+        // skip this one
+      }
+    }
+    setCategorizingProgress("Done!");
+    setTimeout(() => setCategorizingProgress(null), 1500);
+  };
+
+  const handleExportMarkdown = () => {
+    const grouped: Record<string, Reference[]> = {};
+    for (const ref of references) {
+      if (!grouped[ref.category]) grouped[ref.category] = [];
+      grouped[ref.category].push(ref);
+    }
+    let md = `# ${project?.name || "Project"} - References\n\n`;
+    for (const cat of CATEGORIES) {
+      const refs = grouped[cat];
+      if (!refs || refs.length === 0) continue;
+      md += `## ${cat}\n\n`;
+      for (const ref of refs) {
+        md += `### ${ref.title}\n`;
+        md += `- **URL:** ${ref.url}\n`;
+        if (ref.notes) md += `- **Notes:** ${ref.notes}\n`;
+        md += `\n`;
+      }
+    }
+    const otherCats = Object.keys(grouped).filter((c) => !CATEGORIES.includes(c as ReferenceCategory));
+    for (const cat of otherCats) {
+      md += `## ${cat}\n\n`;
+      for (const ref of grouped[cat]) {
+        md += `### ${ref.title}\n`;
+        md += `- **URL:** ${ref.url}\n`;
+        if (ref.notes) md += `- **Notes:** ${ref.notes}\n`;
+        md += `\n`;
+      }
+    }
+    const slug = (project?.name || "project").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${slug}-references.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyLinks = async () => {
+    const links = references.map((r) => r.url).join("\n");
+    await navigator.clipboard.writeText(links);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   useEffect(() => {
@@ -204,11 +302,23 @@ export default function ReferenceBoardPage() {
               <p className="text-sm text-[#6B7280]">{references.length} references collected</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleAiCategorize}
+              disabled={!!categorizingProgress}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-3 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20 disabled:opacity-50"
+            >
+              {categorizingProgress ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Tags className="h-4 w-4" />
+              )}
+              {categorizingProgress || "AI Categorize"}
+            </button>
             <button
               onClick={fetchAiSuggestions}
               disabled={aiLoading}
-              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-4 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-3 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20 disabled:opacity-50"
             >
               {aiLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -218,8 +328,24 @@ export default function ReferenceBoardPage() {
               {aiLoading ? "Suggesting..." : "AI Suggest"}
             </button>
             <button
+              onClick={handleExportMarkdown}
+              disabled={references.length === 0}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B] disabled:opacity-40"
+            >
+              <Download className="h-4 w-4" />
+              Export
+            </button>
+            <button
+              onClick={handleCopyLinks}
+              disabled={references.length === 0}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B] disabled:opacity-40"
+            >
+              {copied ? <Check className="h-4 w-4 text-[#10B981]" /> : <Copy className="h-4 w-4" />}
+              {copied ? "Copied!" : "Copy Links"}
+            </button>
+            <button
               onClick={() => setShowForm(true)}
-              className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-[#0F0F0F] transition-colors hover:bg-[#F59E0B]/90"
+              className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-3 py-2 text-sm font-medium text-[#0F0F0F] transition-colors hover:bg-[#F59E0B]/90"
             >
               <Plus className="h-4 w-4" />
               Add Reference
