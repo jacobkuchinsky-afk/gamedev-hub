@@ -24,6 +24,8 @@ import {
   Plus,
   Clock,
   Calendar,
+  ClipboardCopy,
+  Check,
 } from "lucide-react";
 import {
   getProject,
@@ -117,6 +119,10 @@ export default function PlaytestPage() {
   const [filterCategory, setFilterCategory] = useState<FeedbackCategory | "all">("all");
   const [aiSummary, setAiSummary] = useState("");
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [aiQuestions, setAiQuestions] = useState("");
+  const [aiQuestionsLoading, setAiQuestionsLoading] = useState(false);
+  const [showAiQuestions, setShowAiQuestions] = useState(false);
+  const [questionsCopied, setQuestionsCopied] = useState(false);
 
   const [sessions, setSessions] = useState<PlaytestSession[]>([]);
   const [showSessionForm, setShowSessionForm] = useState(false);
@@ -161,6 +167,44 @@ export default function PlaytestPage() {
     } finally {
       setAiSummaryLoading(false);
     }
+  };
+
+  const handleAiQuestions = async () => {
+    if (!project) return;
+    setAiQuestionsLoading(true);
+    setShowAiQuestions(true);
+    try {
+      const prompt = `Generate 10 playtest feedback questions for a ${project.genre} game in ${project.status} stage. Include: 5 rating questions (1-5 scale) and 5 open-ended questions. Focus on: controls feel, difficulty, visual clarity, audio, fun factor, and bugs. Format as a numbered list.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      setAiQuestions(content || "Could not generate questions. Try again later.");
+    } catch {
+      setAiQuestions("Failed to generate questions. Check your connection and try again.");
+    } finally {
+      setAiQuestionsLoading(false);
+    }
+  };
+
+  const copyQuestions = () => {
+    if (!aiQuestions) return;
+    navigator.clipboard.writeText(aiQuestions).then(() => {
+      setQuestionsCopied(true);
+      setTimeout(() => setQuestionsCopied(false), 2000);
+    });
   };
 
   // Playtester form state
@@ -373,6 +417,18 @@ export default function PlaytestPage() {
               </button>
             </div>
             <button
+              onClick={handleAiQuestions}
+              disabled={aiQuestionsLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {aiQuestionsLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              AI Questions
+            </button>
+            <button
               onClick={handleShareLink}
               className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
             >
@@ -391,6 +447,59 @@ export default function PlaytestPage() {
           </div>
         </div>
       </div>
+
+      {/* ─── AI QUESTIONS PANEL ─── */}
+      {showAiQuestions && (
+        <div className="rounded-xl border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+              <h3 className="text-sm font-semibold text-[#F59E0B]">AI Playtest Questions</h3>
+              <span className="rounded bg-[#F59E0B]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B]">
+                {project.genre} &middot; {project.status}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {aiQuestions && !aiQuestionsLoading && (
+                <button
+                  onClick={copyQuestions}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    questionsCopied
+                      ? "bg-[#10B981]/10 text-[#10B981]"
+                      : "bg-[#F59E0B]/10 text-[#F59E0B] hover:bg-[#F59E0B]/20"
+                  }`}
+                >
+                  {questionsCopied ? (
+                    <>
+                      <Check className="h-3.5 w-3.5" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <ClipboardCopy className="h-3.5 w-3.5" />
+                      Copy as Survey
+                    </>
+                  )}
+                </button>
+              )}
+              <button
+                onClick={() => setShowAiQuestions(false)}
+                className="rounded p-1 text-[#6B7280] transition-colors hover:text-[#9CA3AF]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+          {aiQuestionsLoading ? (
+            <div className="flex items-center gap-3 py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-[#F59E0B]" />
+              <span className="text-sm text-[#9CA3AF]">Generating playtest questions...</span>
+            </div>
+          ) : (
+            <div className="text-sm leading-relaxed text-[#D1D5DB] whitespace-pre-wrap">{aiQuestions}</div>
+          )}
+        </div>
+      )}
 
       {/* ─── RESULTS DASHBOARD ─── */}
       {activeView === "results" && (

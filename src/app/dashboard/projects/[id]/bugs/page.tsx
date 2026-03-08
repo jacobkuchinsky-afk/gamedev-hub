@@ -19,6 +19,7 @@ import {
   RotateCcw,
   Clock,
   ArrowRight,
+  Download,
 } from "lucide-react";
 import {
   getProject,
@@ -336,6 +337,53 @@ Be concise and professional. Fill in any missing sections based on the title and
     } finally {
       setAiAnalyzingBug(null);
     }
+  };
+
+  const exportBugReport = () => {
+    if (!project || bugs.length === 0) return;
+    const open = bugs.filter((b) => b.status === "open" || b.status === "investigating" || b.status === "in-progress").length;
+    const fixed = bugs.filter((b) => b.status === "fixed").length;
+    const closed = bugs.filter((b) => b.status === "closed").length;
+    const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+    let md = `# Bug Report — ${project.name}\n\n`;
+    md += `**Date:** ${date}\n\n`;
+    md += `## Summary\n\n`;
+    md += `| Metric | Count |\n|--------|-------|\n`;
+    md += `| Total Bugs | ${bugs.length} |\n`;
+    md += `| Open | ${open} |\n`;
+    md += `| Fixed | ${fixed} |\n`;
+    md += `| Closed | ${closed} |\n\n`;
+    md += `---\n\n## Bugs\n\n`;
+
+    bugs.forEach((bug, i) => {
+      md += `### ${i + 1}. ${bug.title}\n\n`;
+      md += `- **Severity:** ${bug.severity.charAt(0).toUpperCase() + bug.severity.slice(1)}\n`;
+      md += `- **Status:** ${STATUS_LABELS[bug.status]}\n`;
+      md += `- **Platform:** ${bug.platform}\n`;
+      md += `- **Reported:** ${new Date(bug.created_at).toLocaleDateString()}\n\n`;
+
+      if (bug.description) md += `**Description:**\n${bug.description}\n\n`;
+      if (bug.reproSteps) md += `**Steps to Reproduce:**\n${bug.reproSteps}\n\n`;
+      if (bug.expectedBehavior) md += `**Expected Behavior:**\n${bug.expectedBehavior}\n\n`;
+      if (bug.actualBehavior) md += `**Actual Behavior:**\n${bug.actualBehavior}\n\n`;
+      if (bug.status === "fixed" || bug.status === "closed") {
+        const lastEntry = bug.statusHistory?.[bug.statusHistory.length - 1];
+        if (lastEntry) {
+          md += `**Resolution:** Marked as ${STATUS_LABELS[lastEntry.status as Bug["status"]] || lastEntry.status} on ${new Date(lastEntry.timestamp).toLocaleDateString()}\n\n`;
+        }
+      }
+      md += `---\n\n`;
+    });
+
+    const slug = project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${slug}-bugs.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const openBugs = useMemo(() => bugs.filter((b) => b.status !== "closed"), [bugs]);
@@ -665,6 +713,15 @@ Be concise and professional. Fill in any missing sections based on the title and
               <Zap className="h-3.5 w-3.5" />
               Quick File
             </button>
+            {bugs.length > 0 && (
+              <button
+                onClick={exportBugReport}
+                className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              >
+                <Download className="h-4 w-4" />
+                Export
+              </button>
+            )}
             <button
               onClick={() => setShowAddForm(true)}
               className="flex items-center gap-2 rounded-lg bg-[#EF4444] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#EF4444]/90"
