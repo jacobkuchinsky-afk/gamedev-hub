@@ -19,6 +19,7 @@ import {
   Type,
   Monitor,
   Star,
+  Globe,
 } from "lucide-react";
 
 type Category = "All" | "Art & Design" | "Audio" | "Game Design" | "AI-Powered" | "Level Design" | "Animation";
@@ -147,6 +148,15 @@ const TOOLS: {
       "Visual resolution comparison, aspect ratio calculator, platform recommendations, and sprite density info.",
     color: "#38BDF8",
     category: "Game Design",
+  },
+  {
+    href: "/dashboard/tools/worldbuilder",
+    icon: Globe,
+    name: "World Builder",
+    description:
+      "Generate rich game world lore with AI \u2014 locations, factions, conflicts, and plot hooks for any setting.",
+    color: "#F59E0B",
+    category: "AI-Powered",
   },
 ];
 

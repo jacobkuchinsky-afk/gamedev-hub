@@ -18,6 +18,8 @@ import {
   Undo2,
   Redo2,
   LayoutGrid,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 
 const BASE_TILE = 32;
@@ -95,6 +97,8 @@ export default function TilemapPage() {
 
   const [undoStack, setUndoStack] = useState<Record<LayerName, number[][]>[]>([]);
   const [redoStack, setRedoStack] = useState<Record<LayerName, number[][]>[]>([]);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
 
   const layersRef = useRef(layers);
   layersRef.current = layers;
@@ -138,6 +142,80 @@ export default function TilemapPage() {
   undoRef.current = undo;
   const redoRef = useRef(redo);
   redoRef.current = redo;
+
+  const generateFallbackPattern = useCallback((): number[][] => {
+    const grid = createEmptyGrid(gridW, gridH);
+    for (let y = 0; y < gridH; y++) {
+      for (let x = 0; x < gridW; x++) {
+        if (y === 0 || y === gridH - 1 || x === 0 || x === gridW - 1) {
+          grid[y][x] = 8;
+        } else {
+          grid[y][x] = 1;
+        }
+      }
+    }
+    const midY = Math.floor(gridH / 2);
+    for (let x = 1; x < gridW - 1; x++) {
+      grid[midY][x] = 7;
+    }
+    return grid;
+  }, [gridW, gridH]);
+
+  const generateAiLevel = useCallback(async () => {
+    if (!aiPrompt.trim() || aiLoading) return;
+    setAiLoading(true);
+    pushUndo();
+
+    try {
+      const tileList = TILE_TYPES.map((t) => `${t.name}=${t.id}`).join(", ");
+      const prompt = `Generate a ${gridW}x${gridH} tilemap for a game level described as: '${aiPrompt.trim()}'. The available tile types are: ${tileList}. Return ONLY a JSON 2D array of tile IDs (${gridH} rows of ${gridW} columns). No explanation.`;
+      const maxTokens = Math.min(4096, Math.max(512, Math.ceil(gridW * gridH * 3)));
+
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: maxTokens,
+          temperature: 0.8,
+        }),
+      });
+
+      const data = await response.json();
+      const content =
+        data.choices?.[0]?.message?.content ||
+        data.choices?.[0]?.message?.reasoning ||
+        "";
+
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) throw new Error("No JSON array found");
+
+      const parsed: number[][] = JSON.parse(jsonMatch[0]);
+      if (!Array.isArray(parsed) || !Array.isArray(parsed[0]))
+        throw new Error("Invalid structure");
+
+      const grid = createEmptyGrid(gridW, gridH);
+      for (let y = 0; y < Math.min(parsed.length, gridH); y++) {
+        for (let x = 0; x < Math.min(parsed[y]?.length ?? 0, gridW); x++) {
+          const val = parsed[y][x];
+          if (typeof val === "number" && val >= 0 && val < TILE_TYPES.length) {
+            grid[y][x] = val;
+          }
+        }
+      }
+
+      setLayers((prev) => ({ ...prev, Ground: grid }));
+    } catch {
+      setLayers((prev) => ({ ...prev, Ground: generateFallbackPattern() }));
+    } finally {
+      setAiLoading(false);
+    }
+  }, [aiPrompt, aiLoading, gridW, gridH, pushUndo, generateFallbackPattern]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -516,6 +594,38 @@ export default function TilemapPage() {
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* AI Generate */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-3">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              <Sparkles className="inline h-3 w-3 mr-1" /> AI Level Design
+            </h3>
+            <textarea
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              placeholder='e.g. "forest path with a river crossing"'
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] px-2 py-1.5 text-xs text-[#D1D5DB] placeholder-[#555] outline-none focus:border-[#F59E0B]/40 resize-none"
+              rows={2}
+              disabled={aiLoading}
+            />
+            <button
+              onClick={generateAiLevel}
+              disabled={aiLoading || !aiPrompt.trim()}
+              className="mt-2 w-full flex items-center justify-center gap-2 rounded-lg bg-[#F59E0B] px-3 py-2 text-xs font-semibold text-black transition-colors hover:bg-[#D97706] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {aiLoading ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3.5 w-3.5" />
+                  AI Generate
+                </>
+              )}
+            </button>
           </div>
 
           {/* Tile Palette */}
