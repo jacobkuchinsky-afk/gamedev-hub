@@ -207,7 +207,7 @@ export default function LandingPage() {
           </div>
           <h1 className="animate-fade-in stagger-1 mx-auto max-w-3xl text-5xl font-extrabold leading-tight tracking-tight md:text-7xl">
             Build Games{" "}
-            <span className="bg-gradient-to-r from-[#F59E0B] to-[#D97706] bg-clip-text text-transparent">
+            <span className="hero-gradient-text">
               Better
             </span>
           </h1>

@@ -68,6 +68,20 @@ input, textarea, select {
   100% { transform: translateY(-100vh); opacity: 0.2; }
 }
 
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.hero-gradient-text {
+  background: linear-gradient(90deg, #F59E0B, #D97706, #FBBF24, #F59E0B);
+  background-size: 300% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: gradient-shift 6s ease infinite;
+}
+
 .animate-fade-in {
   animation: fadeIn 200ms ease-out forwards;
 }
