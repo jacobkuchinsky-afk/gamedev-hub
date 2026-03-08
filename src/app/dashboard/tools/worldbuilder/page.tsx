@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
+  Download,
   Globe,
   Sparkles,
   Loader2,
@@ -692,6 +693,42 @@ export default function WorldBuilderPage() {
     [],
   );
 
+  const handleExportAll = useCallback(() => {
+    const sections: string[] = [];
+    sections.push(`# World Builder Export\n\nExported on ${new Date().toLocaleString()}\n\n---\n`);
+
+    if (result.trim()) {
+      sections.push(`## World Lore (Current)\n\n${result.trim()}\n`);
+    }
+    if (placeNames.length > 0) {
+      sections.push(`## Place Names\n\n${placeNames.map((p) => `- **${p.name}** — ${p.desc}`).join("\n")}\n`);
+    }
+    if (aiHistory.trim()) {
+      sections.push(`## History Timeline\n\n${aiHistory.trim()}\n`);
+    }
+    if (worldEvents.length > 0) {
+      sections.push(`## World Events\n\n${worldEvents.map((e) => `### ${e.name}\n- **Trigger:** ${e.trigger}\n- **Effect:** ${e.effect}\n- **Duration:** ${e.duration}`).join("\n\n")}\n`);
+    }
+    if (characters.length > 0) {
+      sections.push(`## Characters\n\n${characters.map((c) => `- **${c.name}** — ${c.role} (${c.faction})`).join("\n")}\n`);
+    }
+    if (relationships.length > 0) {
+      sections.push(`## Character Relationships\n\n${relationships.map((r) => `- ${r.from} — *${r.type}* — ${r.to}`).join("\n")}\n`);
+    }
+    if (savedWorlds.length > 0) {
+      sections.push(`## Saved Worlds\n\n${savedWorlds.map((w) => `### ${w.name}\n*${w.setting} | ${w.tone} | ${w.size}*\n\n${w.content}`).join("\n\n---\n\n")}\n`);
+    }
+
+    const md = sections.join("\n");
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "world-builder-export.md";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [result, placeNames, aiHistory, worldEvents, characters, relationships, savedWorlds]);
+
   const selectBtnClass = (active: boolean) =>
     `rounded-lg px-3 py-2 text-xs font-medium transition-all ${
       active
@@ -701,22 +738,30 @@ export default function WorldBuilderPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-center gap-3">
-        <Link
-          href="/dashboard/tools"
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#2A2A2A] text-[#9CA3AF] hover:text-[#F5F5F5] transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <Globe className="h-5 w-5 text-[#F59E0B]" />
-            World Builder
-          </h1>
-          <p className="text-xs text-[#9CA3AF]">
-            Generate rich game world lore with AI
-          </p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard/tools"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#2A2A2A] text-[#9CA3AF] hover:text-[#F5F5F5] transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <div>
+            <h1 className="text-xl font-bold flex items-center gap-2">
+              <Globe className="h-5 w-5 text-[#F59E0B]" />
+              World Builder
+            </h1>
+            <p className="text-xs text-[#9CA3AF]">
+              Generate rich game world lore with AI
+            </p>
+          </div>
         </div>
+        <button
+          onClick={handleExportAll}
+          className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-3 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20"
+        >
+          <Download className="h-4 w-4" /> Export All
+        </button>
       </div>
 
       <div className="flex gap-1 rounded-lg border border-[#2A2A2A] bg-[#111] p-1">
