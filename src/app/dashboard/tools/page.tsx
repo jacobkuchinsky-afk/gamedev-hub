@@ -28,6 +28,7 @@ import {
   Network,
   Gamepad2,
   Layout,
+  BookMarked,
 } from "lucide-react";
 import { getToolUsage } from "./layout";
 
@@ -229,6 +230,15 @@ const TOOLS: {
       "Design game HUD and menu layouts with drag-and-drop elements, presets for platformer/RPG/FPS, and JSON export.",
     color: "#F59E0B",
     category: "Art & Design",
+  },
+  {
+    href: "/dashboard/tools/narrative",
+    icon: BookMarked,
+    name: "AI Narrative Writer",
+    description:
+      "Generate story outlines, character backstories, and quests with AI. Save and organize your game narratives.",
+    color: "#F59E0B",
+    category: "AI-Powered",
   },
 ];
 
