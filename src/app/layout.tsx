@@ -9,9 +9,24 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "GameForge - Build Games Better",
+  title: "GameForge - Game Development Productivity Platform",
   description:
-    "The productivity platform built for game developers. Organize your project, track bugs, design sprites, generate sounds — all in one place.",
+    "Build games better with GameForge. Sprite editor, sound generator, dialogue builder, project management, and 13+ game dev tools in one place.",
+  keywords: [
+    "game development",
+    "gamedev tools",
+    "sprite editor",
+    "game design",
+    "project management",
+  ],
+  openGraph: {
+    title: "GameForge",
+    description: "The productivity platform built for game developers.",
+    type: "website",
+  },
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
