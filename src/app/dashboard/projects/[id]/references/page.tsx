@@ -11,6 +11,8 @@ import {
   Image,
   ChevronUp,
   ChevronDown,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import {
   getProject,
@@ -44,6 +46,52 @@ export default function ReferenceBoardPage() {
   const [formCategory, setFormCategory] = useState<ReferenceCategory>("Art");
   const [formNotes, setFormNotes] = useState("");
   const [formColor, setFormColor] = useState(COLOR_OPTIONS[0]);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const fetchAiSuggestions = async () => {
+    if (!project) return;
+    setAiLoading(true);
+    try {
+      const prompt = `Suggest 5 game references for a ${project.genre || "general"} game described as: '${project.description || project.name}'. For each, provide: game title, what to study from it (art style, gameplay mechanic, etc.), and a category (Art, Gameplay, UI, Audio, Story). Format as JSON array of objects: [{title, studyFocus, category}].`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const raw = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const jsonMatch = raw.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) return;
+      const suggestions: { title: string; studyFocus: string; category: string }[] = JSON.parse(jsonMatch[0]);
+      for (const s of suggestions) {
+        const cat = CATEGORIES.includes(s.category as ReferenceCategory)
+          ? (s.category as ReferenceCategory)
+          : "Art";
+        const ref = addReference({
+          projectId,
+          title: s.title,
+          url: `https://www.google.com/search?q=${encodeURIComponent(s.title + " game")}`,
+          category: cat,
+          notes: s.studyFocus,
+          colorLabel: COLOR_OPTIONS[Math.floor(Math.random() * COLOR_OPTIONS.length)],
+        });
+        setReferences((prev) => [...prev, ref]);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -156,13 +204,27 @@ export default function ReferenceBoardPage() {
               <p className="text-sm text-[#6B7280]">{references.length} references collected</p>
             </div>
           </div>
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-[#0F0F0F] transition-colors hover:bg-[#F59E0B]/90"
-          >
-            <Plus className="h-4 w-4" />
-            Add Reference
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchAiSuggestions}
+              disabled={aiLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-4 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20 disabled:opacity-50"
+            >
+              {aiLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              {aiLoading ? "Suggesting..." : "AI Suggest"}
+            </button>
+            <button
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-[#0F0F0F] transition-colors hover:bg-[#F59E0B]/90"
+            >
+              <Plus className="h-4 w-4" />
+              Add Reference
+            </button>
+          </div>
         </div>
       </div>
 

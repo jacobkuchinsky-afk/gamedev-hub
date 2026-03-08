@@ -16,6 +16,10 @@ import {
   Eye,
   Plus,
   Trash2,
+  Sparkles,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 const GRID = 16;
@@ -121,6 +125,41 @@ export default function AnimationPage() {
   const [loopMode, setLoopMode] = useState<LoopMode>("loop");
   const [onionSkin, setOnionSkin] = useState(false);
   const [selectedFrames, setSelectedFrames] = useState<Set<number>>(new Set());
+  const [aiDescription, setAiDescription] = useState("");
+  const [aiTips, setAiTips] = useState("");
+  const [aiTipsLoading, setAiTipsLoading] = useState(false);
+  const [aiTipsOpen, setAiTipsOpen] = useState(false);
+
+  const fetchAiTips = async () => {
+    setAiTipsLoading(true);
+    setAiTipsOpen(true);
+    setAiTips("");
+    try {
+      const desc = aiDescription.trim() || "a game sprite";
+      const prompt = `Give 3 quick tips for creating a smooth ${frames.length}-frame pixel art animation. The animation is for ${desc}. Include: frame timing advice, common mistakes to avoid, and a specific technique. Be very brief (3 bullet points max).`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "No tips available right now.";
+      setAiTips(content);
+    } catch {
+      setAiTips("Failed to fetch tips. Check your connection and try again.");
+    } finally {
+      setAiTipsLoading(false);
+    }
+  };
 
   const editorRef = useRef<HTMLCanvasElement>(null);
   const previewRef = useRef<HTMLCanvasElement>(null);
@@ -509,6 +548,55 @@ export default function AnimationPage() {
           <button onClick={exportSpritesheet} className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-4 py-3 text-sm font-medium text-[#F59E0B] hover:bg-[#F59E0B]/20 transition-colors">
             <Download className="h-4 w-4" /> Export Spritesheet
           </button>
+
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 space-y-3">
+            <p className="text-xs font-medium text-[#9CA3AF]">AI ANIMATION TIPS</p>
+            <input
+              type="text"
+              placeholder="Describe your sprite (optional)..."
+              value={aiDescription}
+              onChange={(e) => setAiDescription(e.target.value)}
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-xs text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+            />
+            <button
+              onClick={fetchAiTips}
+              disabled={aiTipsLoading}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-3 py-2 text-xs font-medium text-[#F59E0B] hover:bg-[#F59E0B]/20 transition-colors disabled:opacity-50"
+            >
+              {aiTipsLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              {aiTipsLoading ? "Getting tips..." : "Get AI Tips"}
+            </button>
+            {(aiTips || aiTipsLoading) && (
+              <div>
+                <button
+                  onClick={() => setAiTipsOpen(!aiTipsOpen)}
+                  className="flex w-full items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-xs text-[#9CA3AF] hover:text-[#F5F5F5] transition-colors"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="h-3 w-3 text-[#F59E0B]" />
+                    Tips for {frames.length}-frame animation
+                  </span>
+                  {aiTipsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </button>
+                {aiTipsOpen && (
+                  <div className="mt-2 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3">
+                    {aiTipsLoading ? (
+                      <div className="flex items-center justify-center gap-2 py-4 text-xs text-[#6B7280]">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F59E0B]" />
+                        Thinking...
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap text-xs leading-relaxed text-[#D1D5DB]">{aiTips}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
