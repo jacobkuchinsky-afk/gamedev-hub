@@ -488,6 +488,44 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   color: #3B82F6;
 }
 
+/* Tab bar utilities */
+.tab-bar {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid #2A2A2A;
+  padding-bottom: 0;
+}
+.tab {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6B7280;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+.tab:hover {
+  color: #D1D5DB;
+}
+.tab-active {
+  color: #F59E0B;
+  border-bottom-color: #F59E0B;
+}
+
+/* Avatar utilities */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #F59E0B;
+  color: #0F0F0F;
+  font-weight: 700;
+}
+.avatar-sm { width: 24px; height: 24px; font-size: 10px; }
+.avatar-md { width: 32px; height: 32px; font-size: 13px; }
+.avatar-lg { width: 40px; height: 40px; font-size: 16px; }
+
 /* Button utilities - base + variants */
 .btn {
   display: inline-flex;
