@@ -33,6 +33,10 @@ import {
   ArrowUpRight,
   Copy,
   MessageSquare,
+  Trophy,
+  Search,
+  Zap,
+  Award,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
 import {
@@ -136,6 +140,42 @@ const GAME_DEV_TIPS = [
 ];
 
 
+interface GameForgeBadge {
+  id: string;
+  name: string;
+  description: string;
+  hint: string;
+  icon: typeof Trophy;
+  color: string;
+  check: (ctx: { projects: number; bugs: number; devlogs: number; completedSprints: number; toolsUsed: number; aiUses: number }) => boolean;
+}
+
+const GAMEFORGE_BADGES: GameForgeBadge[] = [
+  { id: "first_project", name: "First Project", description: "Created your first game project", hint: "Create a project to unlock", icon: Rocket, color: "#F59E0B", check: (c) => c.projects >= 1 },
+  { id: "bug_hunter", name: "Bug Hunter", description: "Filed 10+ bugs across all projects", hint: "File 10 bugs to unlock", icon: Bug, color: "#EF4444", check: (c) => c.bugs >= 10 },
+  { id: "prolific_writer", name: "Prolific Writer", description: "Wrote 10+ devlog entries", hint: "Write 10 devlog entries to unlock", icon: PenLine, color: "#10B981", check: (c) => c.devlogs >= 10 },
+  { id: "sprint_champion", name: "Sprint Champion", description: "Completed 3+ sprints", hint: "Complete 3 sprints to unlock", icon: Flame, color: "#F97316", check: (c) => c.completedSprints >= 3 },
+  { id: "tool_explorer", name: "Tool Explorer", description: "Used 10+ different tools", hint: "Try 10 different tools to unlock", icon: Search, color: "#8B5CF6", check: (c) => c.toolsUsed >= 10 },
+  { id: "ai_power_user", name: "AI Power User", description: "Used AI features 20+ times", hint: "Use AI features 20 times to unlock", icon: Zap, color: "#3B82F6", check: (c) => c.aiUses >= 20 },
+];
+
+function getGamificationStats() {
+  if (typeof window === "undefined") return { projects: 0, bugs: 0, devlogs: 0, completedSprints: 0, toolsUsed: 0, aiUses: 0 };
+
+  const projects = getProjects().length;
+  const bugs = getBugs().length;
+  const devlogs = getDevlog().length;
+  const completedSprints = getSprints().filter((s) => s.status === "completed").length;
+
+  const toolsRaw = localStorage.getItem("gameforge_tools_used");
+  const toolsUsed = toolsRaw ? (JSON.parse(toolsRaw) as string[]).length : 0;
+
+  const aiRaw = localStorage.getItem("gameforge_ai_uses");
+  const aiUses = aiRaw ? parseInt(aiRaw, 10) : 0;
+
+  return { projects, bugs, devlogs, completedSprints, toolsUsed, aiUses };
+}
+
 const LAUNCH_ITEMS = [
   { id: "sp_title", label: "Finalize game title" },
   { id: "sp_desc", label: "Write store description" },
@@ -235,6 +275,8 @@ export default function DashboardPage() {
   const [standupLoading, setStandupLoading] = useState(false);
   const [standupText, setStandupText] = useState("");
   const [standupCopied, setStandupCopied] = useState(false);
+
+  const [badgeStats, setBadgeStats] = useState<ReturnType<typeof getGamificationStats>>({ projects: 0, bugs: 0, devlogs: 0, completedSprints: 0, toolsUsed: 0, aiUses: 0 });
 
   const [weeklySummary, setWeeklySummary] = useState<{
     tasksCompleted: Task[];
@@ -511,6 +553,8 @@ export default function DashboardPage() {
       sprintProgress: sprintProg,
       message: motivational,
     });
+
+    setBadgeStats(getGamificationStats());
   }, []);
 
   const statCards = [
@@ -1027,6 +1071,59 @@ export default function DashboardPage() {
           </div>
         );
       })()}
+
+      {/* Your Achievements */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+        <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-4">
+          <div className="flex items-center gap-2">
+            <Award className="h-4 w-4 text-[#F59E0B]" />
+            <h2 className="font-semibold">Your Achievements</h2>
+          </div>
+          <span className="text-xs text-[#6B7280]">
+            {GAMEFORGE_BADGES.filter((b) => b.check(badgeStats)).length}/{GAMEFORGE_BADGES.length} unlocked
+          </span>
+        </div>
+        <div className="p-5">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+            {GAMEFORGE_BADGES.map((badge) => {
+              const earned = badge.check(badgeStats);
+              const Icon = badge.icon;
+              return (
+                <div
+                  key={badge.id}
+                  className="group relative flex flex-col items-center gap-2 rounded-xl border border-[#2A2A2A] p-3 transition-all hover:bg-[#1F1F1F]"
+                  style={earned ? { borderColor: badge.color + "30", backgroundColor: badge.color + "08" } : { opacity: 0.45 }}
+                >
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-xl transition-transform group-hover:scale-110"
+                    style={{ backgroundColor: earned ? badge.color + "20" : "#2A2A2A" }}
+                  >
+                    <Icon
+                      className="h-5 w-5"
+                      style={{ color: earned ? badge.color : "#6B7280" }}
+                    />
+                  </div>
+                  <p className={`text-center text-[11px] font-medium leading-tight ${earned ? "text-[#F5F5F5]" : "text-[#6B7280]"}`}>
+                    {badge.name}
+                  </p>
+                  <div className="pointer-events-none absolute -top-12 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-xs opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+                    <p className="font-medium text-[#F5F5F5]">{earned ? badge.description : badge.hint}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {GAMEFORGE_BADGES.filter((b) => b.check(badgeStats)).length === GAMEFORGE_BADGES.length && (
+            <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-4 py-2.5">
+              <Trophy className="h-4 w-4 text-[#F59E0B]" />
+              <p className="text-xs font-medium text-[#F59E0B]">
+                All achievements unlocked! You&apos;re a GameForge master.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Quick Actions */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

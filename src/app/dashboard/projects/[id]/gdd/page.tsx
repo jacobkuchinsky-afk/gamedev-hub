@@ -29,6 +29,8 @@ import {
   Crosshair,
   Ghost,
   Joystick,
+  Trophy,
+  Copy,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -507,6 +509,10 @@ export default function GDDPage() {
   const [toast, setToast] = useState<{ message: string; type: "error" | "success" } | null>(null);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<GDDTemplate | null>(null);
+  const [achievements, setAchievements] = useState<{ name: string; description: string; rarity: string; condition: string }[]>([]);
+  const [achievementsLoading, setAchievementsLoading] = useState(false);
+  const [showAchievements, setShowAchievements] = useState(false);
+  const [achievementsCopied, setAchievementsCopied] = useState(false);
 
   useEffect(() => {
     console.log("[GDDPage] rendered, id:", projectId);
@@ -702,6 +708,50 @@ export default function GDDPage() {
     [project, data]
   );
 
+  const handleGenerateAchievements = useCallback(async () => {
+    if (!project) return;
+    setAchievementsLoading(true);
+    setShowAchievements(true);
+
+    const gddSummary = Object.entries(data)
+      .filter(([, v]) => v.trim())
+      .map(([k, v]) => `${k}: ${v}`)
+      .slice(0, 8)
+      .join(". ");
+
+    const prompt = `Design 10 achievements/trophies for '${project.name}', a ${project.genre || "unspecified"} game. Context: ${gddSummary || project.description || "No additional context"}. Include: achievement name, description, rarity (Common/Rare/Epic/Legendary), and unlock condition. Mix progression, skill-based, and hidden achievements. Format as JSON array: [{name, description, rarity, condition}]. Return ONLY raw JSON, no markdown.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 1024,
+          temperature: 0.8,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+      const apiData = await response.json();
+      const content = apiData.choices?.[0]?.message?.content || apiData.choices?.[0]?.message?.reasoning || "";
+      const cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      setAchievements(Array.isArray(parsed) ? parsed : []);
+      setToast({ message: "Generated 10 achievements!", type: "success" });
+    } catch (err) {
+      console.error("[GDD Achievements]", err);
+      setToast({ message: "Failed to generate achievements — try again", type: "error" });
+    } finally {
+      setAchievementsLoading(false);
+    }
+  }, [project, data]);
+
   const filledFields = Object.values(data).filter((v) => v.trim().length > 0).length;
   const totalFields = GDD_SECTIONS.reduce((acc, s) => acc + s.fields.length, 0);
   const completionPct = totalFields > 0 ? Math.round((filledFields / totalFields) * 100) : 0;
@@ -794,6 +844,18 @@ export default function GDDPage() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleGenerateAchievements}
+                disabled={achievementsLoading}
+                className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {achievementsLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trophy className="h-3.5 w-3.5" />
+                )}
+                AI Achievements
+              </button>
               <button
                 onClick={() => setShowTemplateModal(true)}
                 className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10"
@@ -982,6 +1044,125 @@ export default function GDDPage() {
           })}
         </div>
       </div>
+
+      {/* AI Achievements Modal */}
+      {showAchievements && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-3xl rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                  <Trophy className="h-4.5 w-4.5 text-[#F59E0B]" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">AI Achievements</h3>
+                  <p className="text-xs text-[#6B7280]">
+                    {achievements.length} trophies generated for {project?.name}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {achievements.length > 0 && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(JSON.stringify(achievements, null, 2));
+                      setAchievementsCopied(true);
+                      setTimeout(() => setAchievementsCopied(false), 2000);
+                    }}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                      achievementsCopied
+                        ? "bg-[#10B981] text-white"
+                        : "border border-[#2A2A2A] text-[#9CA3AF] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                    }`}
+                  >
+                    {achievementsCopied ? (
+                      <><CheckCircle2 className="h-3.5 w-3.5" /> Copied!</>
+                    ) : (
+                      <><Copy className="h-3.5 w-3.5" /> Copy JSON</>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowAchievements(false)}
+                  className="rounded-lg p-1 text-[#9CA3AF] hover:text-[#F5F5F5]"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {achievementsLoading ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#F59E0B]" />
+                  <p className="text-sm text-[#6B7280]">Designing achievements...</p>
+                </div>
+              ) : achievements.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-2">
+                  <Trophy className="h-10 w-10 text-[#3A3A3A]" />
+                  <p className="text-sm text-[#6B7280]">No achievements generated yet</p>
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {achievements.map((ach, i) => {
+                    const rarityColors: Record<string, { border: string; bg: string; text: string }> = {
+                      Common: { border: "#6B7280", bg: "#6B728010", text: "#9CA3AF" },
+                      Rare: { border: "#3B82F6", bg: "#3B82F610", text: "#60A5FA" },
+                      Epic: { border: "#8B5CF6", bg: "#8B5CF610", text: "#A78BFA" },
+                      Legendary: { border: "#F59E0B", bg: "#F59E0B10", text: "#FBBF24" },
+                    };
+                    const r = rarityColors[ach.rarity] || rarityColors.Common;
+                    return (
+                      <div
+                        key={i}
+                        className="rounded-xl border-2 bg-[#0F0F0F] p-4 transition-all hover:bg-[#151515]"
+                        style={{ borderColor: r.border + "40" }}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2">
+                            <Trophy className="h-4 w-4 shrink-0" style={{ color: r.text }} />
+                            <h4 className="text-sm font-semibold text-[#F5F5F5]">{ach.name}</h4>
+                          </div>
+                          <span
+                            className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                            style={{ backgroundColor: r.bg, color: r.text }}
+                          >
+                            {ach.rarity}
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#9CA3AF] leading-relaxed mb-2">{ach.description}</p>
+                        <div className="flex items-center gap-1.5 rounded-lg bg-[#1A1A1A] px-2.5 py-1.5">
+                          <Flag className="h-3 w-3 shrink-0 text-[#6B7280]" />
+                          <p className="text-[11px] text-[#6B7280]">{ach.condition}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {achievements.length > 0 && (
+              <div className="flex items-center justify-between border-t border-[#2A2A2A] px-6 py-3 shrink-0">
+                <p className="text-xs text-[#6B7280]">
+                  {achievements.filter((a) => a.rarity === "Legendary").length} Legendary, {" "}
+                  {achievements.filter((a) => a.rarity === "Epic").length} Epic, {" "}
+                  {achievements.filter((a) => a.rarity === "Rare").length} Rare, {" "}
+                  {achievements.filter((a) => a.rarity === "Common").length} Common
+                </p>
+                <button
+                  onClick={handleGenerateAchievements}
+                  disabled={achievementsLoading}
+                  className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black hover:bg-[#F59E0B]/90 disabled:opacity-50"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Regenerate
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Template Selector Modal */}
       {showTemplateModal && (
