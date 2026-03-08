@@ -22,6 +22,8 @@ import {
   Layers,
   Plus,
   RotateCcw,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 
 type ElementType =
@@ -524,6 +526,58 @@ function safeHex(c: unknown): string {
   return "#000000";
 }
 
+interface AiSuggestion {
+  element: string;
+  position: string;
+  description: string;
+}
+
+const GENRES = ["RPG", "FPS", "Platformer", "Racing", "Strategy", "Survival", "Horror", "Puzzle"];
+
+function posToCoords(pos: string): { x: number; y: number } {
+  const p = pos.toLowerCase();
+  let x = 30, y = 30;
+  if (p.includes("left")) x = 3;
+  else if (p.includes("right")) x = 75;
+  else if (p.includes("center")) x = 40;
+  if (p.includes("top")) y = 3;
+  else if (p.includes("bottom")) y = 82;
+  else if (p.includes("middle") || (p.includes("center") && !p.includes("left") && !p.includes("right"))) y = 40;
+  return { x, y };
+}
+
+function inferType(desc: string): ElementType {
+  const d = desc.toLowerCase();
+  if (d.includes("health") || d.includes("hp") || d.includes("mana") || d.includes("stamina") || d.includes("energy") || d.includes("shield")) return "health-bar";
+  if (d.includes("map") || d.includes("minimap") || d.includes("radar") || d.includes("compass")) return "minimap";
+  if (d.includes("ammo") || d.includes("ammunition") || d.includes("weapon") || d.includes("gun") || d.includes("reload")) return "ammo";
+  if (d.includes("score") || d.includes("point") || d.includes("xp") || d.includes("level") || d.includes("kill") || d.includes("speed") || d.includes("lap")) return "score";
+  if (d.includes("timer") || d.includes("time") || d.includes("clock") || d.includes("countdown")) return "timer";
+  if (d.includes("inventory") || d.includes("slot") || d.includes("item") || d.includes("hotbar") || d.includes("quick")) return "inventory";
+  if (d.includes("button") || d.includes("action") || d.includes("ability") || d.includes("skill") || d.includes("interact")) return "button";
+  return "text-label";
+}
+
+function parseSuggestions(text: string): AiSuggestion[] {
+  const lines = text.split("\n").filter((l) => l.trim().length > 5);
+  const results: AiSuggestion[] = [];
+  const posWords = /\b(top[- ]?left|top[- ]?center|top[- ]?right|center[- ]?left|center[- ]?right|bottom[- ]?left|bottom[- ]?center|bottom[- ]?right|center)\b/i;
+
+  for (const line of lines) {
+    if (results.length >= 5) break;
+    const clean = line.replace(/^\s*[\d\-*]+[.):]?\s*/, "").replace(/\*\*/g, "").trim();
+    if (!clean) continue;
+    const pm = clean.match(posWords);
+    if (!pm) continue;
+    const before = clean.slice(0, pm.index).replace(/[-:,()[\]]+\s*$/, "").trim();
+    const after = clean.slice((pm.index || 0) + pm[0].length).replace(/^[-:,()[\]]+\s*/, "").trim();
+    if (before) {
+      results.push({ element: before, position: pm[0], description: after || before });
+    }
+  }
+  return results;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Element visual renderer                                            */
 /* ------------------------------------------------------------------ */
@@ -717,6 +771,9 @@ export default function UIMockupPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [canvasBg, setCanvasBg] = useState("#0C1222");
   const canvasRef = useRef<HTMLDivElement>(null);
+  const [aiGenre, setAiGenre] = useState("RPG");
+  const [aiSuggestions, setAiSuggestions] = useState<AiSuggestion[]>([]);
+  const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
 
   const selected = elements.find((el) => el.id === selectedId) ?? null;
 
@@ -908,6 +965,44 @@ export default function UIMockupPage() {
     setSelectedId(null);
   };
 
+  const suggestLayout = async () => {
+    if (aiSuggestLoading) return;
+    setAiSuggestLoading(true);
+    setAiSuggestions([]);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: `Suggest a game HUD layout for a ${aiGenre} game. List the UI elements needed and their approximate screen positions (top-left, top-center, bottom-left, etc). Include: what to show, where to place it. 5 elements max. Just a simple list.` }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      setAiSuggestions(parseSuggestions(content));
+    } catch {
+      setAiSuggestions([]);
+    } finally {
+      setAiSuggestLoading(false);
+    }
+  };
+
+  const addAiSuggestion = (s: AiSuggestion) => {
+    const type = inferType(s.element + " " + s.description);
+    const coords = posToCoords(s.position);
+    const el = makeEl(type, coords.x, coords.y);
+    el.name = s.element;
+    setElements((prev) => [...prev, el]);
+    setSelectedId(el.id);
+  };
+
   const exportJSON = () => {
     const data = {
       version: 1,
@@ -1043,6 +1138,56 @@ export default function UIMockupPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="border-b border-[#2A2A2A] p-3">
+            <h2 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">
+              <Sparkles className="h-3 w-3" /> AI Suggest
+            </h2>
+            <select
+              value={aiGenre}
+              onChange={(e) => setAiGenre(e.target.value)}
+              className="mb-2 w-full rounded border border-[#2A2A2A] bg-[#1A1A1A] px-2 py-1.5 text-xs text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+            >
+              {GENRES.map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+            <button
+              onClick={suggestLayout}
+              disabled={aiSuggestLoading}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#F59E0B]/10 px-3 py-1.5 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20 disabled:opacity-50"
+            >
+              {aiSuggestLoading ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Sparkles className="h-3 w-3" />
+              )}
+              {aiSuggestLoading ? "Thinking..." : "Suggest Layout"}
+            </button>
+            {aiSuggestions.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {aiSuggestions.map((s, i) => (
+                  <div key={i} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-2">
+                    <div className="flex items-start justify-between gap-1">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[11px] font-medium text-[#F5F5F5]">{s.element}</p>
+                        <p className="text-[10px] text-[#F59E0B]">{s.position}</p>
+                      </div>
+                      <button
+                        onClick={() => addAiSuggestion(s)}
+                        className="shrink-0 rounded bg-[#F59E0B]/10 px-2 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {s.description && s.description !== s.element && (
+                      <p className="mt-1 text-[10px] leading-tight text-[#9CA3AF]">{s.description}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-1 flex-col overflow-hidden p-3">
