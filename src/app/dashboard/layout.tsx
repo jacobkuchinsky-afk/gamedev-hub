@@ -649,6 +649,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
+  const [devlogCount, setDevlogCount] = useState(0);
   const [pinnedPages, setPinnedPages] = useState<PinnedPage[]>([]);
   const pendingKeyRef = useRef<string | null>(null);
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -664,6 +665,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     if (user) {
       validateStorage();
       setProjects(getProjects());
+      setDevlogCount(getDevlog().length);
       const openTasks = getTasks().filter((t) => t.status !== "done").length;
       const openBugs = getBugs().filter((b) => b.status !== "closed").length;
       setPendingCount(openTasks + openBugs);
@@ -875,6 +877,16 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                     {item.label === "Tools" && (
                       <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#F59E0B] px-1 text-[10px] font-bold leading-none text-[#0F0F0F]">
                         23
+                      </span>
+                    )}
+                    {item.label === "Projects" && (
+                      <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#F59E0B] px-1 text-[10px] font-bold leading-none text-[#0F0F0F]">
+                        {projects.length}
+                      </span>
+                    )}
+                    {item.label === "Devlog" && (
+                      <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#F59E0B] px-1 text-[10px] font-bold leading-none text-[#0F0F0F]">
+                        {devlogCount}
                       </span>
                     )}
                   </Link>
