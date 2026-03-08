@@ -35,6 +35,7 @@ import {
   Flag,
   CheckCircle2,
   Circle,
+  ShieldAlert,
 } from "lucide-react";
 import {
   getProject,
@@ -832,6 +833,10 @@ export default function ProjectDetailPage() {
   const [msDate, setMsDate] = useState("");
   const [msStatus, setMsStatus] = useState<Milestone["status"]>("upcoming");
 
+  const [riskLoading, setRiskLoading] = useState(false);
+  const [riskCards, setRiskCards] = useState<{ title: string; level: "High" | "Medium" | "Low"; description: string; mitigation: string }[] | null>(null);
+  const [riskError, setRiskError] = useState<string | null>(null);
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
@@ -1262,6 +1267,119 @@ export default function ProjectDetailPage() {
     }
   }, [project?.name, project?.genre, project?.status, tasks, sprints, doneTasks, openBugs, devlog.length]);
 
+  const runRiskAssessment = useCallback(async () => {
+    if (!project || riskLoading) return;
+    setRiskLoading(true);
+    setRiskError(null);
+    setRiskCards(null);
+
+    const now = new Date();
+    const overdueTasks = tasks.filter((t) => {
+      if (t.status === "done" || !t.dueDate) return false;
+      return new Date(t.dueDate) < now;
+    }).length;
+
+    const blockerBugs = bugs.filter(
+      (b) => b.severity === "blocker" && b.status !== "closed"
+    ).length;
+
+    const activeSprint = sprints.find((s) => s.status === "active");
+    let sprintHealth = "N/A";
+    if (activeSprint) {
+      const sprintTasks = tasks.filter((t) => t.sprint === activeSprint.name);
+      const sprintDone = sprintTasks.filter((t) => t.status === "done").length;
+      const sprintTotal = sprintTasks.length;
+      const endDate = new Date(activeSprint.endDate);
+      const startDate = new Date(activeSprint.startDate);
+      const totalDays = Math.max(1, (endDate.getTime() - startDate.getTime()) / 86400000);
+      const elapsed = Math.max(0, (now.getTime() - startDate.getTime()) / 86400000);
+      const timePct = Math.round((elapsed / totalDays) * 100);
+      const taskPctLocal = sprintTotal > 0 ? Math.round((sprintDone / sprintTotal) * 100) : 0;
+      sprintHealth = `${taskPctLocal}% done, ${timePct}% time elapsed (${sprintDone}/${sprintTotal} tasks)`;
+    }
+
+    const missedMilestones = milestones.filter(
+      (m) => m.status !== "completed" && new Date(m.targetDate) < now
+    ).length;
+
+    const completion = tasks.length > 0 ? Math.round((doneTasks / tasks.length) * 100) : 0;
+
+    const prompt = `Analyze risks for game project '${project.name}': ${overdueTasks} overdue tasks, ${blockerBugs} blocker bugs, sprint health: ${sprintHealth}, ${missedMilestones} missed milestones, ${completion}% complete. Identify top 3 risks, rate each as High/Medium/Low, and suggest a mitigation for each. Be brief. Format your response EXACTLY as 3 blocks separated by blank lines, each block having 3 lines: Line 1: "RISK: [title]", Line 2: "LEVEL: [High/Medium/Low]", Line 3: "MITIGATION: [suggestion]". No other text.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+
+      const result = await response.json();
+      const content =
+        result.choices?.[0]?.message?.content ||
+        result.choices?.[0]?.message?.reasoning ||
+        "";
+
+      if (!content) throw new Error("No response from AI");
+
+      const blocks = content.split(/\n\s*\n/).filter((b: string) => b.trim());
+      const parsed: { title: string; level: "High" | "Medium" | "Low"; description: string; mitigation: string }[] = [];
+
+      for (const block of blocks) {
+        const lines = block.trim().split("\n").map((l: string) => l.trim());
+        const riskLine = lines.find((l: string) => l.toUpperCase().startsWith("RISK:"));
+        const levelLine = lines.find((l: string) => l.toUpperCase().startsWith("LEVEL:"));
+        const mitigationLine = lines.find((l: string) => l.toUpperCase().startsWith("MITIGATION:"));
+
+        if (riskLine && levelLine) {
+          const title = riskLine.replace(/^RISK:\s*/i, "").trim();
+          const levelRaw = levelLine.replace(/^LEVEL:\s*/i, "").trim();
+          const level = levelRaw.toLowerCase().includes("high")
+            ? "High"
+            : levelRaw.toLowerCase().includes("low")
+              ? "Low"
+              : "Medium";
+          const mitigation = mitigationLine
+            ? mitigationLine.replace(/^MITIGATION:\s*/i, "").trim()
+            : "Review and address promptly.";
+
+          parsed.push({ title, level, description: title, mitigation });
+        }
+      }
+
+      if (parsed.length === 0) {
+        const fallbackRisks = content.split(/\d+\.\s+/).filter((s: string) => s.trim());
+        for (let i = 0; i < Math.min(3, fallbackRisks.length); i++) {
+          const text = fallbackRisks[i].trim();
+          const hasHigh = text.toLowerCase().includes("high");
+          const hasLow = text.toLowerCase().includes("low");
+          parsed.push({
+            title: text.split(".")[0] || `Risk ${i + 1}`,
+            level: hasHigh ? "High" : hasLow ? "Low" : "Medium",
+            description: text,
+            mitigation: "Review and address promptly.",
+          });
+        }
+      }
+
+      setRiskCards(parsed.slice(0, 3));
+    } catch (err) {
+      setRiskError(err instanceof Error ? err.message : "Failed to run risk analysis.");
+    } finally {
+      setRiskLoading(false);
+    }
+  }, [project, tasks, bugs, sprints, milestones, doneTasks, riskLoading]);
+
   const handleProjectSave = (updated: Project) => {
     setProject(updated);
   };
@@ -1423,6 +1541,18 @@ export default function ProjectDetailPage() {
               Health Report
             </button>
             <button
+              onClick={runRiskAssessment}
+              disabled={riskLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/40 hover:bg-[#F59E0B]/10 disabled:opacity-50"
+            >
+              {riskLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <ShieldAlert className="h-3.5 w-3.5" />
+              )}
+              Risk Analysis
+            </button>
+            <button
               onClick={handleDuplicateProject}
               className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
             >
@@ -1486,6 +1616,88 @@ export default function ProjectDetailPage() {
             </div>
           ) : (
             <p className="text-sm leading-relaxed text-[#D1D5DB]">{aiSummary}</p>
+          )}
+        </div>
+      )}
+
+      {/* AI Risk Assessment */}
+      {(riskLoading || riskCards || riskError) && (
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                <ShieldAlert className="h-4 w-4 text-[#F59E0B]" />
+              </div>
+              <h3 className="text-sm font-semibold text-[#F5F5F5]">AI Risk Analysis</h3>
+            </div>
+            {!riskLoading && (
+              <button
+                onClick={() => { setRiskCards(null); setRiskError(null); }}
+                className="rounded-lg p-1 text-[#6B7280] transition-colors hover:text-[#F5F5F5]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {riskLoading && (
+            <div className="flex flex-col items-center gap-3 py-10">
+              <Loader2 className="h-7 w-7 animate-spin text-[#F59E0B]" />
+              <p className="text-sm text-[#9CA3AF]">Analyzing project risks...</p>
+            </div>
+          )}
+
+          {riskError && (
+            <div className="rounded-lg border border-[#EF4444]/20 bg-[#EF4444]/5 px-4 py-3">
+              <p className="text-sm text-[#EF4444]">{riskError}</p>
+            </div>
+          )}
+
+          {!riskLoading && !riskError && riskCards && riskCards.length > 0 && (
+            <div className="grid gap-3 sm:grid-cols-3">
+              {riskCards.map((risk, i) => {
+                const colorMap = {
+                  High: { border: "#EF4444", bg: "#EF4444", text: "#FCA5A5" },
+                  Medium: { border: "#F59E0B", bg: "#F59E0B", text: "#FCD34D" },
+                  Low: { border: "#10B981", bg: "#10B981", text: "#6EE7B7" },
+                };
+                const c = colorMap[risk.level];
+                return (
+                  <div
+                    key={i}
+                    className="rounded-lg border p-4 space-y-2.5"
+                    style={{ borderColor: `${c.border}30`, backgroundColor: `${c.bg}08` }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span
+                        className="rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                        style={{ backgroundColor: `${c.bg}20`, color: c.text }}
+                      >
+                        {risk.level}
+                      </span>
+                      <ShieldAlert className="h-4 w-4" style={{ color: `${c.bg}80` }} />
+                    </div>
+                    <p className="text-sm font-medium text-[#F5F5F5] leading-snug">{risk.title}</p>
+                    <div className="border-t pt-2" style={{ borderColor: `${c.border}15` }}>
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-[#6B7280] mb-1">Mitigation</p>
+                      <p className="text-xs leading-relaxed text-[#D1D5DB]">{risk.mitigation}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {!riskLoading && !riskError && riskCards && riskCards.length > 0 && (
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={runRiskAssessment}
+                className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              >
+                <Sparkles className="h-3 w-3" />
+                Re-analyze
+              </button>
+            </div>
           )}
         </div>
       )}

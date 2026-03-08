@@ -30,6 +30,8 @@ import {
   MoreVertical,
   Copy,
   FileText,
+  MessageSquare,
+  Send,
 } from "lucide-react";
 import {
   getProject,
@@ -49,6 +51,7 @@ import {
   type TaskTag,
   type Sprint,
   type Subtask,
+  type TaskComment,
 } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
 
@@ -210,6 +213,7 @@ export default function TaskBoardPage() {
   const [csEnd, setCsEnd] = useState("");
 
   const [subtaskInputs, setSubtaskInputs] = useState<Record<string, string>>({});
+  const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
 
   const [aiSprintLoading, setAiSprintLoading] = useState(false);
   const [aiSprintResult, setAiSprintResult] = useState<string | null>(null);
@@ -559,6 +563,22 @@ export default function TaskBoardPage() {
     };
     updateTask(taskId, { subtasks: [...existing, newSubtask] });
     setSubtaskInputs((p) => ({ ...p, [taskId]: "" }));
+    reload();
+  };
+
+  const addComment = (taskId: string) => {
+    const text = commentInputs[taskId]?.trim();
+    if (!text) return;
+    const task = tasks.find((t) => t.id === taskId);
+    const existing: TaskComment[] = task?.comments || [];
+    const newComment: TaskComment = {
+      id: `tc_${Date.now()}`,
+      text,
+      author: "JacobK",
+      timestamp: new Date().toISOString(),
+    };
+    updateTask(taskId, { comments: [...existing, newComment] });
+    setCommentInputs((p) => ({ ...p, [taskId]: "" }));
     reload();
   };
 
@@ -2049,6 +2069,12 @@ export default function TaskBoardPage() {
                                   </span>
                                 );
                               })()}
+                              {task.comments && task.comments.length > 0 && (
+                                <span className="flex items-center gap-1 rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] font-medium text-[#9CA3AF]">
+                                  <MessageSquare className="h-2.5 w-2.5" />
+                                  {task.comments.length}
+                                </span>
+                              )}
                               {dueDateInfo && (
                                 <span
                                   className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
@@ -2580,6 +2606,57 @@ export default function TaskBoardPage() {
                                   </div>
                                 </div>
                               )}
+                              {/* Comments Thread */}
+                              <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 space-y-2.5">
+                                <div className="flex items-center gap-1.5 text-xs font-medium text-[#9CA3AF]">
+                                  <MessageSquare className="h-3.5 w-3.5 text-[#F59E0B]" />
+                                  Comments
+                                  {task.comments && task.comments.length > 0 && (
+                                    <span className="text-[#6B7280]">({task.comments.length})</span>
+                                  )}
+                                </div>
+                                {task.comments && task.comments.length > 0 && (
+                                  <div className="space-y-2">
+                                    {task.comments.map((comment) => (
+                                      <div key={comment.id} className="rounded-md border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <span
+                                            className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold leading-none"
+                                            style={{ backgroundColor: `${getAvatarColor(comment.author)}20`, color: getAvatarColor(comment.author) }}
+                                          >
+                                            {getInitials(comment.author)}
+                                          </span>
+                                          <span className="text-[11px] font-medium text-[#D1D5DB]">{comment.author}</span>
+                                          <span className="text-[10px] text-[#6B7280]">
+                                            {new Date(comment.timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                            {" "}
+                                            {new Date(comment.timestamp).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                                          </span>
+                                        </div>
+                                        <p className="text-xs leading-relaxed text-[#D1D5DB]">{comment.text}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="flex gap-1.5 pt-0.5">
+                                  <input
+                                    type="text"
+                                    value={commentInputs[task.id] || ""}
+                                    onChange={(e) => setCommentInputs((p) => ({ ...p, [task.id]: e.target.value }))}
+                                    onKeyDown={(e) => { if (e.key === "Enter") addComment(task.id); }}
+                                    placeholder="Add a comment..."
+                                    className="min-w-0 flex-1 rounded-md border border-[#2A2A2A] bg-[#1A1A1A] px-2.5 py-1.5 text-xs text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/40"
+                                  />
+                                  <button
+                                    onClick={() => addComment(task.id)}
+                                    disabled={!commentInputs[task.id]?.trim()}
+                                    className="shrink-0 rounded-md border border-[#2A2A2A] px-2.5 py-1.5 text-[#6B7280] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B] disabled:opacity-30 disabled:cursor-not-allowed"
+                                  >
+                                    <Send className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              </div>
+
                               <div className="flex items-center gap-3 text-xs text-[#6B7280]">
                                 <span>Sprint: {task.sprint}</span>
                                 {task.assignee && (

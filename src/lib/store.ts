@@ -48,7 +48,15 @@ export interface Task {
   loggedHours?: number;
   subtasks?: Subtask[];
   dueDate?: string;
+  comments?: TaskComment[];
   created_at: string;
+}
+
+export interface TaskComment {
+  id: string;
+  text: string;
+  author: string;
+  timestamp: string;
 }
 
 export interface BugComment {
@@ -157,6 +165,10 @@ const SEED_TASKS: Task[] = [
       { id: "st_002", title: "Write replacement shader", done: true },
       { id: "st_003", title: "Test on low-end hardware", done: false },
       { id: "st_004", title: "Update shield color parameters", done: false },
+    ],
+    comments: [
+      { id: "tc_001", text: "Shader draft is working but needs optimization for integrated GPUs.", author: "JacobK", timestamp: "2026-03-05T14:30:00Z" },
+      { id: "tc_002", text: "Tested on GTX 1050 — still some flicker at 30fps. Might need to double-buffer the shield mesh.", author: "JacobK", timestamp: "2026-03-06T10:00:00Z" },
     ],
     created_at: "2026-03-05T10:00:00Z",
   },
@@ -270,6 +282,9 @@ const SEED_TASKS: Task[] = [
       { id: "st_023", title: "Trade history log", done: false },
       { id: "st_024", title: "Profit/loss indicators", done: false },
       { id: "st_025", title: "Station inventory refresh cycle", done: false },
+    ],
+    comments: [
+      { id: "tc_003", text: "Dynamic pricing is feeling really good — prices fluctuate naturally based on supply. Need to cap the variance though, some items get absurdly expensive.", author: "JacobK", timestamp: "2026-03-04T16:00:00Z" },
     ],
     created_at: "2026-03-03T08:00:00Z",
   },
