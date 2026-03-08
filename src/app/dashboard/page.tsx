@@ -31,6 +31,8 @@ import {
   ExternalLink,
   Gauge,
   ArrowUpRight,
+  Copy,
+  MessageSquare,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
 import {
@@ -229,6 +231,10 @@ export default function DashboardPage() {
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [focusItems, setFocusItems] = useState<FocusItem[]>([]);
   const [tipOffset, setTipOffset] = useState(0);
+  const [showStandup, setShowStandup] = useState(false);
+  const [standupLoading, setStandupLoading] = useState(false);
+  const [standupText, setStandupText] = useState("");
+  const [standupCopied, setStandupCopied] = useState(false);
 
   const [weeklySummary, setWeeklySummary] = useState<{
     tasksCompleted: Task[];
@@ -257,6 +263,62 @@ export default function DashboardPage() {
   const handleDismissWelcome = () => {
     setWelcomeDismissed(true);
     localStorage.setItem("gameforge_welcome_dismissed", "true");
+  };
+
+  const generateStandup = async () => {
+    setStandupLoading(true);
+    setStandupCopied(false);
+    setShowStandup(true);
+
+    const allTasks = getTasks();
+    const allBugs = getBugs();
+
+    const doneTasks = allTasks.filter((t) => t.status === "done").slice(0, 10);
+    const inProgressTasks = allTasks.filter((t) => t.status === "in-progress");
+    const blockerBugs = allBugs.filter(
+      (b) => b.status !== "closed" && (b.severity === "blocker" || b.severity === "critical")
+    );
+    const overdueTasks = allTasks.filter((t) => {
+      if (t.status === "done" || !t.dueDate) return false;
+      return new Date(t.dueDate) < new Date();
+    });
+
+    const doneStr =
+      doneTasks.length > 0 ? doneTasks.map((t) => t.title).join(", ") : "No tasks completed recently";
+    const inProgressStr =
+      inProgressTasks.length > 0 ? inProgressTasks.map((t) => t.title).join(", ") : "No tasks in progress";
+    const blockersArr = [
+      ...overdueTasks.map((t) => `Overdue: ${t.title}`),
+      ...blockerBugs.map((b) => `Bug: ${b.title} (${b.severity})`),
+    ];
+    const blockersStr = blockersArr.length > 0 ? blockersArr.join(", ") : "None";
+
+    const prompt = `Generate a brief daily standup report for a game developer. Yesterday: ${doneStr}. Today: ${inProgressStr}. Blockers: ${blockersStr}. Format as: Yesterday, Today, Blockers. Keep it concise.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content =
+        data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "Failed to generate standup.";
+      setStandupText(content);
+    } catch {
+      setStandupText("Failed to generate standup. Please try again.");
+    }
+
+    setStandupLoading(false);
   };
 
   useEffect(() => {
@@ -629,14 +691,28 @@ export default function DashboardPage() {
       ) : (
         <>
           {/* Welcome */}
-          <div>
-            <h1 className="text-2xl font-bold">
-              Welcome back,{" "}
-              <span className="text-[#F59E0B]">{user?.username}</span>
-            </h1>
-            <p className="mt-1 text-[#9CA3AF]">
-              Here&apos;s what&apos;s happening with your games.
-            </p>
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">
+                Welcome back,{" "}
+                <span className="text-[#F59E0B]">{user?.username}</span>
+              </h1>
+              <p className="mt-1 text-[#9CA3AF]">
+                Here&apos;s what&apos;s happening with your games.
+              </p>
+            </div>
+            <button
+              onClick={generateStandup}
+              disabled={standupLoading}
+              className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-2.5 text-sm font-medium text-[#F5F5F5] transition-all hover:border-[#F59E0B]/30 hover:bg-[#1F1F1F] disabled:opacity-50"
+            >
+              {standupLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin text-[#F59E0B]" />
+              ) : (
+                <MessageSquare className="h-4 w-4 text-[#F59E0B]" />
+              )}
+              AI Standup
+            </button>
           </div>
         </>
       )}
@@ -1076,6 +1152,75 @@ export default function DashboardPage() {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Standup Modal */}
+      {showStandup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowStandup(false)} />
+          <div className="relative w-full max-w-lg rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#F59E0B]/10">
+                  <MessageSquare className="h-4 w-4 text-[#F59E0B]" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold">Daily Standup</h2>
+                  <p className="text-xs text-[#6B7280]">AI-generated from your tasks</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowStandup(false)}
+                className="rounded-lg p-1.5 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {standupLoading ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-[#F59E0B]" />
+                <p className="text-sm text-[#6B7280]">Generating your standup...</p>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-xl border border-[#2A2A2A] bg-[#0F0F0F] p-4">
+                  <pre className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB] font-sans">
+                    {standupText}
+                  </pre>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between">
+                  <p className="text-xs text-[#6B7280]">Paste into Discord, Slack, or wherever</p>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(standupText);
+                      setStandupCopied(true);
+                      setTimeout(() => setStandupCopied(false), 2000);
+                    }}
+                    className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
+                      standupCopied
+                        ? "bg-[#10B981] text-[#0F0F0F]"
+                        : "bg-[#F59E0B] text-[#0F0F0F] hover:bg-[#F59E0B]/90"
+                    }`}
+                  >
+                    {standupCopied ? (
+                      <>
+                        <CheckCircle2 className="h-4 w-4" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-4 w-4" />
+                        Copy to Clipboard
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

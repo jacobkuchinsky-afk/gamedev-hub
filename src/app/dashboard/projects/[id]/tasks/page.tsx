@@ -216,6 +216,8 @@ export default function TaskBoardPage() {
 
   const [subtaskInputs, setSubtaskInputs] = useState<Record<string, string>>({});
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
+  const [aiEstimateLoading, setAiEstimateLoading] = useState<Record<string, boolean>>({});
+  const [aiEstimateNote, setAiEstimateNote] = useState<Record<string, string>>({});
 
   const [aiSprintLoading, setAiSprintLoading] = useState(false);
   const [aiSprintResult, setAiSprintResult] = useState<string | null>(null);
@@ -554,6 +556,47 @@ export default function TaskBoardPage() {
       return next;
     });
     reload();
+  };
+
+  const handleAiEstimate = async (task: Task) => {
+    setAiEstimateLoading((prev) => ({ ...prev, [task.id]: true }));
+    setAiEstimateNote((prev) => { const n = { ...prev }; delete n[task.id]; return n; });
+
+    const prompt = `Estimate the time needed for this game development task: '${task.title}'. Description: '${task.description || "No description"}'. Tags: ${(task.tags || []).join(", ") || "none"}. Priority: ${task.priority}. Give a time estimate in hours (just a number) and a one-line justification.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content =
+        data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+
+      const hoursMatch = content.match(/(\d+(?:\.\d+)?)/);
+      if (hoursMatch) {
+        const hours = parseFloat(hoursMatch[1]);
+        updateTask(task.id, { estimatedHours: hours });
+        reload();
+      }
+
+      const justification = content.replace(/^\s*\d+(?:\.\d+)?\s*(?:hours?)?\s*[-:.]\s*/i, "").trim() || content;
+      setAiEstimateNote((prev) => ({ ...prev, [task.id]: justification }));
+    } catch {
+      setAiEstimateNote((prev) => ({ ...prev, [task.id]: "Failed to estimate. Try again." }));
+    }
+
+    setAiEstimateLoading((prev) => ({ ...prev, [task.id]: false }));
   };
 
   const toggleSubtask = (taskId: string, subtaskId: string) => {
@@ -2674,12 +2717,27 @@ export default function TaskBoardPage() {
                                         </button>
                                       </div>
                                     ) : (
-                                      <button
-                                        onClick={() => setEditEstimate((p) => ({ ...p, [task.id]: String(task.estimatedHours || "") }))}
-                                        className="text-xs text-[#F5F5F5] hover:text-[#F59E0B] transition-colors"
-                                      >
-                                        {task.estimatedHours ? `${task.estimatedHours}h` : "Set estimate"}
-                                      </button>
+                                      <div className="flex items-center gap-1.5">
+                                        <button
+                                          onClick={() => setEditEstimate((p) => ({ ...p, [task.id]: String(task.estimatedHours || "") }))}
+                                          className="text-xs text-[#F5F5F5] hover:text-[#F59E0B] transition-colors"
+                                        >
+                                          {task.estimatedHours ? `${task.estimatedHours}h` : "Set estimate"}
+                                        </button>
+                                        <button
+                                          onClick={() => handleAiEstimate(task)}
+                                          disabled={aiEstimateLoading[task.id]}
+                                          title="AI Estimate"
+                                          className="flex items-center gap-1 rounded-md border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 hover:border-[#F59E0B]/40 disabled:opacity-50"
+                                        >
+                                          {aiEstimateLoading[task.id] ? (
+                                            <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                                          ) : (
+                                            <Sparkles className="h-2.5 w-2.5" />
+                                          )}
+                                          AI
+                                        </button>
+                                      </div>
                                     )}
                                   </div>
                                   <div>
@@ -2713,6 +2771,12 @@ export default function TaskBoardPage() {
                                         style={{ width: `${Math.min(100, ((task.loggedHours || 0) / task.estimatedHours) * 100)}%` }}
                                       />
                                     </div>
+                                  </div>
+                                )}
+                                {aiEstimateNote[task.id] && (
+                                  <div className="flex items-start gap-1.5 rounded-md border border-[#F59E0B]/10 bg-[#F59E0B]/5 px-2.5 py-1.5">
+                                    <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-[#F59E0B]" />
+                                    <p className="text-[10px] leading-relaxed text-[#9CA3AF]">{aiEstimateNote[task.id]}</p>
                                   </div>
                                 )}
                               </div>
