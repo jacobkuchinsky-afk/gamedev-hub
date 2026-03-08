@@ -18,6 +18,8 @@ import {
   Loader2,
   Tag,
   Lock,
+  Clock,
+  Timer,
 } from "lucide-react";
 import {
   getProject,
@@ -96,6 +98,7 @@ export default function TaskBoardPage() {
   const [editBlockedBy, setEditBlockedBy] = useState("");
   const [filterTag, setFilterTag] = useState<TaskTag | "all">("all");
   const [aiDetailLoading, setAiDetailLoading] = useState(false);
+  const [editEstimate, setEditEstimate] = useState<Record<string, string>>({});
 
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [selectedSprint, setSelectedSprint] = useState<string>("all");
@@ -253,6 +256,25 @@ export default function TaskBoardPage() {
     reload();
   };
 
+  const handleLogTime = (taskId: string, hours: number) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    updateTask(taskId, { loggedHours: (task.loggedHours || 0) + hours });
+    reload();
+  };
+
+  const handleSetEstimate = (taskId: string) => {
+    const val = parseFloat(editEstimate[taskId] || "0");
+    if (isNaN(val) || val < 0) return;
+    updateTask(taskId, { estimatedHours: val || undefined });
+    setEditEstimate((prev) => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+    reload();
+  };
+
   const sprintSummary = useMemo(() => {
     let pool: Task[];
     if (selectedSprint === "all") pool = tasks;
@@ -265,7 +287,9 @@ export default function TaskBoardPage() {
       (t) => t.status === "in-progress"
     ).length;
     const pct = total ? Math.round((done / total) * 100) : 0;
-    return { total, done, inProgress, pct };
+    const totalEstimated = pool.reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+    const totalLogged = pool.reduce((sum, t) => sum + (t.loggedHours || 0), 0);
+    return { total, done, inProgress, pct, totalEstimated, totalLogged };
   }, [tasks, selectedSprint]);
 
   const velocity = useMemo(() => {
@@ -592,6 +616,26 @@ export default function TaskBoardPage() {
               </span>
               <span className="text-[10px] text-[#6B7280]">/sprint</span>
             </div>
+            {sprintSummary.totalEstimated > 0 && (
+              <div className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] px-2.5 py-1.5">
+                <Clock className="h-3.5 w-3.5 text-[#F59E0B]" />
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-xs font-medium ${sprintSummary.totalLogged > sprintSummary.totalEstimated ? "text-[#EF4444]" : "text-[#F5F5F5]"}`}>
+                      {sprintSummary.totalLogged}h
+                    </span>
+                    <span className="text-[10px] text-[#6B7280]">/</span>
+                    <span className="text-xs text-[#6B7280]">{sprintSummary.totalEstimated}h</span>
+                  </div>
+                  <div className="mt-0.5 h-1 w-16 overflow-hidden rounded-full bg-[#2A2A2A]">
+                    <div
+                      className={`h-full rounded-full transition-all ${sprintSummary.totalLogged > sprintSummary.totalEstimated ? "bg-[#EF4444]" : "bg-[#F59E0B]"}`}
+                      style={{ width: `${Math.min(100, sprintSummary.totalEstimated > 0 ? (sprintSummary.totalLogged / sprintSummary.totalEstimated) * 100 : 0)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1407,6 +1451,84 @@ export default function TaskBoardPage() {
                                   {task.description}
                                 </p>
                               )}
+                              {/* Time Tracking */}
+                              <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 space-y-2.5">
+                                <div className="flex items-center gap-1.5 text-xs font-medium text-[#9CA3AF]">
+                                  <Timer className="h-3.5 w-3.5 text-[#F59E0B]" />
+                                  Time Tracking
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <div className="flex-1">
+                                    <p className="text-[10px] uppercase tracking-wider text-[#6B7280] mb-1">Estimate</p>
+                                    {editEstimate[task.id] !== undefined ? (
+                                      <div className="flex items-center gap-1.5">
+                                        <input
+                                          type="number"
+                                          step="0.5"
+                                          min="0"
+                                          value={editEstimate[task.id]}
+                                          onChange={(e) => setEditEstimate((p) => ({ ...p, [task.id]: e.target.value }))}
+                                          onKeyDown={(e) => { if (e.key === "Enter") handleSetEstimate(task.id); }}
+                                          className="w-16 rounded border border-[#2A2A2A] bg-[#1A1A1A] px-2 py-1 text-xs text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+                                          autoFocus
+                                        />
+                                        <span className="text-[10px] text-[#6B7280]">hrs</span>
+                                        <button
+                                          onClick={() => handleSetEstimate(task.id)}
+                                          className="rounded p-0.5 text-[#F59E0B] hover:bg-[#F59E0B]/10"
+                                        >
+                                          <Check className="h-3 w-3" />
+                                        </button>
+                                        <button
+                                          onClick={() => setEditEstimate((p) => { const n = { ...p }; delete n[task.id]; return n; })}
+                                          className="rounded p-0.5 text-[#6B7280] hover:text-[#F5F5F5]"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={() => setEditEstimate((p) => ({ ...p, [task.id]: String(task.estimatedHours || "") }))}
+                                        className="text-xs text-[#F5F5F5] hover:text-[#F59E0B] transition-colors"
+                                      >
+                                        {task.estimatedHours ? `${task.estimatedHours}h` : "Set estimate"}
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-wider text-[#6B7280] mb-1">Logged</p>
+                                    <p className="text-xs font-medium text-[#F5F5F5]">{task.loggedHours || 0}h</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] text-[#6B7280] mr-0.5">Log:</span>
+                                  {[0.5, 1, 2, 4].map((h) => (
+                                    <button
+                                      key={h}
+                                      onClick={() => handleLogTime(task.id, h)}
+                                      className="rounded border border-[#2A2A2A] px-2 py-0.5 text-[10px] font-medium text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                                    >
+                                      +{h}h
+                                    </button>
+                                  ))}
+                                </div>
+                                {task.estimatedHours && task.estimatedHours > 0 && (
+                                  <div>
+                                    <div className="flex items-center justify-between text-[10px] text-[#6B7280] mb-1">
+                                      <span>Progress</span>
+                                      <span className={(task.loggedHours || 0) > task.estimatedHours ? "text-[#EF4444]" : ""}>
+                                        {Math.round(((task.loggedHours || 0) / task.estimatedHours) * 100)}%
+                                      </span>
+                                    </div>
+                                    <div className="h-1.5 overflow-hidden rounded-full bg-[#2A2A2A]">
+                                      <div
+                                        className={`h-full rounded-full transition-all ${(task.loggedHours || 0) > task.estimatedHours ? "bg-[#EF4444]" : "bg-[#F59E0B]"}`}
+                                        style={{ width: `${Math.min(100, ((task.loggedHours || 0) / task.estimatedHours) * 100)}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                               <div className="flex items-center gap-3 text-xs text-[#6B7280]">
                                 <span>Sprint: {task.sprint}</span>
                                 {task.assignee && (

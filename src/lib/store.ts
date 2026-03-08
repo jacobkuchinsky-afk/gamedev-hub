@@ -37,6 +37,8 @@ export interface Task {
   assignee: string;
   tags?: TaskTag[];
   blockedBy?: string;
+  estimatedHours?: number;
+  loggedHours?: number;
   created_at: string;
 }
 
@@ -49,6 +51,8 @@ export interface Bug {
   status: "open" | "confirmed" | "fixing" | "testing" | "closed";
   platform: string;
   reproSteps: string;
+  expectedBehavior?: string;
+  actualBehavior?: string;
   created_at: string;
 }
 
@@ -116,6 +120,8 @@ const SEED_TASKS: Task[] = [
     sprint: "Sprint 14",
     assignee: "JacobK",
     tags: ["Art", "Bugfix"],
+    estimatedHours: 6,
+    loggedHours: 3.5,
     created_at: "2026-03-05T10:00:00Z",
   },
   {
@@ -128,6 +134,8 @@ const SEED_TASKS: Task[] = [
     sprint: "Sprint 14",
     assignee: "JacobK",
     tags: ["Gameplay", "Polish"],
+    estimatedHours: 2,
+    loggedHours: 0,
     created_at: "2026-03-05T10:30:00Z",
   },
   {
@@ -140,6 +148,8 @@ const SEED_TASKS: Task[] = [
     sprint: "Sprint 13",
     assignee: "JacobK",
     tags: ["Backend", "Feature"],
+    estimatedHours: 16,
+    loggedHours: 18,
     created_at: "2026-02-20T08:00:00Z",
   },
   {
@@ -152,6 +162,8 @@ const SEED_TASKS: Task[] = [
     sprint: "Sprint 15",
     assignee: "JacobK",
     tags: ["UI", "Gameplay", "Feature"],
+    estimatedHours: 12,
+    loggedHours: 0,
     created_at: "2026-03-06T09:00:00Z",
   },
   {
@@ -164,6 +176,8 @@ const SEED_TASKS: Task[] = [
     sprint: "Sprint 14",
     assignee: "JacobK",
     tags: ["Optimization"],
+    estimatedHours: 8,
+    loggedHours: 7,
     created_at: "2026-03-04T14:00:00Z",
   },
   {
@@ -176,6 +190,8 @@ const SEED_TASKS: Task[] = [
     sprint: "Sprint 12",
     assignee: "JacobK",
     tags: ["UI", "Art"],
+    estimatedHours: 4,
+    loggedHours: 5,
     created_at: "2026-02-10T11:00:00Z",
   },
   {
@@ -188,6 +204,8 @@ const SEED_TASKS: Task[] = [
     sprint: "Sprint 15",
     assignee: "JacobK",
     tags: ["Audio"],
+    estimatedHours: 3,
+    loggedHours: 0,
     created_at: "2026-03-06T10:00:00Z",
   },
   {
@@ -200,6 +218,8 @@ const SEED_TASKS: Task[] = [
     sprint: "Sprint 14",
     assignee: "JacobK",
     tags: ["Gameplay", "Feature", "Backend"],
+    estimatedHours: 20,
+    loggedHours: 12,
     created_at: "2026-03-03T08:00:00Z",
   },
   {
@@ -211,6 +231,8 @@ const SEED_TASKS: Task[] = [
     priority: "high",
     sprint: "Sprint 1",
     assignee: "JacobK",
+    estimatedHours: 8,
+    loggedHours: 0,
     created_at: "2026-02-15T08:30:00Z",
   },
   {
@@ -222,6 +244,8 @@ const SEED_TASKS: Task[] = [
     priority: "critical",
     sprint: "Sprint 2",
     assignee: "JacobK",
+    estimatedHours: 10,
+    loggedHours: 4,
     created_at: "2026-01-22T10:00:00Z",
   },
 ];
@@ -236,6 +260,8 @@ const SEED_BUGS: Bug[] = [
     status: "confirmed",
     platform: "Windows",
     reproSteps: "1. Approach station at max speed\n2. Boost into docking bay entrance\n3. Player passes through wall",
+    expectedBehavior: "Player should collide with station walls and be stopped or deflected regardless of speed.",
+    actualBehavior: "Player passes through station geometry entirely and ends up inside or behind the station mesh.",
     created_at: "2026-03-06T15:00:00Z",
   },
   {
@@ -247,6 +273,8 @@ const SEED_BUGS: Bug[] = [
     status: "fixing",
     platform: "All",
     reproSteps: "1. Open station storage\n2. Click transfer rapidly on any item\n3. Item count increases in both inventories",
+    expectedBehavior: "Item should transfer from one inventory to the other with correct counts on both sides.",
+    actualBehavior: "Item count increases in both inventories simultaneously, creating duplicates out of thin air.",
     created_at: "2026-03-05T11:00:00Z",
   },
   {
@@ -258,6 +286,8 @@ const SEED_BUGS: Bug[] = [
     status: "open",
     platform: "All",
     reproSteps: "1. Enter asteroid belt\n2. Wait for track to finish (~3 min)\n3. No music plays after",
+    expectedBehavior: "Music should seamlessly loop when the track ends while the player is still in the asteroid belt zone.",
+    actualBehavior: "Complete silence after the first track finishes. Music only resumes when entering a different zone.",
     created_at: "2026-03-04T09:00:00Z",
   },
   {
@@ -269,6 +299,8 @@ const SEED_BUGS: Bug[] = [
     status: "open",
     platform: "Windows",
     reproSteps: "1. Open star map\n2. Hover over a star in the top-right corner\n3. Tooltip is clipped",
+    expectedBehavior: "Tooltip should reposition itself to stay fully visible within the viewport.",
+    actualBehavior: "Tooltip renders at its default position and gets clipped by the screen edge.",
     created_at: "2026-03-03T16:00:00Z",
   },
   {
@@ -280,6 +312,8 @@ const SEED_BUGS: Bug[] = [
     status: "open",
     platform: "Windows",
     reproSteps: "1. Launch game\n2. During loading screen, alt-tab\n3. Game crashes to desktop",
+    expectedBehavior: "Game should handle focus loss gracefully, pausing the loading process or continuing in background.",
+    actualBehavior: "Hard crash to desktop with no error dialog or crash log generated.",
     created_at: "2026-03-07T08:00:00Z",
   },
 ];

@@ -91,6 +91,8 @@ export default function BugTrackerPage() {
   const [newSeverity, setNewSeverity] = useState<Bug["severity"]>("major");
   const [newPlatform, setNewPlatform] = useState("All");
   const [newReproSteps, setNewReproSteps] = useState("");
+  const [newExpectedBehavior, setNewExpectedBehavior] = useState("");
+  const [newActualBehavior, setNewActualBehavior] = useState("");
   const [aiSuggestingPriority, setAiSuggestingPriority] = useState(false);
   const [aiSuggestFlash, setAiSuggestFlash] = useState(false);
   const [aiImprovingDesc, setAiImprovingDesc] = useState(false);
@@ -126,12 +128,16 @@ export default function BugTrackerPage() {
       status: "open",
       platform: newPlatform,
       reproSteps: newReproSteps.trim(),
+      expectedBehavior: newExpectedBehavior.trim() || undefined,
+      actualBehavior: newActualBehavior.trim() || undefined,
     });
     setNewTitle("");
     setNewDesc("");
     setNewSeverity("major");
     setNewPlatform("All");
     setNewReproSteps("");
+    setNewExpectedBehavior("");
+    setNewActualBehavior("");
     setShowAddForm(false);
     reload();
   };
@@ -159,7 +165,18 @@ export default function BugTrackerPage() {
     if (!newTitle.trim() || aiImprovingDesc) return;
     setAiImprovingDesc(true);
     try {
-      const prompt = `Improve this game bug report. Title: '${newTitle.trim()}'. Description: '${newDesc.trim() || "none"}'. Rewrite as a clear, professional bug report with: Steps to Reproduce, Expected Behavior, Actual Behavior. Be brief.`;
+      const prompt = `Improve this game bug report. Title: '${newTitle.trim()}'. Description: '${newDesc.trim() || "none"}'. Steps to Reproduce: '${newReproSteps.trim() || "none"}'. Expected Behavior: '${newExpectedBehavior.trim() || "none"}'. Actual Behavior: '${newActualBehavior.trim() || "none"}'.
+
+Respond with EXACTLY this format (use these exact headers):
+DESCRIPTION: <improved 1-2 sentence description>
+STEPS:
+1. <step>
+2. <step>
+3. <step>
+EXPECTED: <what should happen>
+ACTUAL: <what actually happens>
+
+Be concise and professional. Fill in any missing sections based on the title and context.`;
       const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -176,7 +193,21 @@ export default function BugTrackerPage() {
       });
       const data = await response.json();
       const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
-      if (content) setNewDesc(content);
+      if (content) {
+        const descMatch = content.match(/DESCRIPTION:\s*([\s\S]*?)(?=\nSTEPS:|$)/i);
+        const stepsMatch = content.match(/STEPS:\s*([\s\S]*?)(?=\nEXPECTED:|$)/i);
+        const expectedMatch = content.match(/EXPECTED:\s*([\s\S]*?)(?=\nACTUAL:|$)/i);
+        const actualMatch = content.match(/ACTUAL:\s*([\s\S]*?)$/i);
+
+        if (descMatch) setNewDesc(descMatch[1].trim());
+        if (stepsMatch) setNewReproSteps(stepsMatch[1].trim());
+        if (expectedMatch) setNewExpectedBehavior(expectedMatch[1].trim());
+        if (actualMatch) setNewActualBehavior(actualMatch[1].trim());
+
+        if (!descMatch && !stepsMatch) {
+          setNewDesc(content);
+        }
+      }
     } catch {
       // silently fail
     } finally {
@@ -340,7 +371,7 @@ export default function BugTrackerPage() {
           {bug.reproSteps && (
             <div>
               <p className="text-xs font-medium text-[#6B7280] mb-1">
-                Repro Steps
+                Steps to Reproduce
               </p>
               <div className="rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] p-3">
                 {bug.reproSteps.split("\n").map((step, i) => (
@@ -349,6 +380,26 @@ export default function BugTrackerPage() {
                   </p>
                 ))}
               </div>
+            </div>
+          )}
+          {(bug.expectedBehavior || bug.actualBehavior) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {bug.expectedBehavior && (
+                <div className="rounded-lg bg-[#0F0F0F] border border-[#10B981]/20 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#10B981] mb-1.5">
+                    Expected Behavior
+                  </p>
+                  <p className="text-sm text-[#D1D5DB] leading-relaxed">{bug.expectedBehavior}</p>
+                </div>
+              )}
+              {bug.actualBehavior && (
+                <div className="rounded-lg bg-[#0F0F0F] border border-[#EF4444]/20 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#EF4444] mb-1.5">
+                    Actual Behavior
+                  </p>
+                  <p className="text-sm text-[#D1D5DB] leading-relaxed">{bug.actualBehavior}</p>
+                </div>
+              )}
             </div>
           )}
           <div>
@@ -641,13 +692,37 @@ export default function BugTrackerPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs text-[#6B7280]">
-                  Repro Steps
+                  Steps to Reproduce
                 </label>
                 <textarea
                   value={newReproSteps}
                   onChange={(e) => setNewReproSteps(e.target.value)}
                   placeholder={"1. Do this\n2. Then this\n3. Bug happens"}
                   rows={3}
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50 resize-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[#6B7280]">
+                  Expected Behavior
+                </label>
+                <textarea
+                  value={newExpectedBehavior}
+                  onChange={(e) => setNewExpectedBehavior(e.target.value)}
+                  placeholder="What should happen?"
+                  rows={2}
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50 resize-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[#6B7280]">
+                  Actual Behavior
+                </label>
+                <textarea
+                  value={newActualBehavior}
+                  onChange={(e) => setNewActualBehavior(e.target.value)}
+                  placeholder="What actually happens?"
+                  rows={2}
                   className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50 resize-none"
                 />
               </div>
