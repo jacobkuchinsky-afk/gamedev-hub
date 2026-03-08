@@ -11,6 +11,8 @@ import {
   Cog,
   Pencil,
   FileText,
+  MessageSquare,
+  Send,
 } from "lucide-react";
 import {
   getProject,
@@ -20,6 +22,7 @@ import {
   getMoodEmoji,
   type Project,
   type DevlogEntry,
+  type DevlogNote,
 } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
 
@@ -176,6 +179,8 @@ export default function DevlogPage() {
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
   const [newMood, setNewMood] = useState<DevlogEntry["mood"]>("productive");
+  const [noteInputs, setNoteInputs] = useState<Record<string, string>>({});
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
 
   const reload = useCallback(() => {
     const e = getDevlog(projectId);
@@ -236,6 +241,22 @@ export default function DevlogPage() {
     setNewTitle("");
     setNewContent("");
     setNewMood("productive");
+  };
+
+  const handleAddNote = (entryId: string) => {
+    const text = noteInputs[entryId]?.trim();
+    if (!text) return;
+    const entry = entries.find((e) => e.id === entryId);
+    if (!entry) return;
+    const existing: DevlogNote[] = entry.notes || [];
+    const newNote: DevlogNote = {
+      id: `note_${Date.now()}`,
+      text,
+      timestamp: new Date().toISOString(),
+    };
+    updateDevlogEntry(entryId, { notes: [...existing, newNote] } as Partial<Omit<DevlogEntry, "id" | "projectId">>);
+    setNoteInputs((p) => ({ ...p, [entryId]: "" }));
+    reload();
   };
 
   if (!project) return null;
@@ -503,6 +524,72 @@ export default function DevlogPage() {
                     </div>
                     <div className="space-y-1">
                       {renderMarkdown(entry.content)}
+                    </div>
+
+                    {/* Notes Section */}
+                    <div className="mt-4 border-t border-[#2A2A2A] pt-3">
+                      <button
+                        onClick={() =>
+                          setExpandedNotes((p) => ({
+                            ...p,
+                            [entry.id]: !p[entry.id],
+                          }))
+                        }
+                        className="flex items-center gap-1.5 text-xs text-[#6B7280] transition-colors hover:text-[#F59E0B]"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        {entry.notes && entry.notes.length > 0
+                          ? `${entry.notes.length} note${entry.notes.length !== 1 ? "s" : ""}`
+                          : "Add Note"}
+                      </button>
+
+                      {(expandedNotes[entry.id] || (entry.notes && entry.notes.length > 0)) && (
+                        <div className="mt-2.5 space-y-2">
+                          {entry.notes && entry.notes.length > 0 && (
+                            <div className="space-y-2">
+                              {entry.notes.map((note) => (
+                                <div
+                                  key={note.id}
+                                  className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2"
+                                >
+                                  <p className="text-sm text-[#D1D5DB]">{note.text}</p>
+                                  <p className="mt-1 text-[10px] text-[#6B7280]">
+                                    {new Date(note.timestamp).toLocaleString("en-US", {
+                                      month: "short",
+                                      day: "numeric",
+                                      hour: "numeric",
+                                      minute: "2-digit",
+                                    })}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex gap-1.5">
+                            <input
+                              type="text"
+                              value={noteInputs[entry.id] || ""}
+                              onChange={(e) =>
+                                setNoteInputs((p) => ({
+                                  ...p,
+                                  [entry.id]: e.target.value,
+                                }))
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleAddNote(entry.id);
+                              }}
+                              placeholder="Add a note..."
+                              className="min-w-0 flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-xs text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/40"
+                            />
+                            <button
+                              onClick={() => handleAddNote(entry.id)}
+                              className="shrink-0 rounded-lg border border-[#2A2A2A] px-2.5 py-1.5 text-[#6B7280] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

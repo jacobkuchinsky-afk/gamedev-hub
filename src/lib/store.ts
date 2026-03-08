@@ -47,6 +47,7 @@ export interface Task {
   estimatedHours?: number;
   loggedHours?: number;
   subtasks?: Subtask[];
+  dueDate?: string;
   created_at: string;
 }
 
@@ -72,6 +73,12 @@ export interface Bug {
   created_at: string;
 }
 
+export interface DevlogNote {
+  id: string;
+  text: string;
+  timestamp: string;
+}
+
 export interface DevlogEntry {
   id: string;
   projectId: string;
@@ -79,6 +86,7 @@ export interface DevlogEntry {
   content: string;
   mood: "productive" | "struggling" | "breakthrough" | "grinding";
   date: string;
+  notes?: DevlogNote[];
 }
 
 const PROJECTS_KEY = "gameforge_projects";

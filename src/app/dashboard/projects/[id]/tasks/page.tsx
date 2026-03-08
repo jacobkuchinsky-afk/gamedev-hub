@@ -20,6 +20,8 @@ import {
   Lock,
   Clock,
   Timer,
+  CalendarDays,
+  AlertTriangle,
 } from "lucide-react";
 import {
   getProject,
@@ -55,7 +57,30 @@ const PRIORITY_ORDER: Record<Task["priority"], number> = {
   low: 3,
 };
 
-type SortOption = "priority" | "name" | "date";
+type SortOption = "priority" | "name" | "date" | "dueDate";
+
+function getDueDateInfo(dueDate: string | undefined): { label: string; urgency: "overdue" | "urgent" | "normal" | "none" } | null {
+  if (!dueDate) return null;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const due = new Date(dueDate + "T00:00:00");
+  const diffMs = due.getTime() - now.getTime();
+  const diffDays = Math.round(diffMs / 86400000);
+
+  if (diffDays < 0) {
+    const abs = Math.abs(diffDays);
+    return { label: abs === 1 ? "Overdue by 1 day" : `Overdue by ${abs} days`, urgency: "overdue" };
+  }
+  if (diffDays === 0) return { label: "Due today", urgency: "urgent" };
+  if (diffDays === 1) return { label: "Due tomorrow", urgency: "urgent" };
+  if (diffDays <= 2) return { label: `Due in ${diffDays} days`, urgency: "urgent" };
+  if (diffDays <= 7) return { label: `Due in ${diffDays} days`, urgency: "normal" };
+  if (diffDays <= 30) {
+    const weeks = Math.floor(diffDays / 7);
+    return { label: weeks === 1 ? "Due in 1 week" : `Due in ${weeks} weeks`, urgency: "normal" };
+  }
+  return { label: `Due ${due.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`, urgency: "normal" };
+}
 
 const SPRINT_STATUS_STYLES: Record<
   Sprint["status"],
@@ -112,7 +137,9 @@ export default function TaskBoardPage() {
   const [newTags, setNewTags] = useState<TaskTag[]>([]);
   const [editTags, setEditTags] = useState<TaskTag[]>([]);
   const [newBlockedBy, setNewBlockedBy] = useState("");
+  const [newDueDate, setNewDueDate] = useState("");
   const [editBlockedBy, setEditBlockedBy] = useState("");
+  const [editDueDate, setEditDueDate] = useState("");
   const [editAssignee, setEditAssignee] = useState("");
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [filterTag, setFilterTag] = useState<TaskTag | "all">("all");
@@ -303,12 +330,14 @@ export default function TaskBoardPage() {
       assignee: newAssignee,
       tags: newTags.length > 0 ? newTags : undefined,
       blockedBy: newBlockedBy || undefined,
+      dueDate: newDueDate || undefined,
     });
     setNewTitle("");
     setNewDesc("");
     setNewPriority("medium");
     setNewTags([]);
     setNewBlockedBy("");
+    setNewDueDate("");
     setShowAddForm(false);
     reload();
   };
@@ -363,6 +392,7 @@ export default function TaskBoardPage() {
     setEditTags(task.tags || []);
     setEditBlockedBy(task.blockedBy || "");
     setEditAssignee(task.assignee || "");
+    setEditDueDate(task.dueDate || "");
   };
 
   const saveEdit = () => {
@@ -374,6 +404,7 @@ export default function TaskBoardPage() {
       assignee: editAssignee.trim(),
       tags: editTags.length > 0 ? editTags : undefined,
       blockedBy: editBlockedBy || undefined,
+      dueDate: editDueDate || undefined,
     });
     setEditingTask(null);
     reload();
@@ -546,6 +577,12 @@ export default function TaskBoardPage() {
           return a.title.localeCompare(b.title);
         case "date":
           return b.id.localeCompare(a.id);
+        case "dueDate": {
+          if (!a.dueDate && !b.dueDate) return 0;
+          if (!a.dueDate) return 1;
+          if (!b.dueDate) return -1;
+          return a.dueDate.localeCompare(b.dueDate);
+        }
         default:
           return 0;
       }
@@ -581,6 +618,7 @@ export default function TaskBoardPage() {
                 <option value="priority">Sort: Priority</option>
                 <option value="name">Sort: Name</option>
                 <option value="date">Sort: Date</option>
+                <option value="dueDate">Sort: Due Date</option>
               </select>
               <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
             </div>
@@ -1357,24 +1395,37 @@ export default function TaskBoardPage() {
                   })}
                 </div>
               </div>
-              <div>
-                <label className="mb-1 block text-xs text-[#6B7280]">
-                  Blocked By
-                </label>
-                <select
-                  value={newBlockedBy}
-                  onChange={(e) => setNewBlockedBy(e.target.value)}
-                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
-                >
-                  <option value="">None</option>
-                  {tasks
-                    .filter((t) => t.projectId === projectId)
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.title}
-                      </option>
-                    ))}
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs text-[#6B7280]">
+                    Blocked By
+                  </label>
+                  <select
+                    value={newBlockedBy}
+                    onChange={(e) => setNewBlockedBy(e.target.value)}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+                  >
+                    <option value="">None</option>
+                    {tasks
+                      .filter((t) => t.projectId === projectId)
+                      .map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.title}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-[#6B7280]">
+                    Due Date
+                  </label>
+                  <input
+                    type="date"
+                    value={newDueDate}
+                    onChange={(e) => setNewDueDate(e.target.value)}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none [color-scheme:dark] focus:border-[#F59E0B]/50"
+                  />
+                </div>
               </div>
               <button
                 type="submit"
@@ -1464,6 +1515,7 @@ export default function TaskBoardPage() {
                   const isBlocked = blockingTask
                     ? blockingTask.status !== "done"
                     : false;
+                  const dueDateInfo = task.status !== "done" ? getDueDateInfo(task.dueDate) : null;
 
                   return (
                     <div
@@ -1474,9 +1526,13 @@ export default function TaskBoardPage() {
                         className={`rounded-lg border bg-[#1A1A1A] p-3 transition-all duration-500 ${
                           flashingTask === task.id
                             ? "border-[#F59E0B] ring-2 ring-[#F59E0B]/20 bg-[#F59E0B]/5"
-                            : isExpanded
-                              ? "border-[#F59E0B]/30"
-                              : "border-[#2A2A2A] hover:border-[#F59E0B]/20"
+                            : dueDateInfo?.urgency === "overdue"
+                              ? "border-[#EF4444]/60 bg-[#EF4444]/5"
+                              : dueDateInfo?.urgency === "urgent"
+                                ? "border-[#F59E0B]/40 bg-[#F59E0B]/5"
+                                : isExpanded
+                                  ? "border-[#F59E0B]/30"
+                                  : "border-[#2A2A2A] hover:border-[#F59E0B]/20"
                         }`}
                       >
                         <div className="flex items-start gap-1.5">
@@ -1565,6 +1621,30 @@ export default function TaskBoardPage() {
                                   </span>
                                 );
                               })()}
+                              {dueDateInfo && (
+                                <span
+                                  className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                    dueDateInfo.urgency === "overdue"
+                                      ? "bg-[#EF4444]/15 text-[#EF4444]"
+                                      : dueDateInfo.urgency === "urgent"
+                                        ? "bg-[#F59E0B]/15 text-[#F59E0B]"
+                                        : "bg-[#2A2A2A] text-[#9CA3AF]"
+                                  }`}
+                                >
+                                  {dueDateInfo.urgency === "overdue" ? (
+                                    <AlertTriangle className="h-2.5 w-2.5" />
+                                  ) : (
+                                    <CalendarDays className="h-2.5 w-2.5" />
+                                  )}
+                                  {dueDateInfo.label}
+                                </span>
+                              )}
+                              {!dueDateInfo && task.dueDate && task.status === "done" && (
+                                <span className="flex items-center gap-1 rounded bg-[#10B981]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#10B981]">
+                                  <CalendarDays className="h-2.5 w-2.5" />
+                                  Completed
+                                </span>
+                              )}
                             </div>
                           </div>
 
@@ -1677,24 +1757,37 @@ export default function TaskBoardPage() {
                                   className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/50"
                                 />
                               </div>
-                              <div>
-                                <label className="mb-1 block text-xs text-[#6B7280]">
-                                  Blocked By
-                                </label>
-                                <select
-                                  value={editBlockedBy}
-                                  onChange={(e) => setEditBlockedBy(e.target.value)}
-                                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
-                                >
-                                  <option value="">None</option>
-                                  {tasks
-                                    .filter((t) => t.projectId === projectId && t.id !== editingTask)
-                                    .map((t) => (
-                                      <option key={t.id} value={t.id}>
-                                        {t.title}
-                                      </option>
-                                    ))}
-                                </select>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="mb-1 block text-xs text-[#6B7280]">
+                                    Blocked By
+                                  </label>
+                                  <select
+                                    value={editBlockedBy}
+                                    onChange={(e) => setEditBlockedBy(e.target.value)}
+                                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+                                  >
+                                    <option value="">None</option>
+                                    {tasks
+                                      .filter((t) => t.projectId === projectId && t.id !== editingTask)
+                                      .map((t) => (
+                                        <option key={t.id} value={t.id}>
+                                          {t.title}
+                                        </option>
+                                      ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="mb-1 block text-xs text-[#6B7280]">
+                                    Due Date
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={editDueDate}
+                                    onChange={(e) => setEditDueDate(e.target.value)}
+                                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-sm text-[#F5F5F5] outline-none [color-scheme:dark] focus:border-[#F59E0B]/50"
+                                  />
+                                </div>
                               </div>
                               <div className="flex gap-2">
                                 <button
