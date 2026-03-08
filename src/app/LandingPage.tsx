@@ -698,7 +698,7 @@ export default function LandingPage() {
             One plan. Everything included.
           </p>
           <div className="mx-auto max-w-md">
-            <div className="relative rounded-2xl border-2 border-[#F59E0B]/50 bg-[#1A1A1A] p-8 shadow-[0_0_40px_rgba(245,158,11,0.15)] transition-all hover:border-[#F59E0B] hover:shadow-[0_0_50px_rgba(245,158,11,0.2)]">
+            <div className="relative rounded-2xl border-2 border-[#F59E0B]/50 bg-[#1A1A1A] p-8 shadow-[0_0_40px_rgba(245,158,11,0.15)] transition-all duration-300 hover:scale-[1.01] hover:border-[#F59E0B] hover:shadow-[0_0_60px_rgba(245,158,11,0.35)]">
               <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#F59E0B]/[0.03] to-transparent" />
               <div className="relative">
                 <h3 className="text-2xl font-bold text-[#F5F5F5]">Free Forever</h3>
