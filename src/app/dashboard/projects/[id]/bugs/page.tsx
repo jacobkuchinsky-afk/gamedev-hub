@@ -124,6 +124,8 @@ export default function BugTrackerPage() {
   const [aiSuggestingPriority, setAiSuggestingPriority] = useState(false);
   const [aiSuggestFlash, setAiSuggestFlash] = useState(false);
   const [aiImprovingDesc, setAiImprovingDesc] = useState(false);
+  const [aiSuggestingPlatform, setAiSuggestingPlatform] = useState(false);
+  const [aiPlatformFlash, setAiPlatformFlash] = useState(false);
 
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [aiAnalysis, setAiAnalysis] = useState<Record<string, string>>({});
@@ -286,6 +288,41 @@ Be concise and professional. Fill in any missing sections based on the title and
       // silently fail
     } finally {
       setAiSuggestingPriority(false);
+    }
+  };
+
+  const handleAiSuggestPlatform = async () => {
+    if (!newTitle.trim() || aiSuggestingPlatform) return;
+    setAiSuggestingPlatform(true);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: `Based on this game bug description, which platform is most likely affected: Windows, Mac, Linux, Web, Mobile, All? Bug: '${newTitle.trim()}'. Respond with just the platform name.` }],
+          stream: false,
+          max_tokens: 128,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      const platformMap: Record<string, string> = { windows: "Windows", mac: "macOS", macos: "macOS", linux: "Linux", web: "Web", mobile: "Mobile", all: "All" };
+      const key = content.toLowerCase().replace(/[^a-z]/g, "");
+      const matched = Object.entries(platformMap).find(([k]) => key.includes(k));
+      if (matched) {
+        setNewPlatform(matched[1]);
+        setAiPlatformFlash(true);
+        setTimeout(() => setAiPlatformFlash(false), 1500);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setAiSuggestingPlatform(false);
     }
   };
 
@@ -1286,13 +1323,32 @@ Be concise and professional. Fill in any missing sections based on the title and
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-[#6B7280]">
-                    Platform
-                  </label>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="block text-xs text-[#6B7280]">
+                      Platform
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleAiSuggestPlatform}
+                      disabled={!newTitle.trim() || aiSuggestingPlatform}
+                      className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {aiSuggestingPlatform ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3 w-3" />
+                      )}
+                      AI Suggest
+                    </button>
+                  </div>
                   <select
                     value={newPlatform}
                     onChange={(e) => setNewPlatform(e.target.value)}
-                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+                    className={`w-full rounded-lg border bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none transition-all focus:border-[#F59E0B]/50 ${
+                      aiPlatformFlash
+                        ? "border-[#F59E0B] ring-1 ring-[#F59E0B]/30"
+                        : "border-[#2A2A2A]"
+                    }`}
                   >
                     {PLATFORMS.map((p) => (
                       <option key={p} value={p}>{p}</option>

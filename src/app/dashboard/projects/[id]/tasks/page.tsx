@@ -208,6 +208,7 @@ export default function TaskBoardPage() {
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [filterTag, setFilterTag] = useState<TaskTag | "all">("all");
   const [aiDetailLoading, setAiDetailLoading] = useState(false);
+  const [aiImprovingTitle, setAiImprovingTitle] = useState(false);
   const [editEstimate, setEditEstimate] = useState<Record<string, string>>({});
 
   const [sprints, setSprints] = useState<Sprint[]>([]);
@@ -371,6 +372,34 @@ export default function TaskBoardPage() {
       // silently fail
     } finally {
       setAiDetailLoading(false);
+    }
+  };
+
+  const handleAiImproveTitle = async () => {
+    if (!newTitle.trim() || aiImprovingTitle) return;
+    setAiImprovingTitle(true);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: `Improve this game development task title to be more specific and actionable: '${newTitle.trim()}'. Return only the improved title.` }],
+          stream: false,
+          max_tokens: 128,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      if (content) setNewTitle(content.replace(/^["']|["']$/g, ""));
+    } catch {
+      // silently fail
+    } finally {
+      setAiImprovingTitle(false);
     }
   };
 
@@ -2106,15 +2135,30 @@ export default function TaskBoardPage() {
               )}
             </div>
             <form onSubmit={handleAddTask} className="space-y-4">
-              <input
-                type="text"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Task title"
-                required
-                autoFocus
-                className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
-              />
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="Task title"
+                  required
+                  autoFocus
+                  className="min-w-0 flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+                />
+                <button
+                  type="button"
+                  onClick={handleAiImproveTitle}
+                  disabled={!newTitle.trim() || aiImprovingTitle}
+                  title="AI Improve Title"
+                  className="flex shrink-0 items-center justify-center rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 p-2.5 text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/15 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {aiImprovingTitle ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <label className="text-xs text-[#6B7280]">Description</label>
