@@ -454,7 +454,7 @@ export default function LandingPage() {
               <Link
                 key={tool.name}
                 href="/dashboard/tools"
-                className={`animate-fade-in stagger-${i + 1} group flex items-center gap-4 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 transition-all hover:border-[#F59E0B]/30 hover:bg-[#1F1F1F]`}
+                className={`animate-fade-in stagger-${i + 1} group flex items-center gap-4 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 transition-all transition-transform duration-200 hover:scale-[1.02] hover:border-[#F59E0B]/30 hover:bg-[#1F1F1F]`}
               >
                 <div
                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg"
