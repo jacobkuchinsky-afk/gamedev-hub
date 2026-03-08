@@ -189,6 +189,7 @@ export default function SettingsPage() {
     a.download = `gameforge-export-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    localStorage.setItem("gameforge_last_backup", new Date().toISOString());
     console.log("[Settings] exported data, keys:", Object.keys(allKeys).length);
   }, []);
 

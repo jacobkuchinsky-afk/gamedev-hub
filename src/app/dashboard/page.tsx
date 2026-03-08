@@ -21,6 +21,7 @@ import {
   Sparkles,
   X,
   ChevronRight,
+  HardDrive,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
 import {
@@ -94,10 +95,15 @@ export default function DashboardPage() {
   const [allProjects, setAllProjects] = useState<(Project & { taskPct: number })[]>([]);
   const [totalProjects, setTotalProjects] = useState(0);
   const [welcomeDismissed, setWelcomeDismissed] = useState(true);
+  const [lastBackup, setLastBackup] = useState<string | null>(null);
+  const [backupLoaded, setBackupLoaded] = useState(false);
 
   useEffect(() => {
     const dismissed = localStorage.getItem("gameforge_welcome_dismissed") === "true";
     setWelcomeDismissed(dismissed);
+    const ts = localStorage.getItem("gameforge_last_backup");
+    setLastBackup(ts);
+    setBackupLoaded(true);
   }, []);
 
   const handleDismissWelcome = () => {
@@ -336,6 +342,18 @@ export default function DashboardPage() {
   ];
 
   const showWelcomeBanner = totalProjects === 0 && !welcomeDismissed;
+
+  const backupDaysAgo = lastBackup
+    ? Math.floor((Date.now() - new Date(lastBackup).getTime()) / 86400000)
+    : null;
+  const backupLabel = !lastBackup
+    ? "Never"
+    : backupDaysAgo === 0
+      ? "Today"
+      : backupDaysAgo === 1
+        ? "Yesterday"
+        : `${backupDaysAgo} days ago`;
+  const backupStale = !lastBackup || (backupDaysAgo !== null && backupDaysAgo > 7);
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
@@ -721,6 +739,49 @@ export default function DashboardPage() {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Backup Reminder */}
+      {backupLoaded && (
+        <div
+          className={`flex items-center gap-3 rounded-xl border px-5 py-3.5 ${
+            backupStale
+              ? "border-[#F59E0B]/20 bg-[#F59E0B]/5"
+              : "border-[#2A2A2A] bg-[#1A1A1A]"
+          }`}
+        >
+          <HardDrive
+            className={`h-4 w-4 shrink-0 ${backupStale ? "text-[#F59E0B]" : "text-[#6B7280]"}`}
+          />
+          <div className="min-w-0 flex-1">
+            {backupStale ? (
+              <p className="text-sm text-[#F59E0B]">
+                {lastBackup
+                  ? "It\u2019s been a while since you backed up your data."
+                  : "You\u2019ve never backed up your data."}
+                {" "}
+                <Link
+                  href="/dashboard/settings"
+                  className="font-medium underline decoration-[#F59E0B]/40 underline-offset-2 transition-colors hover:decoration-[#F59E0B]"
+                >
+                  Export now?
+                </Link>
+              </p>
+            ) : (
+              <p className="text-sm text-[#6B7280]">
+                Last backup: {backupLabel}
+              </p>
+            )}
+          </div>
+          {!backupStale && (
+            <Link
+              href="/dashboard/settings"
+              className="shrink-0 text-xs text-[#6B7280] transition-colors hover:text-[#F59E0B]"
+            >
+              Settings
+            </Link>
+          )}
         </div>
       )}
     </div>

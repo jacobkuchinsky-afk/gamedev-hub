@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -25,6 +25,8 @@ import {
   Pencil,
   X,
   Trash2,
+  HeartPulse,
+  Loader2,
 } from "lucide-react";
 import {
   getProject,
@@ -341,6 +343,113 @@ function DeleteProjectModal({
   );
 }
 
+function HealthReportModal({
+  open,
+  onClose,
+  report,
+  loading,
+  error,
+}: {
+  open: boolean;
+  onClose: () => void;
+  report: string | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/60" />
+      <div
+        className="relative z-10 w-full max-w-lg overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+              <HeartPulse className="h-4 w-4 text-[#F59E0B]" />
+            </div>
+            <h2 className="text-lg font-semibold">Health Report</h2>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1 text-[#9CA3AF] transition-colors hover:text-[#F5F5F5]">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="max-h-[65vh] overflow-y-auto p-6">
+          {loading && (
+            <div className="flex flex-col items-center gap-3 py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-[#F59E0B]" />
+              <p className="text-sm text-[#9CA3AF]">Analyzing project health...</p>
+            </div>
+          )}
+          {error && (
+            <div className="rounded-lg border border-[#EF4444]/20 bg-[#EF4444]/5 px-4 py-3">
+              <p className="text-sm text-[#EF4444]">{error}</p>
+            </div>
+          )}
+          {!loading && !error && report && (
+            <div className="prose-invert space-y-3 text-sm leading-relaxed text-[#D1D5DB]">
+              {report.split("\n").map((line, i) => {
+                if (!line.trim()) return <div key={i} className="h-2" />;
+                if (line.startsWith("# ") || line.startsWith("## ") || line.startsWith("### ")) {
+                  return (
+                    <h3 key={i} className="mt-3 text-base font-semibold text-[#F5F5F5]">
+                      {line.replace(/^#+\s*/, "")}
+                    </h3>
+                  );
+                }
+                if (line.startsWith("- ") || line.startsWith("* ")) {
+                  return (
+                    <div key={i} className="flex gap-2">
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#F59E0B]" />
+                      <span>{line.replace(/^[-*]\s*/, "")}</span>
+                    </div>
+                  );
+                }
+                const ratingMatch = line.match(/(\d+)\s*\/\s*10/);
+                if (ratingMatch) {
+                  const score = parseInt(ratingMatch[1]);
+                  const scoreColor = score >= 7 ? "#10B981" : score >= 4 ? "#F59E0B" : "#EF4444";
+                  return (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="text-2xl font-bold" style={{ color: scoreColor }}>
+                        {score}
+                      </span>
+                      <span className="text-xs text-[#6B7280]">/ 10</span>
+                      <span className="ml-1 text-sm">{line.replace(/\d+\s*\/\s*10/, "").trim()}</span>
+                    </div>
+                  );
+                }
+                if (line.match(/^\d+\.\s/)) {
+                  return (
+                    <div key={i} className="flex gap-2">
+                      <span className="shrink-0 text-[#F59E0B]">{line.match(/^\d+/)?.[0]}.</span>
+                      <span>{line.replace(/^\d+\.\s*/, "")}</span>
+                    </div>
+                  );
+                }
+                if (line.startsWith("**") && line.endsWith("**")) {
+                  return (
+                    <p key={i} className="font-semibold text-[#F5F5F5]">
+                      {line.replace(/\*\*/g, "")}
+                    </p>
+                  );
+                }
+                return <p key={i}>{line}</p>;
+              })}
+            </div>
+          )}
+          {!loading && !error && !report && (
+            <p className="py-8 text-center text-sm text-[#6B7280]">No report generated yet.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -354,6 +463,10 @@ export default function ProjectDetailPage() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [healthOpen, setHealthOpen] = useState(false);
+  const [healthReport, setHealthReport] = useState<string | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthError, setHealthError] = useState<string | null>(null);
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -469,6 +582,79 @@ export default function ProjectDetailPage() {
     },
   ];
 
+  const runHealthReport = useCallback(async () => {
+    setHealthOpen(true);
+    setHealthLoading(true);
+    setHealthError(null);
+    setHealthReport(null);
+
+    const severityDist = bugs.reduce<Record<string, number>>((acc, b) => {
+      if (b.status !== "closed") acc[b.severity] = (acc[b.severity] || 0) + 1;
+      return acc;
+    }, {});
+
+    const sprintGroups = tasks.reduce<Record<string, { total: number; done: number }>>((acc, t) => {
+      const s = t.sprint || "Unassigned";
+      if (!acc[s]) acc[s] = { total: 0, done: 0 };
+      acc[s].total++;
+      if (t.status === "done") acc[s].done++;
+      return acc;
+    }, {});
+
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
+    const recentDevlogs = devlog.filter((d) => new Date(d.date) >= thirtyDaysAgo).length;
+
+    const data = {
+      totalTasks: tasks.length,
+      completedTasks: doneTasks,
+      inProgressTasks,
+      openBugs,
+      criticalBugs,
+      severityDistribution: severityDist,
+      sprintVelocity: sprintGroups,
+      devlogFrequency: `${recentDevlogs} entries in last 30 days`,
+      projectAge: `${projectAgeDays} days`,
+      status: project?.status,
+    };
+
+    const prompt = `Analyze this game project's health: ${JSON.stringify(data)}. Rate overall health 1-10. Identify the top risk, the strongest area, and suggest 3 specific actions to improve. Be brief and actionable.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+
+      const result = await response.json();
+      const content =
+        result.choices?.[0]?.message?.content ||
+        result.choices?.[0]?.message?.reasoning ||
+        "";
+
+      if (!content) throw new Error("No response from AI");
+      setHealthReport(content);
+    } catch (err) {
+      setHealthError(
+        err instanceof Error ? err.message : "Failed to generate health report. Try again later."
+      );
+    } finally {
+      setHealthLoading(false);
+    }
+  }, [tasks, bugs, devlog, doneTasks, inProgressTasks, openBugs, criticalBugs, projectAgeDays, project?.status]);
+
   const handleProjectSave = (updated: Project) => {
     setProject(updated);
   };
@@ -496,6 +682,14 @@ export default function ProjectDetailPage() {
           />
         </>
       )}
+
+      <HealthReportModal
+        open={healthOpen}
+        onClose={() => setHealthOpen(false)}
+        report={healthReport}
+        loading={healthLoading}
+        error={healthError}
+      />
 
       {/* Back + Header */}
       <div>
@@ -548,6 +742,13 @@ export default function ProjectDetailPage() {
               <BookOpen className="h-3.5 w-3.5" />
               Write Devlog
             </Link>
+            <button
+              onClick={runHealthReport}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/40 hover:bg-[#F59E0B]/10"
+            >
+              <HeartPulse className="h-3.5 w-3.5" />
+              Health Report
+            </button>
             <button
               onClick={() => setEditOpen(true)}
               className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
