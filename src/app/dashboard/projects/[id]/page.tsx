@@ -36,6 +36,8 @@ import {
   CheckCircle2,
   Circle,
   ShieldAlert,
+  Settings,
+  Tag,
 } from "lucide-react";
 import {
   getProject,
@@ -65,6 +67,9 @@ import {
   type PlaytestResponse,
   type Sprint,
   type Milestone,
+  ALL_TASK_TAGS,
+  TASK_TAG_COLORS,
+  type TaskTag,
 } from "@/lib/store";
 
 const STATUS_BADGE_STYLES: Record<Project["status"], string> = {
@@ -470,6 +475,254 @@ function HealthReportModal({
   );
 }
 
+interface ProjectSettings {
+  defaultPriority: "critical" | "high" | "medium" | "low";
+  sprintDuration: 1 | 2 | 3 | 4;
+  projectColor: string;
+  customTags: string[];
+}
+
+const DEFAULT_SETTINGS: ProjectSettings = {
+  defaultPriority: "medium",
+  sprintDuration: 2,
+  projectColor: "#F59E0B",
+  customTags: [],
+};
+
+function getProjectSettings(projectId: string): ProjectSettings {
+  try {
+    const raw = localStorage.getItem(`gameforge_settings_${projectId}`);
+    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+  } catch { /* ignore */ }
+  return { ...DEFAULT_SETTINGS };
+}
+
+function saveProjectSettings(projectId: string, settings: ProjectSettings) {
+  localStorage.setItem(`gameforge_settings_${projectId}`, JSON.stringify(settings));
+}
+
+const SPRINT_DURATION_OPTIONS = [
+  { value: 1, label: "1 week" },
+  { value: 2, label: "2 weeks" },
+  { value: 3, label: "3 weeks" },
+  { value: 4, label: "4 weeks" },
+];
+
+function ProjectSettingsModal({
+  projectId,
+  open,
+  onClose,
+}: {
+  projectId: string;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const [settings, setSettings] = useState<ProjectSettings>(DEFAULT_SETTINGS);
+  const [newTag, setNewTag] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setSettings(getProjectSettings(projectId));
+      setNewTag("");
+    }
+  }, [open, projectId]);
+
+  const handleSave = () => {
+    saveProjectSettings(projectId, settings);
+    onClose();
+  };
+
+  const addCustomTag = () => {
+    const tag = newTag.trim();
+    if (!tag || settings.customTags.includes(tag)) return;
+    setSettings((s) => ({ ...s, customTags: [...s.customTags, tag] }));
+    setNewTag("");
+  };
+
+  const removeCustomTag = (tag: string) => {
+    setSettings((s) => ({ ...s, customTags: s.customTags.filter((t) => t !== tag) }));
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/60" />
+      <div
+        className="relative z-10 w-full max-w-lg overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+              <Settings className="h-4 w-4 text-[#F59E0B]" />
+            </div>
+            <h2 className="text-lg font-semibold">Project Settings</h2>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1 text-[#9CA3AF] transition-colors hover:text-[#F5F5F5]">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="max-h-[70vh] space-y-5 overflow-y-auto p-6">
+          {/* Default Priority */}
+          <div>
+            <label className="mb-2 block text-xs font-medium text-[#9CA3AF]">Default Task Priority</label>
+            <p className="mb-2 text-[10px] text-[#6B7280]">New tasks will start with this priority level</p>
+            <div className="grid grid-cols-4 gap-2">
+              {(["critical", "high", "medium", "low"] as const).map((p) => {
+                const colors: Record<string, string> = {
+                  critical: "#EF4444",
+                  high: "#F97316",
+                  medium: "#F59E0B",
+                  low: "#10B981",
+                };
+                const isActive = settings.defaultPriority === p;
+                return (
+                  <button
+                    key={p}
+                    onClick={() => setSettings((s) => ({ ...s, defaultPriority: p }))}
+                    className={`rounded-lg border px-3 py-2 text-xs font-medium capitalize transition-colors ${
+                      isActive
+                        ? "border-transparent"
+                        : "border-[#2A2A2A] bg-[#0F0F0F] text-[#9CA3AF] hover:border-[#3A3A3A] hover:text-[#F5F5F5]"
+                    }`}
+                    style={isActive ? { backgroundColor: `${colors[p]}15`, color: colors[p], borderColor: `${colors[p]}40` } : undefined}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Sprint Duration */}
+          <div>
+            <label className="mb-2 block text-xs font-medium text-[#9CA3AF]">Sprint Duration</label>
+            <p className="mb-2 text-[10px] text-[#6B7280]">Default length for new sprints</p>
+            <div className="grid grid-cols-4 gap-2">
+              {SPRINT_DURATION_OPTIONS.map((opt) => {
+                const isActive = settings.sprintDuration === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => setSettings((s) => ({ ...s, sprintDuration: opt.value as 1 | 2 | 3 | 4 }))}
+                    className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                      isActive
+                        ? "border-[#F59E0B]/50 bg-[#F59E0B]/10 text-[#F59E0B]"
+                        : "border-[#2A2A2A] bg-[#0F0F0F] text-[#9CA3AF] hover:border-[#3A3A3A] hover:text-[#F5F5F5]"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Project Color */}
+          <div>
+            <label className="mb-2 block text-xs font-medium text-[#9CA3AF]">Project Accent Color</label>
+            <p className="mb-2 text-[10px] text-[#6B7280]">Used for highlights and badges in this project</p>
+            <div className="flex flex-wrap gap-2">
+              {PRESET_COLORS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setSettings((s) => ({ ...s, projectColor: c }))}
+                  className={`h-8 w-8 rounded-lg transition-all ${
+                    settings.projectColor === c ? "ring-2 ring-[#F59E0B] ring-offset-2 ring-offset-[#1A1A1A]" : "hover:scale-110"
+                  }`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+              <div className="relative">
+                <input
+                  type="color"
+                  value={settings.projectColor}
+                  onChange={(e) => setSettings((s) => ({ ...s, projectColor: e.target.value }))}
+                  className="absolute inset-0 h-8 w-8 cursor-pointer opacity-0"
+                />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-dashed border-[#2A2A2A] text-[#6B7280] hover:border-[#F59E0B]/50 hover:text-[#F59E0B]">
+                  <Plus className="h-3.5 w-3.5" />
+                </div>
+              </div>
+            </div>
+            {settings.projectColor && (
+              <div className="mt-2 flex items-center gap-2">
+                <div className="h-4 w-4 rounded" style={{ backgroundColor: settings.projectColor }} />
+                <span className="text-xs font-mono text-[#6B7280]">{settings.projectColor}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Custom Tags */}
+          <div>
+            <label className="mb-2 block text-xs font-medium text-[#9CA3AF]">Custom Tags</label>
+            <p className="mb-2 text-[10px] text-[#6B7280]">Add project-specific tags (built-in tags are always available)</p>
+
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {ALL_TASK_TAGS.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded px-2 py-0.5 text-[10px] font-medium"
+                  style={{ backgroundColor: `${TASK_TAG_COLORS[tag]}20`, color: TASK_TAG_COLORS[tag] }}
+                >
+                  {tag}
+                </span>
+              ))}
+              {settings.customTags.map((tag) => (
+                <span
+                  key={tag}
+                  className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium bg-[#F59E0B]/15 text-[#F59E0B]"
+                >
+                  {tag}
+                  <button onClick={() => removeCustomTag(tag)} className="hover:text-[#EF4444] transition-colors">
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </span>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomTag(); } }}
+                placeholder="New tag name..."
+                className="flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+              />
+              <button
+                onClick={addCustomTag}
+                disabled={!newTag.trim()}
+                className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-xs font-medium text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Plus className="h-3 w-3" />
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-[#2A2A2A] px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-sm text-[#9CA3AF] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-[#0F0F0F] transition-colors hover:bg-[#D97706]"
+          >
+            Save Settings
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TimelineSection({
   milestones,
   sprints,
@@ -834,6 +1087,7 @@ export default function ProjectDetailPage() {
   const [msStatus, setMsStatus] = useState<Milestone["status"]>("upcoming");
 
   const [aiMilestoneLoading, setAiMilestoneLoading] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [riskLoading, setRiskLoading] = useState(false);
   const [riskCards, setRiskCards] = useState<{ title: string; level: "High" | "Medium" | "Low"; description: string; mitigation: string }[] | null>(null);
@@ -1486,6 +1740,12 @@ export default function ProjectDetailPage() {
         error={healthError}
       />
 
+      <ProjectSettingsModal
+        projectId={projectId}
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
+
       {/* Back + Header */}
       <div>
         <Link
@@ -1616,6 +1876,13 @@ export default function ProjectDetailPage() {
             >
               <Copy className="h-3.5 w-3.5" />
               Duplicate
+            </button>
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+            >
+              <Settings className="h-3.5 w-3.5" />
+              Settings
             </button>
             <button
               onClick={() => setEditOpen(true)}

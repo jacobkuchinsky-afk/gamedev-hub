@@ -34,6 +34,8 @@ import {
   Send,
   Download,
   ScrollText,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import {
   getProject,
@@ -244,6 +246,10 @@ export default function TaskBoardPage() {
 
   const [taskExportOpen, setTaskExportOpen] = useState(false);
   const taskExportRef = useRef<HTMLDivElement>(null);
+
+  const [viewMode, setViewMode] = useState<"board" | "list">("board");
+  const [listSortField, setListSortField] = useState<string>("priority");
+  const [listSortDir, setListSortDir] = useState<"asc" | "desc">("asc");
 
   const handleConvertToBug = (taskId: string) => {
     const task = tasks.find((t) => t.id === taskId);
@@ -925,16 +931,10 @@ export default function TaskBoardPage() {
 
   const saveRetro = (sprintName: string, field: "wentWell" | "didntGoWell" | "improve", value: string) => {
     setRetroNotes((prev) => {
-      const updated = {
-        ...prev,
-        [sprintName]: {
-          wentWell: "",
-          didntGoWell: "",
-          improve: "",
-          ...prev[sprintName],
-          [field]: value,
-        },
-      };
+      const defaults = { wentWell: "", didntGoWell: "", improve: "" };
+      const existing = prev[sprintName] ?? defaults;
+      const merged = { ...defaults, ...existing, [field]: value };
+      const updated = { ...prev, [sprintName]: merged };
       localStorage.setItem(`retro_${projectId}`, JSON.stringify(updated));
       return updated;
     });
@@ -1023,6 +1023,45 @@ export default function TaskBoardPage() {
     });
   }, [tasks, filterPriority, filterTag, filterAssignee, sortBy, selectedSprint]);
 
+  const toggleListSort = (field: string) => {
+    if (listSortField === field) {
+      setListSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setListSortField(field);
+      setListSortDir("asc");
+    }
+  };
+
+  const listSortedTasks = useMemo(() => {
+    const sorted = [...sortedFilteredTasks];
+    const dir = listSortDir === "asc" ? 1 : -1;
+    sorted.sort((a, b) => {
+      switch (listSortField) {
+        case "title":
+          return dir * a.title.localeCompare(b.title);
+        case "status": {
+          const so: Record<string, number> = { todo: 0, "in-progress": 1, testing: 2, done: 3 };
+          return dir * ((so[a.status] ?? 0) - (so[b.status] ?? 0));
+        }
+        case "priority":
+          return dir * (PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
+        case "assignee":
+          return dir * (a.assignee || "").localeCompare(b.assignee || "");
+        case "sprint":
+          return dir * (a.sprint || "").localeCompare(b.sprint || "");
+        case "dueDate": {
+          if (!a.dueDate && !b.dueDate) return 0;
+          if (!a.dueDate) return dir;
+          if (!b.dueDate) return -dir;
+          return dir * a.dueDate.localeCompare(b.dueDate);
+        }
+        default:
+          return 0;
+      }
+    });
+    return sorted;
+  }, [sortedFilteredTasks, listSortField, listSortDir]);
+
   const handleExportTasksJSON = useCallback(() => {
     if (!project) return;
     const exportData = tasks.map((t) => ({
@@ -1110,7 +1149,26 @@ export default function TaskBoardPage() {
           ]}
         />
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-2xl font-bold">Task Board</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold">Task Board</h1>
+            <div className="flex items-center overflow-hidden rounded-lg border border-[#2A2A2A]">
+              <button
+                onClick={() => setViewMode("board")}
+                className={`p-2 transition-colors ${viewMode === "board" ? "bg-[#F59E0B]/15 text-[#F59E0B]" : "text-[#6B7280] hover:text-[#F5F5F5] hover:bg-[#1F1F1F]"}`}
+                title="Board view"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+              <div className="h-5 w-px bg-[#2A2A2A]" />
+              <button
+                onClick={() => setViewMode("list")}
+                className={`p-2 transition-colors ${viewMode === "list" ? "bg-[#F59E0B]/15 text-[#F59E0B]" : "text-[#6B7280] hover:text-[#F5F5F5] hover:bg-[#1F1F1F]"}`}
+                title="List view"
+              >
+                <List className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
           <div className="flex items-center gap-3">
             <div className="relative">
               <div className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2">
@@ -2119,8 +2177,206 @@ export default function TaskBoardPage() {
         </div>
       )}
 
+      {/* List View */}
+      {viewMode === "list" && (
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px]">
+              <thead>
+                <tr className="border-b border-[#2A2A2A] bg-[#151515]">
+                  <th className="w-10 px-3 py-3">
+                    <button
+                      onClick={() => {
+                        const allSelected = listSortedTasks.length > 0 && listSortedTasks.every((t) => selectedTasks.has(t.id));
+                        if (allSelected) {
+                          setSelectedTasks(new Set());
+                        } else {
+                          setSelectedTasks(new Set(listSortedTasks.map((t) => t.id)));
+                        }
+                      }}
+                      className="rounded p-0.5 text-[#6B7280] transition-colors hover:text-[#F59E0B]"
+                    >
+                      {listSortedTasks.length > 0 && listSortedTasks.every((t) => selectedTasks.has(t.id)) ? (
+                        <CheckSquare className="h-4 w-4 text-[#F59E0B]" />
+                      ) : (
+                        <Square className="h-4 w-4" />
+                      )}
+                    </button>
+                  </th>
+                  {[
+                    { key: "title", label: "Title", sortable: true },
+                    { key: "status", label: "Status", sortable: true },
+                    { key: "priority", label: "Priority", sortable: true },
+                    { key: "assignee", label: "Assignee", sortable: true },
+                    { key: "sprint", label: "Sprint", sortable: true },
+                    { key: "dueDate", label: "Due Date", sortable: true },
+                    { key: "tags", label: "Tags", sortable: false },
+                    { key: "time", label: "Time", sortable: false },
+                  ].map((col) => (
+                    <th
+                      key={col.key}
+                      className={`px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-[#6B7280] ${col.sortable ? "cursor-pointer select-none hover:text-[#F59E0B] transition-colors" : ""}`}
+                      onClick={col.sortable ? () => toggleListSort(col.key) : undefined}
+                    >
+                      <span className="flex items-center gap-1">
+                        {col.label}
+                        {col.sortable && listSortField === col.key && (
+                          <ChevronDown className={`h-3 w-3 text-[#F59E0B] transition-transform ${listSortDir === "asc" ? "rotate-180" : ""}`} />
+                        )}
+                        {col.sortable && listSortField !== col.key && (
+                          <ArrowUpDown className="h-3 w-3 opacity-30" />
+                        )}
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#2A2A2A]/60">
+                {listSortedTasks.map((task) => {
+                  const col = COLUMNS.find((c) => c.key === task.status);
+                  const dueDateInfo = getDueDateInfo(task.dueDate);
+                  const isSelected = selectedTasks.has(task.id);
+                  return (
+                    <tr
+                      key={task.id}
+                      className={`transition-colors hover:bg-[#1F1F1F] ${isSelected ? "bg-[#F59E0B]/5" : ""}`}
+                    >
+                      <td className="w-10 px-3 py-2.5">
+                        <button
+                          onClick={() => toggleTaskSelection(task.id)}
+                          className="rounded p-0.5 text-[#6B7280] transition-colors hover:text-[#F59E0B]"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="h-4 w-4 text-[#F59E0B]" />
+                          ) : (
+                            <Square className="h-4 w-4" />
+                          )}
+                        </button>
+                      </td>
+                      <td className="max-w-[280px] px-3 py-2.5">
+                        <button
+                          onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
+                          className="text-left"
+                        >
+                          <span className="text-sm font-medium text-[#F5F5F5] hover:text-[#F59E0B] transition-colors">
+                            {task.title}
+                          </span>
+                          {task.blockedBy && (
+                            <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] text-[#EF4444]">
+                              <Lock className="h-2.5 w-2.5" />
+                            </span>
+                          )}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span
+                          className="inline-block rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap"
+                          style={{
+                            backgroundColor: `${col?.color || "#9CA3AF"}15`,
+                            color: col?.color || "#9CA3AF",
+                          }}
+                        >
+                          {col?.label || task.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span
+                          className="inline-block rounded-md px-2 py-0.5 text-xs font-medium capitalize whitespace-nowrap"
+                          style={{
+                            backgroundColor: `${getPriorityColor(task.priority)}15`,
+                            color: getPriorityColor(task.priority),
+                          }}
+                        >
+                          {task.priority}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {task.assignee && (
+                          <div className="flex items-center gap-1.5">
+                            <div
+                              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                              style={{ backgroundColor: getAvatarColor(task.assignee) }}
+                            >
+                              {getInitials(task.assignee)}
+                            </div>
+                            <span className="text-xs text-[#9CA3AF] whitespace-nowrap">{task.assignee}</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className="text-xs text-[#9CA3AF] whitespace-nowrap">{task.sprint}</span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {dueDateInfo ? (
+                          <span
+                            className={`text-xs whitespace-nowrap ${
+                              dueDateInfo.urgency === "overdue"
+                                ? "text-[#EF4444]"
+                                : dueDateInfo.urgency === "urgent"
+                                  ? "text-[#F59E0B]"
+                                  : "text-[#9CA3AF]"
+                            }`}
+                          >
+                            {dueDateInfo.label}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-[#4B5563]">&mdash;</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex flex-wrap gap-1">
+                          {(task.tags || []).map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap"
+                              style={{
+                                backgroundColor: `${TASK_TAG_COLORS[tag]}20`,
+                                color: TASK_TAG_COLORS[tag],
+                              }}
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {(task.loggedHours || task.estimatedHours) ? (
+                          <span className="text-xs tabular-nums text-[#9CA3AF] whitespace-nowrap">
+                            {task.loggedHours || 0}h
+                            {task.estimatedHours ? (
+                              <span className="text-[#6B7280]">/{task.estimatedHours}h</span>
+                            ) : null}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-[#4B5563]">&mdash;</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {listSortedTasks.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="py-12 text-center">
+                      <p className="text-sm text-[#6B7280]">No tasks match your filters</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-between border-t border-[#2A2A2A] px-4 py-2.5">
+            <span className="text-xs text-[#6B7280]">
+              {listSortedTasks.length} task{listSortedTasks.length !== 1 ? "s" : ""}
+            </span>
+            <span className="text-xs text-[#6B7280]">
+              {listSortedTasks.filter((t) => t.status === "done").length} done
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Kanban Board */}
-      <div className="grid gap-4 lg:grid-cols-4">
+      {viewMode === "board" && <div className="grid gap-4 lg:grid-cols-4">
         {COLUMNS.map((column, colIndex) => {
           const columnTasks = sortedFilteredTasks.filter(
             (t) => t.status === column.key
@@ -3039,7 +3295,7 @@ export default function TaskBoardPage() {
             </div>
           );
         })}
-      </div>
+      </div>}
 
       {/* Floating Bulk Action Bar */}
       {selectedTasks.size > 0 && (
