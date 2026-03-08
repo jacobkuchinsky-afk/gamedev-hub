@@ -36,6 +36,7 @@ import {
   ScrollText,
   LayoutGrid,
   List,
+  Zap,
 } from "lucide-react";
 import {
   getProject,
@@ -250,6 +251,9 @@ export default function TaskBoardPage() {
   const [viewMode, setViewMode] = useState<"board" | "list">("board");
   const [listSortField, setListSortField] = useState<string>("priority");
   const [listSortDir, setListSortDir] = useState<"asc" | "desc">("asc");
+
+  const [showPlanningPoker, setShowPlanningPoker] = useState(false);
+  const [pokerIndex, setPokerIndex] = useState(0);
 
   const handleConvertToBug = (taskId: string) => {
     const task = tasks.find((t) => t.id === taskId);
@@ -1270,6 +1274,16 @@ export default function TaskBoardPage() {
                 </div>
               )}
             </div>
+            <button
+              onClick={() => {
+                setPokerIndex(0);
+                setShowPlanningPoker(true);
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10"
+            >
+              <Zap className="h-3.5 w-3.5" />
+              Planning Poker
+            </button>
             <button
               onClick={() => {
                 setAddToColumn("todo");
@@ -3477,6 +3491,161 @@ export default function TaskBoardPage() {
           </div>
         </div>
       )}
+
+      {/* Planning Poker Modal */}
+      {showPlanningPoker && (() => {
+        const unestimated = tasks.filter((t) => !t.estimatedHours);
+        const total = unestimated.length;
+        const current = unestimated[pokerIndex];
+        const POKER_VALUES = [0.5, 1, 2, 4, 8, 16];
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-lg rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                    <Zap className="h-4.5 w-4.5 text-[#F59E0B]" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold">Planning Poker</h3>
+                    <p className="text-xs text-[#6B7280]">Quick sprint estimation</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowPlanningPoker(false)}
+                  className="rounded-lg p-1 text-[#9CA3AF] hover:text-[#F5F5F5]"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="p-6">
+                {total === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 gap-3">
+                    <CheckSquare className="h-10 w-10 text-[#10B981]" />
+                    <p className="text-sm font-medium text-[#F5F5F5]">All tasks estimated!</p>
+                    <p className="text-xs text-[#6B7280]">Every task has an hour estimate assigned.</p>
+                    <button
+                      onClick={() => setShowPlanningPoker(false)}
+                      className="mt-2 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black hover:bg-[#F59E0B]/90"
+                    >
+                      Done
+                    </button>
+                  </div>
+                ) : !current ? (
+                  <div className="flex flex-col items-center justify-center py-12 gap-3">
+                    <CheckSquare className="h-10 w-10 text-[#10B981]" />
+                    <p className="text-sm font-medium text-[#F5F5F5]">Session complete!</p>
+                    <p className="text-xs text-[#6B7280]">You estimated {total - (total - pokerIndex)} tasks this round.</p>
+                    <button
+                      onClick={() => setShowPlanningPoker(false)}
+                      className="mt-2 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black hover:bg-[#F59E0B]/90"
+                    >
+                      Done
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-[#F59E0B]">
+                          {pokerIndex + 1}/{total} tasks
+                        </span>
+                        <span className="text-xs text-[#6B7280]">
+                          {total - pokerIndex} remaining
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-[#2A2A2A]">
+                        <div
+                          className="h-1.5 rounded-full bg-[#F59E0B] transition-all"
+                          style={{ width: `${((pokerIndex) / total) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-[#2A2A2A] bg-[#0F0F0F] p-5 mb-5">
+                      <div className="flex items-start gap-3">
+                        <span
+                          className="mt-0.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: getPriorityColor(current.priority) }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-sm font-semibold text-[#F5F5F5] mb-1">{current.title}</h4>
+                          {current.description && (
+                            <p className="text-xs text-[#6B7280] line-clamp-3">{current.description}</p>
+                          )}
+                          <div className="flex flex-wrap items-center gap-2 mt-2">
+                            <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[10px] font-medium text-[#9CA3AF] capitalize">
+                              {current.priority}
+                            </span>
+                            <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[10px] font-medium text-[#9CA3AF] capitalize">
+                              {current.status}
+                            </span>
+                            {current.tags?.map((tag) => (
+                              <span key={tag} className="rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ backgroundColor: (TASK_TAG_COLORS as Record<string, string>)[tag] + "20", color: (TASK_TAG_COLORS as Record<string, string>)[tag] }}>
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-[#6B7280] mb-3 text-center">How many hours will this take?</p>
+
+                    <div className="grid grid-cols-6 gap-2 mb-4">
+                      {POKER_VALUES.map((val) => (
+                        <button
+                          key={val}
+                          onClick={() => {
+                            updateTask(current.id, { estimatedHours: val });
+                            reload();
+                            if (pokerIndex < total - 1) {
+                              setPokerIndex(pokerIndex + 1);
+                            } else {
+                              setPokerIndex(total);
+                            }
+                          }}
+                          className="flex flex-col items-center justify-center rounded-xl border border-[#2A2A2A] bg-[#0F0F0F] py-3 text-center transition-all hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/5 active:scale-95"
+                        >
+                          <span className="text-lg font-bold text-[#F5F5F5]">{val}</span>
+                          <span className="text-[10px] text-[#6B7280]">hrs</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <button
+                        onClick={() => {
+                          if (pokerIndex < total - 1) {
+                            setPokerIndex(pokerIndex + 1);
+                          } else {
+                            setPokerIndex(total);
+                          }
+                        }}
+                        className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-xs text-[#9CA3AF] transition-colors hover:border-[#3A3A3A] hover:text-[#F5F5F5]"
+                      >
+                        Skip
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                      {pokerIndex > 0 && (
+                        <button
+                          onClick={() => setPokerIndex(Math.max(0, pokerIndex - 1))}
+                          className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-xs text-[#9CA3AF] transition-colors hover:border-[#3A3A3A] hover:text-[#F5F5F5]"
+                        >
+                          <ChevronLeft className="h-3.5 w-3.5" />
+                          Previous
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

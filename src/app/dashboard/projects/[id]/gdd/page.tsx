@@ -40,6 +40,7 @@ import {
   Trash2,
   Star,
   Anchor,
+  Zap,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -88,6 +89,16 @@ interface AIEnemy {
   specialAbility: string;
   behaviorPattern: string;
   visualDescription: string;
+}
+
+interface AIPowerUp {
+  name: string;
+  icon: string;
+  effect: string;
+  duration: string;
+  cooldown: string;
+  rarity: "Common" | "Rare" | "Legendary";
+  visualEffect: string;
 }
 
 interface DesignPillar {
@@ -627,6 +638,11 @@ export default function GDDPage() {
   const [enemiesLoading, setEnemiesLoading] = useState(false);
   const [showEnemies, setShowEnemies] = useState(false);
   const [enemiesCopied, setEnemiesCopied] = useState(false);
+
+  const [powerUps, setPowerUps] = useState<AIPowerUp[]>([]);
+  const [powerUpsLoading, setPowerUpsLoading] = useState(false);
+  const [showPowerUps, setShowPowerUps] = useState(false);
+  const [powerUpsCopied, setPowerUpsCopied] = useState(false);
 
   const [mechanicsLoading, setMechanicsLoading] = useState(false);
   const [mechanicsResult, setMechanicsResult] = useState("");
@@ -1286,6 +1302,48 @@ export default function GDDPage() {
     }
   }, [project, data]);
 
+  const handleGeneratePowerUps = useCallback(async () => {
+    if (!project) return;
+    setPowerUpsLoading(true);
+    setShowPowerUps(true);
+    setPowerUpsCopied(false);
+
+    const genre = data.genre || project.genre || "unspecified";
+    const name = data.gameTitle || project.name || "Untitled";
+
+    const prompt = `Design 8 power-ups/abilities for a ${genre} game called '${name}'. For each provide: name, icon (a single emoji), effect (1-2 sentences describing what it does), duration (e.g. "10 seconds" or "permanent"), cooldown (e.g. "30 seconds" or "none"), rarity (one of: Common, Rare, Legendary), and visualEffect (1 sentence describing the visual feedback). Return as JSON array: [{"name":"...","icon":"...","effect":"...","duration":"...","cooldown":"...","rarity":"Common|Rare|Legendary","visualEffect":"..."}]. Return ONLY raw JSON, no markdown.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 1024,
+          temperature: 0.8,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+      const apiData = await response.json();
+      const content = apiData.choices?.[0]?.message?.content || apiData.choices?.[0]?.message?.reasoning || "";
+      const cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      setPowerUps(Array.isArray(parsed) ? parsed : []);
+      setToast({ message: `Generated ${Array.isArray(parsed) ? parsed.length : 0} power-ups!`, type: "success" });
+    } catch (err) {
+      console.error("[GDD AI Power-Ups]", err);
+      setToast({ message: "Failed to generate power-ups -- try again", type: "error" });
+    } finally {
+      setPowerUpsLoading(false);
+    }
+  }, [project, data]);
+
   const handleGenerateWikiEntry = useCallback(async () => {
     if (!project || !wikiTopic.trim()) return;
     setWikiLoading(true);
@@ -1527,6 +1585,18 @@ export default function GDDPage() {
                   <Swords className="h-3.5 w-3.5" />
                 )}
                 AI Enemies
+              </button>
+              <button
+                onClick={handleGeneratePowerUps}
+                disabled={powerUpsLoading}
+                className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {powerUpsLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Zap className="h-3.5 w-3.5" />
+                )}
+                AI Power-Ups
               </button>
               <button
                 onClick={handleMechanicsAdvisor}
@@ -2742,6 +2812,143 @@ export default function GDDPage() {
                 <button
                   onClick={handleGenerateEnemies}
                   disabled={enemiesLoading}
+                  className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black hover:bg-[#F59E0B]/90 disabled:opacity-50"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Regenerate
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AI Power-Ups Modal */}
+      {showPowerUps && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-4xl rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                  <Zap className="h-4.5 w-4.5 text-[#F59E0B]" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">AI Power-Up Designer</h3>
+                  <p className="text-xs text-[#6B7280]">
+                    {powerUps.length} abilities designed for {project?.name}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {powerUps.length > 0 && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(JSON.stringify(powerUps, null, 2));
+                      setPowerUpsCopied(true);
+                      setTimeout(() => setPowerUpsCopied(false), 2000);
+                    }}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                      powerUpsCopied
+                        ? "bg-[#10B981] text-white"
+                        : "border border-[#2A2A2A] text-[#9CA3AF] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                    }`}
+                  >
+                    {powerUpsCopied ? (
+                      <><CheckCircle2 className="h-3.5 w-3.5" /> Copied!</>
+                    ) : (
+                      <><Copy className="h-3.5 w-3.5" /> Copy JSON</>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowPowerUps(false)}
+                  className="rounded-lg p-1 text-[#9CA3AF] hover:text-[#F5F5F5]"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {powerUpsLoading ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#F59E0B]" />
+                  <p className="text-sm text-[#6B7280]">Designing power-ups & abilities...</p>
+                </div>
+              ) : powerUps.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-2">
+                  <Zap className="h-10 w-10 text-[#3A3A3A]" />
+                  <p className="text-sm text-[#6B7280]">No power-ups generated yet</p>
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {powerUps.map((pu, i) => {
+                    const rarityStyles: Record<string, { border: string; bg: string; text: string }> = {
+                      Common: { border: "#6B7280", bg: "#6B728015", text: "#9CA3AF" },
+                      Rare: { border: "#3B82F6", bg: "#3B82F615", text: "#60A5FA" },
+                      Legendary: { border: "#F59E0B", bg: "#F59E0B15", text: "#FBBF24" },
+                    };
+                    const rs = rarityStyles[pu.rarity] || rarityStyles.Common;
+
+                    return (
+                      <div
+                        key={i}
+                        className="rounded-xl border-2 bg-[#0F0F0F] p-5 transition-all hover:bg-[#131313]"
+                        style={{ borderColor: rs.border + "50" }}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <div className="flex items-center gap-2.5">
+                            <div
+                              className="flex h-9 w-9 items-center justify-center rounded-lg text-lg"
+                              style={{ backgroundColor: rs.bg }}
+                            >
+                              {pu.icon}
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-bold text-[#F5F5F5]">{pu.name}</h4>
+                              <p className="text-xs text-[#6B7280] mt-0.5">{pu.effect}</p>
+                            </div>
+                          </div>
+                          <span
+                            className="shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                            style={{ backgroundColor: rs.bg, color: rs.text }}
+                          >
+                            {pu.rarity}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 mb-3">
+                          <div className="rounded-lg bg-[#1A1A1A] px-3 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] mb-0.5">Duration</p>
+                            <p className="text-xs font-mono text-[#9CA3AF]">{pu.duration}</p>
+                          </div>
+                          <div className="rounded-lg bg-[#1A1A1A] px-3 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] mb-0.5">Cooldown</p>
+                            <p className="text-xs font-mono text-[#9CA3AF]">{pu.cooldown}</p>
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg bg-[#1A1A1A] px-3 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-[#F59E0B] mb-0.5">Visual Effect</p>
+                          <p className="text-xs text-[#9CA3AF] leading-relaxed">{pu.visualEffect}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {powerUps.length > 0 && (
+              <div className="flex items-center justify-between border-t border-[#2A2A2A] px-6 py-3 shrink-0">
+                <p className="text-xs text-[#6B7280]">
+                  {powerUps.filter((p) => p.rarity === "Legendary").length} Legendary, {" "}
+                  {powerUps.filter((p) => p.rarity === "Rare").length} Rare, {" "}
+                  {powerUps.filter((p) => p.rarity === "Common").length} Common
+                </p>
+                <button
+                  onClick={handleGeneratePowerUps}
+                  disabled={powerUpsLoading}
                   className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black hover:bg-[#F59E0B]/90 disabled:opacity-50"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
