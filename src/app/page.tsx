@@ -136,9 +136,15 @@ const faqs = [
 
 export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [scrollOpacity, setScrollOpacity] = useState(1);
 
   useEffect(() => {
-    console.log("[LandingPage] rendered");
+    const onScroll = () => {
+      const opacity = Math.max(0, 1 - window.scrollY / 200);
+      setScrollOpacity(opacity);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   return (
@@ -230,6 +236,14 @@ export default function LandingPage() {
               See Tools
             </Link>
           </div>
+          <a
+            href="#tools"
+            className="mt-12 flex flex-col items-center gap-1.5 transition-opacity duration-300"
+            style={{ opacity: scrollOpacity }}
+          >
+            <ChevronDown className="h-5 w-5 text-[#F59E0B] animate-bounce-down" />
+            <span className="text-xs text-[#9CA3AF]">Scroll to explore</span>
+          </a>
         </div>
       </section>
 
