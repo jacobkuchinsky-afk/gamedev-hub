@@ -22,6 +22,13 @@ import {
   Sparkles,
   Loader2,
   Printer,
+  Library,
+  X,
+  Swords,
+  Puzzle,
+  Crosshair,
+  Ghost,
+  Joystick,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -230,6 +237,243 @@ const QUICK_FILL_TEMPLATES: Record<string, Record<string, string>> = {
   },
 };
 
+interface GDDTemplate {
+  id: string;
+  name: string;
+  icon: React.ElementType;
+  description: string;
+  color: string;
+  data: Record<string, string>;
+}
+
+const GDD_TEMPLATES: GDDTemplate[] = [
+  {
+    id: "platformer",
+    name: "2D Platformer",
+    icon: Joystick,
+    description: "Classic side-scrolling action with jumping, collectibles, and level-based progression.",
+    color: "#3B82F6",
+    data: {
+      gameTitle: "Untitled Platformer",
+      tagline: "Run, jump, and conquer a vibrant world one level at a time.",
+      elevatorPitch: "A tight, responsive 2D platformer with hand-crafted levels, collectible power-ups, and a charming art style. Players master momentum-based movement through increasingly creative obstacle courses, with hidden secrets rewarding exploration.",
+      targetAudience: "All ages, fans of Celeste, Hollow Knight, and classic Mario",
+      platforms: "PC, Nintendo Switch",
+      genre: "2D Platformer / Action",
+      gameplayLoop: "Enter level -> Navigate obstacles using jump/dash/wall-climb -> Collect gems and power-ups -> Reach the end -> Unlock next level. Each level introduces a new mechanic or twist. Speedrun timers encourage replay.",
+      controls: "Keyboard or controller. D-pad/stick for movement, A to jump, X to dash, B for special ability. Simple 3-button scheme with deep skill ceiling.",
+      cameraType: "Side-Scrolling",
+      coreVerbs: "Jump, Dash, Wall-Climb, Collect, Dodge",
+      setting: "A colorful kingdom where each world has a distinct biome: lush forests, crystal caves, volcanic mountains, and floating sky islands. The land has been shattered by a magical storm.",
+      timePeriod: "Fantasy / Timeless",
+      protagonist: "A small, agile fox spirit awakened by the storm. Moves with fluid grace and gains new traversal abilities as the journey progresses.",
+      antagonist: "The Storm King, a corrupted guardian who shattered the land. Each world boss is one of his lieutenants.",
+      narrativeStyle: "Environmental Storytelling",
+      themes: "Perseverance, Exploration, Mastery",
+      visualStyle: "Pixel Art",
+      colorPalette: "Vibrant and saturated. Each world has a distinct palette: greens/browns for forest, blues/purples for caves, reds/oranges for volcanic, whites/golds for sky. High contrast for readability.",
+      referenceImages: "",
+      uiStyle: "Minimal in-game HUD: health hearts, gem counter, and timer. Clean pixel-art menus with smooth transitions. Level select shown as a world map.",
+      musicStyle: "Chiptune-influenced with modern production. Upbeat and energetic for action levels, ambient for exploration areas. Each world has a unique theme with variations for boss fights.",
+      soundDesign: "Punchy and satisfying. Crisp jump sounds, coin collection chimes, exaggerated impacts. Retro-inspired but polished.",
+      voiceActing: "Grunts/Reactions Only",
+      engine: "Godot",
+      targetFPS: "60 FPS",
+      minSpecs: "CPU: Any dual-core\nGPU: Integrated graphics\nRAM: 2GB\nStorage: 500MB",
+      networking: "Singleplayer Only",
+      techPlatforms: "Windows, macOS, Nintendo Switch",
+      model: "Premium (Pay Once)",
+      pricePoint: "$14.99",
+      iapStrategy: "No microtransactions. One paid DLC expansion with 20 new levels and a new world planned for 3 months post-launch.",
+      prototype: "4 weeks — Core movement (jump, dash, wall-climb), 3 test levels, basic art",
+      alpha: "10 weeks — 3 complete worlds (15 levels each), all movement abilities, basic enemies",
+      beta: "16 weeks — All 5 worlds, boss fights, collectibles, save system, sound",
+      launch: "20 weeks — Full polish, accessibility options, speedrun leaderboards",
+      postLaunch: "Month 1: Bug fixes and speedrun community support\nMonth 3: Free update with time trial mode\nMonth 6: Paid DLC — new world with 20 levels",
+    },
+  },
+  {
+    id: "rpg",
+    name: "RPG",
+    icon: Swords,
+    description: "Story-driven role-playing with character progression, quests, and turn-based or real-time combat.",
+    color: "#8B5CF6",
+    data: {
+      gameTitle: "Untitled RPG",
+      tagline: "Forge your legend in a world that remembers your choices.",
+      elevatorPitch: "A narrative-driven RPG where player choices shape the world. Build a party of unique companions, master a deep combat system, and uncover a sprawling mystery across a hand-crafted open world. Every quest has multiple solutions, and the world reacts to your reputation.",
+      targetAudience: "RPG enthusiasts aged 16-40, fans of Divinity: Original Sin, Baldur's Gate, and Final Fantasy",
+      platforms: "PC (Steam), PlayStation 5, Xbox Series X",
+      genre: "RPG / Adventure",
+      gameplayLoop: "Explore world -> Accept quests from NPCs -> Traverse dungeons/areas -> Engage in turn-based combat -> Earn XP and loot -> Level up and choose skills -> Return to town to craft/trade -> Advance main story. Side content feeds into the main narrative.",
+      controls: "Mouse + keyboard (point-and-click for navigation, hotbar for abilities). Full controller support with radial menus. Pause-and-plan combat.",
+      cameraType: "Isometric",
+      coreVerbs: "Fight, Talk, Explore, Craft, Choose, Level Up",
+      setting: "A continent recovering from a magical cataclysm. Ancient ruins hold powerful artifacts, rival kingdoms vie for territory, and a secretive guild manipulates events from the shadows. Cities feel lived-in, wilderness is dangerous.",
+      timePeriod: "Medieval fantasy with magical technology (runic machinery, enchanted infrastructure)",
+      protagonist: "A former scholar whose hometown was destroyed in the cataclysm. Customizable class, background, and moral alignment. Driven by a personal mystery tied to the larger plot.",
+      antagonist: "The Ashen Council — a cabal of mages who caused the cataclysm intentionally and now seek to harness its aftereffects. Their leader is a former mentor to the protagonist.",
+      narrativeStyle: "Branching",
+      themes: "Power and corruption, Redemption, The cost of knowledge, Trust",
+      visualStyle: "Stylized/Cel-Shaded",
+      colorPalette: "Rich and warm for civilized areas (ambers, deep reds, warm stone). Cold and desaturated for corrupted zones (grays, sickly greens). Magic effects in bright jewel tones.",
+      referenceImages: "",
+      uiStyle: "Detailed but organized. Tabbed character sheets, inventory grid with item comparison tooltips, quest journal with map markers. Dialogue UI with portrait art and branching options clearly labeled.",
+      musicStyle: "Orchestral fantasy with regional instruments. Sweeping strings for exploration, intense percussion for combat, haunting vocals for story moments. Dynamic layers that shift with combat intensity.",
+      soundDesign: "Immersive and detailed. Footsteps change by terrain, spells have distinct audio signatures, ambient environments (tavern chatter, forest wildlife, dungeon drips). Combat sounds are weighty and impactful.",
+      voiceActing: "Partial (Key Scenes)",
+      engine: "Unity",
+      targetFPS: "60 FPS",
+      minSpecs: "CPU: Intel i5-10400 / Ryzen 5 3600\nGPU: GTX 1060 / RX 580\nRAM: 8GB\nStorage: 15GB SSD",
+      networking: "Singleplayer Only",
+      techPlatforms: "Windows, PlayStation 5, Xbox Series X",
+      model: "Premium (Pay Once)",
+      pricePoint: "$29.99",
+      iapStrategy: "No microtransactions. Story expansion DLC planned: 'The Ashen Legacy' (new region, 10+ hours of content, new companion). Second expansion with endgame dungeon content.",
+      prototype: "8 weeks — Core combat system, 1 town, 3 quests, character creation, basic dialogue",
+      alpha: "20 weeks — First act complete (5-8 hours), party system, crafting, 2 companion characters",
+      beta: "32 weeks — All 3 acts playable, all companions, full quest chains, save/load, localization-ready",
+      launch: "40 weeks — Full polish, balancing pass, accessibility, achievements",
+      postLaunch: "Month 1: Bug fixes and balance patches\nMonth 3: Free content update (new side quests, quality of life)\nMonth 8: Paid DLC expansion — new region and story arc\nOngoing: Mod support tools",
+    },
+  },
+  {
+    id: "puzzle",
+    name: "Puzzle Game",
+    icon: Puzzle,
+    description: "Brain-teasing mechanics with escalating complexity, minimal story, and satisfying 'aha' moments.",
+    color: "#10B981",
+    data: {
+      gameTitle: "Untitled Puzzle",
+      tagline: "Simple rules. Infinite depth. One more level.",
+      elevatorPitch: "An elegant puzzle game built around a single core mechanic that evolves through creative level design. Each chapter introduces a twist that recontextualizes everything you've learned. Minimalist presentation keeps focus on the puzzles. Perfect for short sessions or marathon solving.",
+      targetAudience: "Puzzle lovers of all ages, fans of Baba Is You, The Witness, and Portal",
+      platforms: "PC, Mobile (iOS/Android), Nintendo Switch",
+      genre: "Puzzle / Logic",
+      gameplayLoop: "View puzzle -> Analyze constraints -> Experiment with solutions -> Solve -> Unlock next puzzle. Chapters group puzzles by mechanic. Optional star challenges for each level reward mastery. Hint system prevents frustration.",
+      controls: "Mouse/touch primary. Click/tap to interact with puzzle elements. Drag to move pieces. Undo button always available. Keyboard shortcuts for power users.",
+      cameraType: "Top-Down",
+      coreVerbs: "Place, Rotate, Connect, Undo, Think",
+      setting: "Abstract geometric world. Each chapter has a visual theme (crystal, water, light, shadow) but the world is more conceptual than narrative. Environments reflect the mechanic being explored.",
+      timePeriod: "Abstract / Timeless",
+      protagonist: "No traditional protagonist. The player's cursor/hand is the only presence. Optional: a small geometric avatar that reacts to puzzle completion.",
+      antagonist: "No antagonist. The puzzles themselves are the challenge. Late-game puzzles may have a 'trickster' element that subverts expectations.",
+      narrativeStyle: "No Story",
+      themes: "Logic, Elegance, Discovery, Patience",
+      visualStyle: "Vector",
+      colorPalette: "Clean and minimal. White/light gray backgrounds with bold accent colors for interactive elements. Each chapter uses a distinct accent color. High contrast for accessibility.",
+      referenceImages: "",
+      uiStyle: "Ultra-minimal. No HUD during puzzles — just the puzzle itself. Level select as a clean grid. Chapter progress shown as connected nodes. Settings accessible from pause menu only.",
+      musicStyle: "Ambient electronic. Soft synth pads that evolve as you progress through chapters. Subtle melodic elements that respond to puzzle interactions. Never distracting.",
+      soundDesign: "Satisfying tactile sounds. Clicks for placement, chimes for correct connections, a rewarding completion sound. Minimal but every sound feels intentional.",
+      voiceActing: "No Voice Acting",
+      engine: "Godot",
+      targetFPS: "60 FPS",
+      minSpecs: "CPU: Any modern processor\nGPU: Integrated graphics\nRAM: 1GB\nStorage: 200MB",
+      networking: "Singleplayer Only",
+      techPlatforms: "Windows, macOS, iOS, Android, Nintendo Switch",
+      model: "Premium (Pay Once)",
+      pricePoint: "$9.99 (PC/Switch), $4.99 (Mobile)",
+      iapStrategy: "No microtransactions. Free content updates with new puzzle packs. Optional paid expansion with advanced puzzles for hardcore players.",
+      prototype: "3 weeks — Core mechanic implemented, 10 hand-crafted puzzles, basic UI",
+      alpha: "8 weeks — 3 chapters (60 puzzles), hint system, undo/redo, save progress",
+      beta: "12 weeks — All 6 chapters (120+ puzzles), star challenges, accessibility options",
+      launch: "16 weeks — Full polish, mobile optimization, colorblind modes, cloud save",
+      postLaunch: "Month 1: Bug fixes\nMonth 2: Free puzzle pack (20 community-favorite style puzzles)\nMonth 4: Paid expansion — 'Expert Mode' with 40 brutally hard puzzles\nOngoing: Daily puzzle feature",
+    },
+  },
+  {
+    id: "fps",
+    name: "FPS",
+    icon: Crosshair,
+    description: "Fast-paced first-person shooter with tight gunplay, multiplayer modes, and visceral combat.",
+    color: "#EF4444",
+    data: {
+      gameTitle: "Untitled FPS",
+      tagline: "Lock and load. Every bullet counts.",
+      elevatorPitch: "A skill-based FPS that blends tactical gunplay with fluid movement. Tight weapon handling, destructible environments, and competitive multiplayer modes. A solo campaign teaches mechanics through intense set pieces. Movement abilities like sliding and wall-running add verticality without sacrificing tactical depth.",
+      targetAudience: "FPS fans aged 16-35, competitive gamers, fans of DOOM, Titanfall, and Counter-Strike",
+      platforms: "PC (Steam), PlayStation 5, Xbox Series X",
+      genre: "First-Person Shooter / Action",
+      gameplayLoop: "Campaign: Enter area -> Engage enemies using guns + movement abilities -> Clear encounter -> Scavenge ammo/upgrades -> Push forward. Multiplayer: Queue match -> Select loadout -> Compete in objective or deathmatch modes -> Earn XP -> Unlock cosmetics.",
+      controls: "WASD movement, mouse aim, left-click shoot, right-click ADS, shift sprint, ctrl slide, space jump/double-jump, Q/E for abilities. Fully rebindable. Controller with aim assist options.",
+      cameraType: "First Person",
+      coreVerbs: "Shoot, Move, Slide, Aim, Dodge, Reload",
+      setting: "Near-future Earth after a corporate war. Megacities are battlegrounds between private military companies. Environments range from neon-lit urban districts to industrial wastelands and orbital stations.",
+      timePeriod: "Near future (2080s)",
+      protagonist: "Campaign: A disgraced PMC operative pulled back in for one last mission. Dry humor, reluctant heroism. Multiplayer: customizable operator with faction allegiance.",
+      antagonist: "Campaign: Zenith Corp, a megacorp developing autonomous weapons. Their CEO is a charismatic tech oligarch who believes human soldiers are obsolete.",
+      narrativeStyle: "Linear",
+      themes: "Technology vs. humanity, Corporate warfare, Loyalty, The cost of violence",
+      visualStyle: "Realistic",
+      colorPalette: "High contrast. Dark environments with bright muzzle flashes, neon signage, and particle effects. UI uses warm amber/orange on dark backgrounds. Enemy indicators in red, allies in blue.",
+      referenceImages: "",
+      uiStyle: "Clean military HUD. Ammo counter, health bar, minimap, and crosshair. Kill feed and objective markers. Minimal clutter — information density adjustable in settings.",
+      musicStyle: "Electronic/industrial with orchestral elements for cinematic moments. Heavy bass and synth during combat, ambient tension during stealth/exploration. Dynamic music system that ramps with combat intensity.",
+      soundDesign: "Hyper-realistic weapon sounds with spatial audio. Distinct audio signatures per weapon type. Directional footsteps for competitive advantage. Explosions with bass impact. Shell casings hitting the floor.",
+      voiceActing: "Full Voice Acting",
+      engine: "Unreal Engine 5",
+      targetFPS: "120 FPS",
+      minSpecs: "CPU: Intel i7-10700K / Ryzen 7 3700X\nGPU: RTX 2070 / RX 5700 XT\nRAM: 16GB\nStorage: 50GB SSD",
+      networking: "Online Multiplayer",
+      techPlatforms: "Windows, PlayStation 5, Xbox Series X",
+      model: "Premium (Pay Once)",
+      pricePoint: "$39.99",
+      iapStrategy: "Cosmetic-only microtransactions: weapon skins, operator outfits, emotes. Battle pass each season (8 weeks). No pay-to-win — all gameplay content is free.",
+      prototype: "12 weeks — Core gunplay, movement system, 1 multiplayer map, 3 weapons, basic AI for campaign",
+      alpha: "24 weeks — 4 multiplayer maps, 10 weapons, 3 campaign missions, matchmaking",
+      beta: "36 weeks — Full campaign (8 missions), 8 multiplayer maps, ranked mode, anti-cheat",
+      launch: "44 weeks — Full polish, launch trailer, server infrastructure, season 1 content ready",
+      postLaunch: "Season 1 (launch): 2 new maps, battle pass, ranked ladder\nSeason 2 (8 weeks): New game mode, 3 weapons\nSeason 3: New campaign DLC\nOngoing: Community maps, esports support",
+    },
+  },
+  {
+    id: "horror",
+    name: "Horror",
+    icon: Ghost,
+    description: "Atmospheric survival horror with tension, resource management, and psychological dread.",
+    color: "#6B7280",
+    data: {
+      gameTitle: "Untitled Horror",
+      tagline: "Some doors should stay closed.",
+      elevatorPitch: "A first-person psychological horror game where the environment itself is the enemy. Explore a shifting, impossible space that reacts to your actions and sanity. No combat — survival depends on stealth, puzzle-solving, and managing your deteriorating mental state. The less you see, the more you fear.",
+      targetAudience: "Horror fans aged 18+, fans of Amnesia, PT, and Soma",
+      platforms: "PC (Steam), PlayStation 5",
+      genre: "Psychological Horror / Survival",
+      gameplayLoop: "Explore environment -> Solve environmental puzzles to progress -> Avoid/hide from threats -> Manage sanity and resources (light sources, medicine) -> Uncover story fragments -> Reach safe room to save. Sanity affects what you see and hear — unreliable perception is core.",
+      controls: "WASD movement, mouse look, E to interact, F for flashlight, shift to sprint (limited stamina), ctrl to crouch/hide. Deliberately limited — no combat buttons reinforce vulnerability.",
+      cameraType: "First Person",
+      coreVerbs: "Explore, Hide, Listen, Solve, Survive, Run",
+      setting: "An abandoned research facility built into a coastal cliff. The architecture shifts impossibly — hallways loop, rooms change when you're not looking, doors lead to places they shouldn't. The facility was studying something recovered from the deep ocean.",
+      timePeriod: "Modern day (isolated location, no outside contact)",
+      protagonist: "A maintenance contractor called in for a routine job. No combat training, no weapons. Relatable and vulnerable. Internal monologue reveals growing dread and fragmented memories.",
+      antagonist: "The Presence — never fully seen, only felt. It corrupts the space around it, turning the facility into a labyrinth. Secondary threat: your own deteriorating sanity and the hallucinations it creates.",
+      narrativeStyle: "Environmental Storytelling",
+      themes: "Fear of the unknown, Isolation, Sanity, What lies beneath the surface",
+      visualStyle: "Realistic",
+      colorPalette: "Extremely desaturated. Grays, dark blues, sickly yellows from fluorescent lights. Occasional vivid red as a warning color. Darkness is a design element — most of the screen is shadow.",
+      referenceImages: "",
+      uiStyle: "Almost no HUD. No health bar — physical state communicated through visual/audio cues (limping, heavy breathing, screen distortion). Inventory is a physical item the player holds. Flashlight battery shown as a dim indicator light.",
+      musicStyle: "Barely music — more like a living soundscape. Low drones, distant industrial sounds, dissonant strings. Silence is used as tension. Rare melodic fragments in safe rooms feel like relief. Stinger cues for scares are used sparingly.",
+      soundDesign: "The most important design element. Spatial audio critical — directional sounds, reverb changes with room size, sounds behind walls. Breathing, heartbeat, footsteps are hyper-detailed. Ambiguous sounds that could be threat or environment.",
+      voiceActing: "Partial (Key Scenes)",
+      engine: "Unreal Engine 5",
+      targetFPS: "60 FPS",
+      minSpecs: "CPU: Intel i5-10400 / Ryzen 5 3600\nGPU: RTX 2060 / RX 5600 XT\nRAM: 12GB\nStorage: 25GB SSD",
+      networking: "Singleplayer Only",
+      techPlatforms: "Windows, PlayStation 5",
+      model: "Premium (Pay Once)",
+      pricePoint: "$24.99",
+      iapStrategy: "No microtransactions. One story DLC expanding the lore — a prequel chapter showing the facility's final days before the incident. Released 4 months post-launch.",
+      prototype: "8 weeks — Core loop: exploration, flashlight, one shifting room, basic AI stalker, sanity system prototype",
+      alpha: "18 weeks — 2 of 4 chapters playable, puzzle mechanics, full sanity system, sound design pass",
+      beta: "28 weeks — All 4 chapters, multiple endings based on sanity, full audio, playtesting for scare pacing",
+      launch: "34 weeks — Final polish, performance optimization, accessibility (subtitle options, scare intensity slider)",
+      postLaunch: "Month 1: Bug fixes, community feedback on scare pacing\nMonth 4: Paid DLC — 'Before the Dark' prequel chapter\nMonth 6: Free update with commentary mode and behind-the-scenes",
+    },
+  },
+];
+
 function getGDDKey(projectId: string) {
   return `gameforge_gdd_${projectId}`;
 }
@@ -261,6 +505,8 @@ export default function GDDPage() {
   const [dirty, setDirty] = useState(false);
   const [aiLoading, setAiLoading] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{ message: string; type: "error" | "success" } | null>(null);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<GDDTemplate | null>(null);
 
   useEffect(() => {
     console.log("[GDDPage] rendered, id:", projectId);
@@ -365,6 +611,24 @@ export default function GDDPage() {
     setDirty(true);
     setSaved(false);
   }, []);
+
+  const applyTemplate = useCallback(
+    (template: GDDTemplate) => {
+      const hasExistingData = Object.values(data).some((v) => v.trim().length > 0);
+      if (hasExistingData) {
+        if (!confirm(`This will overwrite your existing GDD data with the "${template.name}" template. Continue?`)) {
+          return;
+        }
+      }
+      setData({ ...template.data });
+      setDirty(true);
+      setSaved(false);
+      setShowTemplateModal(false);
+      setSelectedTemplate(null);
+      setToast({ message: `Applied "${template.name}" template`, type: "success" });
+    },
+    [data]
+  );
 
   useEffect(() => {
     if (toast) {
@@ -530,6 +794,13 @@ export default function GDDPage() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowTemplateModal(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10"
+              >
+                <Library className="h-3.5 w-3.5" />
+                Load Template
+              </button>
               <button
                 onClick={handlePrint}
                 className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
@@ -711,6 +982,109 @@ export default function GDDPage() {
           })}
         </div>
       </div>
+
+      {/* Template Selector Modal */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-2xl rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
+              <div>
+                <h3 className="text-lg font-semibold">GDD Templates</h3>
+                <p className="mt-0.5 text-xs text-[#6B7280]">
+                  Pick a genre template to pre-fill all sections
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowTemplateModal(false);
+                  setSelectedTemplate(null);
+                }}
+                className="rounded-lg p-1 text-[#9CA3AF] hover:text-[#F5F5F5]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto">
+              {GDD_TEMPLATES.map((template) => {
+                const isSelected = selectedTemplate?.id === template.id;
+                return (
+                  <button
+                    key={template.id}
+                    onClick={() => setSelectedTemplate(template)}
+                    className={`w-full text-left rounded-xl border p-4 transition-all ${
+                      isSelected
+                        ? "border-[#F59E0B]/50 bg-[#F59E0B]/5"
+                        : "border-[#2A2A2A] bg-[#0F0F0F] hover:border-[#3A3A3A]"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
+                        style={{ backgroundColor: `${template.color}15` }}
+                      >
+                        <template.icon
+                          className="h-5 w-5"
+                          style={{ color: template.color }}
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">{template.name}</span>
+                          {isSelected && (
+                            <span className="rounded-full bg-[#F59E0B]/10 px-2 py-0.5 text-[10px] font-medium text-[#F59E0B]">
+                              Selected
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-sm text-[#9CA3AF] leading-relaxed">
+                          {template.description}
+                        </p>
+                        {isSelected && (
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            {GDD_SECTIONS.map((section) => {
+                              const filled = section.fields.filter(
+                                (f) => template.data[f.key]?.trim()
+                              ).length;
+                              return (
+                                <span
+                                  key={section.id}
+                                  className="rounded-md bg-[#2A2A2A] px-2 py-0.5 text-[10px] text-[#9CA3AF]"
+                                >
+                                  {section.title}: {filled}/{section.fields.length}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-[#2A2A2A] px-6 py-4">
+              <button
+                onClick={() => {
+                  setShowTemplateModal(false);
+                  setSelectedTemplate(null);
+                }}
+                className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-sm text-[#9CA3AF] transition-colors hover:text-[#F5F5F5]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => selectedTemplate && applyTemplate(selectedTemplate)}
+                disabled={!selectedTemplate}
+                className="rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-[#F59E0B]/90 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Apply Template
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">

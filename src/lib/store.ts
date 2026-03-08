@@ -648,6 +648,12 @@ export function getMoodEmoji(mood: DevlogEntry["mood"]): string {
 export type AssetType = "sprite" | "model" | "animation" | "audio" | "ui" | "level" | "vfx";
 export type AssetStatus = "concept" | "wip" | "review" | "approved" | "integrated";
 
+export interface AssetVersionEntry {
+  version: number;
+  timestamp: string;
+  notes: string;
+}
+
 export interface GameAsset {
   id: string;
   projectId: string;
@@ -659,6 +665,8 @@ export interface GameAsset {
   fileRef: string;
   notes: string;
   folder?: AssetFolder;
+  version?: number;
+  versionHistory?: AssetVersionEntry[];
   created_at: string;
 }
 
@@ -726,6 +734,12 @@ const SEED_ASSETS: GameAsset[] = [
     priority: "critical",
     fileRef: "sprites/ships/player_hull_v3.png",
     notes: "Final version with damage states. 4 directional frames.",
+    version: 3,
+    versionHistory: [
+      { version: 1, timestamp: "2025-12-10T09:00:00Z", notes: "Initial hull design" },
+      { version: 2, timestamp: "2026-01-05T14:00:00Z", notes: "Added directional frames" },
+      { version: 3, timestamp: "2026-02-12T11:00:00Z", notes: "Added damage states" },
+    ],
     created_at: "2025-12-10T09:00:00Z",
   },
   {
@@ -762,6 +776,11 @@ const SEED_ASSETS: GameAsset[] = [
     priority: "medium",
     fileRef: "anims/docking_sequence_v2.anim",
     notes: "3-second docking clamp animation. Syncs with magnetic clamp SFX.",
+    version: 2,
+    versionHistory: [
+      { version: 1, timestamp: "2026-02-28T16:00:00Z", notes: "Initial animation draft" },
+      { version: 2, timestamp: "2026-03-04T10:00:00Z", notes: "Sync with SFX timing" },
+    ],
     created_at: "2026-02-28T16:00:00Z",
   },
   {
@@ -864,6 +883,22 @@ export function updateAsset(id: string, updates: Partial<GameAsset>): GameAsset 
   const idx = assets.findIndex((a) => a.id === id);
   if (idx === -1) return undefined;
   assets[idx] = { ...assets[idx], ...updates };
+  save(ASSETS_KEY, assets);
+  return assets[idx];
+}
+
+export function bumpAssetVersion(id: string, notes: string): GameAsset | undefined {
+  const assets = getAssets();
+  const idx = assets.findIndex((a) => a.id === id);
+  if (idx === -1) return undefined;
+  const asset = assets[idx];
+  const currentVersion = asset.version || 1;
+  const newVersion = currentVersion + 1;
+  const history = asset.versionHistory || [
+    { version: currentVersion, timestamp: asset.created_at, notes: "Initial version" },
+  ];
+  history.push({ version: newVersion, timestamp: new Date().toISOString(), notes });
+  assets[idx] = { ...asset, version: newVersion, versionHistory: history };
   save(ASSETS_KEY, assets);
   return assets[idx];
 }

@@ -26,6 +26,9 @@ import {
   Sparkles,
   Loader2,
   FolderOpen,
+  GitBranch,
+  Clock,
+  ChevronUp,
 } from "lucide-react";
 import {
   getProject,
@@ -33,6 +36,7 @@ import {
   addAsset,
   updateAsset,
   swapAssetOrder,
+  bumpAssetVersion,
   ASSET_TYPE_LABELS,
   ASSET_TYPE_COLORS,
   ASSET_STATUS_LABELS,
@@ -45,6 +49,7 @@ import {
   type AssetType,
   type AssetStatus,
   type AssetFolder,
+  type AssetVersionEntry,
 } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
 
@@ -95,6 +100,8 @@ export default function AssetPipelinePage() {
   const [newFolder, setNewFolder] = useState<AssetFolder>(TYPE_TO_DEFAULT_FOLDER["sprite"]);
   const [aiSuggestion, setAiSuggestion] = useState("");
   const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [bumpNotes, setBumpNotes] = useState("");
 
   const reload = useCallback(() => {
     console.log("[AssetPipelinePage] reloading assets for", projectId);
@@ -230,6 +237,16 @@ export default function AssetPipelinePage() {
     if (selectedAsset?.id === assetId) {
       setSelectedAsset({ ...selectedAsset, folder });
     }
+  };
+
+  const handleBumpVersion = (assetId: string) => {
+    const notes = bumpNotes.trim() || "Version bump";
+    const updated = bumpAssetVersion(assetId, notes);
+    if (updated) {
+      setSelectedAsset(updated);
+      setBumpNotes("");
+    }
+    reload();
   };
 
   if (!project) return null;
@@ -457,6 +474,11 @@ export default function AssetPipelinePage() {
                               >
                                 {asset.priority}
                               </span>
+                              {asset.version && (
+                                <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-[#F59E0B]/10 text-[#F59E0B]">
+                                  v{asset.version}
+                                </span>
+                              )}
                             </div>
                             {asset.assignee && (
                               <div className="mt-1.5 flex items-center gap-1 text-xs text-[#6B7280]">
@@ -492,6 +514,7 @@ export default function AssetPipelinePage() {
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Priority</th>
                 <th className="px-4 py-3 font-medium">Assignee</th>
+                <th className="px-4 py-3 font-medium">Version</th>
                 <th className="px-4 py-3 font-medium">File</th>
               </tr>
             </thead>
@@ -551,6 +574,15 @@ export default function AssetPipelinePage() {
                       <span className="text-sm text-[#9CA3AF]">{asset.assignee}</span>
                     </td>
                     <td className="px-4 py-3">
+                      {asset.version ? (
+                        <span className="rounded px-2 py-0.5 text-xs font-medium bg-[#F59E0B]/10 text-[#F59E0B]">
+                          v{asset.version}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[#6B7280]">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
                       <span className="max-w-[150px] truncate block text-xs text-[#6B7280] font-mono">
                         {asset.fileRef || "—"}
                       </span>
@@ -608,6 +640,11 @@ export default function AssetPipelinePage() {
                     >
                       {ASSET_STATUS_LABELS[asset.status]}
                     </span>
+                    {asset.version && (
+                      <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-[#F59E0B]/10 text-[#F59E0B]">
+                        v{asset.version}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 text-xs text-[#6B7280]">
                     <User className="h-3 w-3" />
@@ -957,6 +994,87 @@ export default function AssetPipelinePage() {
                   </div>
                 </div>
               )}
+
+              {/* Version */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#6B7280]">Version</span>
+                  <button
+                    onClick={() => setShowVersionHistory(!showVersionHistory)}
+                    className="flex items-center gap-1 text-[10px] text-[#F59E0B] hover:text-[#F59E0B]/80"
+                  >
+                    <Clock className="h-3 w-3" />
+                    {showVersionHistory ? "Hide" : "Show"} History
+                  </button>
+                </div>
+                <div className="mt-2 flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <GitBranch className="h-4 w-4 text-[#F59E0B]" />
+                    <span className="text-lg font-bold text-[#F59E0B]">
+                      v{selectedAsset.version || 1}
+                    </span>
+                  </div>
+                  <div className="flex flex-1 items-center gap-2">
+                    <input
+                      type="text"
+                      value={bumpNotes}
+                      onChange={(e) => setBumpNotes(e.target.value)}
+                      placeholder="Version notes..."
+                      className="flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-xs text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleBumpVersion(selectedAsset.id);
+                      }}
+                    />
+                    <button
+                      onClick={() => handleBumpVersion(selectedAsset.id)}
+                      className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-3 py-1.5 text-xs font-medium text-black transition-colors hover:bg-[#F59E0B]/90"
+                    >
+                      <ChevronUp className="h-3 w-3" />
+                      Bump
+                    </button>
+                  </div>
+                </div>
+
+                {showVersionHistory && (
+                  <div className="mt-3 space-y-1.5">
+                    {(selectedAsset.versionHistory && selectedAsset.versionHistory.length > 0
+                      ? [...selectedAsset.versionHistory].reverse()
+                      : [{ version: selectedAsset.version || 1, timestamp: selectedAsset.created_at, notes: "Initial version" }]
+                    ).map((entry: AssetVersionEntry, i: number) => (
+                      <div
+                        key={i}
+                        className={`flex items-start gap-2.5 rounded-lg px-3 py-2 text-xs ${
+                          i === 0
+                            ? "border border-[#F59E0B]/20 bg-[#F59E0B]/5"
+                            : "bg-[#0F0F0F]"
+                        }`}
+                      >
+                        <span
+                          className={`shrink-0 rounded px-1.5 py-0.5 font-mono font-medium ${
+                            i === 0
+                              ? "bg-[#F59E0B]/10 text-[#F59E0B]"
+                              : "bg-[#2A2A2A] text-[#9CA3AF]"
+                          }`}
+                        >
+                          v{entry.version}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[#D1D5DB]">{entry.notes}</p>
+                          <p className="mt-0.5 text-[#6B7280]">
+                            {new Date(entry.timestamp).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {/* Move buttons */}
               <div>
