@@ -22,6 +22,7 @@ import {
   Globe,
   Flame,
   ArrowUpDown,
+  Code2,
 } from "lucide-react";
 import { getToolUsage } from "./layout";
 
@@ -159,6 +160,15 @@ const TOOLS: {
     description:
       "Generate rich game world lore with AI \u2014 locations, factions, conflicts, and plot hooks for any setting.",
     color: "#F59E0B",
+    category: "AI-Powered",
+  },
+  {
+    href: "/dashboard/tools/code",
+    icon: Code2,
+    name: "Code Snippets",
+    description:
+      "Generate game dev code snippets with AI for any language and engine. Save, search, and reuse.",
+    color: "#22D3EE",
     category: "AI-Powered",
   },
 ];
