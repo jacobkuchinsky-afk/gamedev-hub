@@ -340,6 +340,37 @@ input[type="checkbox"]:checked::after {
   line-height: 12px;
 }
 
+/* Toggle switch utility - use data-checked="true" or .active for on state */
+.toggle {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  background: #2A2A2A;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+.toggle::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: #6B7280;
+  border-radius: 50%;
+  transition: all 150ms ease;
+}
+.toggle[data-checked="true"],
+.toggle.active {
+  background: #F59E0B;
+}
+.toggle[data-checked="true"]::after,
+.toggle.active::after {
+  left: 20px;
+  background: #0F0F0F;
+}
+
 /* Input utilities */
 .input {
   background: #0F0F0F;
