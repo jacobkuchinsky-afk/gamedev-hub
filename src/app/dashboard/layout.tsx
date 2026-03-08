@@ -13,6 +13,7 @@ import {
   LogOut,
   X,
   ChevronRight,
+  Clock,
   Search,
   Paintbrush,
   Music,
@@ -247,11 +248,15 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [recentPages, setRecentPages] = useState<Array<{ href: string; label: string; ts: number }>>([]);
 
   useEffect(() => {
     if (open) {
       setQuery("");
       setProjects(getProjects());
+      try {
+        setRecentPages(JSON.parse(localStorage.getItem("gameforge_recent_pages") || "[]"));
+      } catch { setRecentPages([]); }
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
@@ -273,7 +278,10 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
 
   const allEmpty = filteredStatic.length === 0 && filteredProjects.length === 0;
 
+  const showRecent = !query && recentPages.length > 0;
+
   const allItems = [
+    ...(showRecent ? recentPages.map((p) => p.href) : []),
     ...filteredStatic.map((i) => i.href),
     ...filteredProjects.map((p) => `/dashboard/projects/${p.id}`),
   ];
@@ -311,6 +319,23 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
         <div className="max-h-80 overflow-y-auto p-2">
           {allEmpty && (
             <p className="px-3 py-6 text-center text-sm text-[#6B7280]">No results</p>
+          )}
+          {showRecent && (
+            <div>
+              <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                Recent
+              </p>
+              {recentPages.map((page) => (
+                <button
+                  key={page.href}
+                  onClick={() => go(page.href)}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
+                >
+                  <Clock className="h-4 w-4" />
+                  <span className="flex-1 truncate text-left">{page.label}</span>
+                </button>
+              ))}
+            </div>
           )}
           {filteredProjects.length > 0 && (
             <div>
@@ -358,6 +383,58 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
   );
 }
 
+function KeyboardShortcutsHint() {
+  const [visible, setVisible] = useState(false);
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const dismissed = localStorage.getItem("gameforge_shortcuts_hint_seen");
+    if (dismissed) return;
+
+    setVisible(true);
+    const raf = requestAnimationFrame(() => setShow(true));
+
+    const timer = setTimeout(() => {
+      setShow(false);
+      setTimeout(() => {
+        setVisible(false);
+        localStorage.setItem("gameforge_shortcuts_hint_seen", "1");
+      }, 300);
+    }, 10000);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
+  }, []);
+
+  const dismiss = () => {
+    setShow(false);
+    setTimeout(() => {
+      setVisible(false);
+      localStorage.setItem("gameforge_shortcuts_hint_seen", "1");
+    }, 300);
+  };
+
+  if (!visible) return null;
+
+  return (
+    <div
+      onClick={dismiss}
+      className={`fixed bottom-5 right-5 z-50 cursor-pointer transition-all duration-300 ${
+        show ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
+      }`}
+    >
+      <div className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]/95 px-3.5 py-2.5 text-xs text-[#9CA3AF] shadow-lg backdrop-blur-sm transition-colors hover:border-[#F59E0B]/30 hover:text-[#F5F5F5]">
+        Press{" "}
+        <kbd className="rounded bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B]">?</kbd>{" "}
+        for keyboard shortcuts
+      </div>
+    </div>
+  );
+}
+
 const VIM_NAV: Record<string, string> = {
   d: "/dashboard",
   p: "/dashboard/projects",
@@ -397,6 +474,21 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setSidebarOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!pathname) return;
+    try {
+      const label =
+        CMD_ITEMS.find((i) => i.href === pathname)?.label ||
+        pathname.split("/").filter(Boolean).pop()?.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) ||
+        "Page";
+      const stored: Array<{ href: string; label: string; ts: number }> =
+        JSON.parse(localStorage.getItem("gameforge_recent_pages") || "[]");
+      const filtered = stored.filter((p) => p.href !== pathname);
+      filtered.unshift({ href: pathname, label, ts: Date.now() });
+      localStorage.setItem("gameforge_recent_pages", JSON.stringify(filtered.slice(0, 5)));
+    } catch {}
   }, [pathname]);
 
   const clearPending = useCallback(() => {
@@ -655,6 +747,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
         <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
         <WhatsNew />
+        <KeyboardShortcutsHint />
 
         {/* Content */}
         <main id="main-content" aria-label="Page content" className="flex-1 overflow-y-auto p-6">{children}</main>
