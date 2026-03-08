@@ -307,6 +307,8 @@ export default function ControlsPage() {
   const [aiDescription, setAiDescription] = useState("");
   const [aiDescLoading, setAiDescLoading] = useState(false);
   const [aiDescCopied, setAiDescCopied] = useState(false);
+  const [aiPresetInput, setAiPresetInput] = useState("");
+  const [aiPresetLoading, setAiPresetLoading] = useState(false);
 
   const conflicts = useMemo(() => {
     const seen = new Map<string, string[]>();
@@ -449,6 +451,71 @@ export default function ControlsPage() {
     setAiDescCopied(true);
     setTimeout(() => setAiDescCopied(false), 1500);
   }, [aiDescription]);
+
+  const generateAIPreset = useCallback(async () => {
+    if (!aiPresetInput.trim() || aiPresetLoading) return;
+    setAiPresetLoading(true);
+    try {
+      const prompt = `Suggest keyboard controls for a ${aiPresetInput.trim()} game. List key=action pairs for 8-10 essential controls. Format: KEY=ACTION, one per line. No extra text.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+
+      const CATEGORY_KEYWORDS: Record<ActionCategory, string[]> = {
+        Movement: ["move", "walk", "run", "sprint", "jump", "crouch", "dash", "dodge", "strafe", "climb", "swim", "fly", "roll", "slide"],
+        Action: ["attack", "shoot", "fire", "reload", "interact", "use", "ability", "spell", "throw", "melee", "block", "parry", "grab", "cast", "special", "slot", "weapon", "grenade", "bomb"],
+        UI: ["menu", "pause", "inventory", "map", "quest", "journal", "scoreboard", "chat", "tab", "escape", "help", "settings"],
+        Camera: ["look", "zoom", "rotate", "camera", "view", "pan"],
+      };
+
+      function guessCategory(action: string): ActionCategory {
+        const lower = action.toLowerCase();
+        for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+          if (keywords.some((kw) => lower.includes(kw))) return cat as ActionCategory;
+        }
+        return "Action";
+      }
+
+      const allKeys = KEYBOARD_ROWS.flat();
+      const parsed: KeyMapping[] = [];
+      const lines = content.split("\n");
+      for (const line of lines) {
+        const match = line.match(/^\s*[`*-]*\s*(\S+?)\s*=\s*(.+?)\s*[`*]*$/);
+        if (!match) continue;
+        let [, rawKey, action] = match;
+        action = action.replace(/[`*]/g, "").trim();
+        const normalized = rawKey.charAt(0).toUpperCase() + rawKey.slice(1).toLowerCase();
+        const found = allKeys.find((k) => k.toLowerCase() === rawKey.toLowerCase() || k === normalized);
+        const finalKey = found || rawKey.toUpperCase();
+        if (action) {
+          parsed.push({ key: finalKey, action, category: guessCategory(action) });
+        }
+      }
+
+      if (parsed.length > 0) {
+        setKeyMappings(parsed);
+        setGamepadMappings([]);
+        setActivePreset(null);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setAiPresetLoading(false);
+    }
+  }, [aiPresetInput, aiPresetLoading]);
 
   const exportJSON = useCallback(() => {
     const data = { keyboard: keyMappings, gamepad: gamepadMappings };
@@ -596,6 +663,37 @@ export default function ControlsPage() {
           >
             <RotateCcw className="h-3.5 w-3.5" />
             Clear
+          </button>
+        </div>
+      </div>
+
+      {/* AI Custom Preset */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+          <p className="text-sm font-semibold text-[#F5F5F5]">AI Custom Preset</p>
+          <span className="text-xs text-[#6B7280]">Describe your game to generate controls</span>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={aiPresetInput}
+            onChange={(e) => setAiPresetInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") generateAIPreset(); }}
+            placeholder='e.g. "twin-stick shooter", "point and click adventure"'
+            className="min-w-0 flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none transition-colors focus:border-[#F59E0B]/50"
+          />
+          <button
+            onClick={generateAIPreset}
+            disabled={aiPresetLoading || !aiPresetInput.trim()}
+            className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/40 bg-[#F59E0B]/10 px-4 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20 disabled:opacity-40"
+          >
+            {aiPresetLoading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" />
+            )}
+            {aiPresetLoading ? "Generating..." : "Generate"}
           </button>
         </div>
       </div>

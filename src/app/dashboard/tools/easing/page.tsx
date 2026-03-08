@@ -294,6 +294,8 @@ export default function EasingPage() {
   const [aiDesc, setAiDesc] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState<{ name: string; reason: string } | null>(null);
+  const [aiUseCases, setAiUseCases] = useState<string[]>([]);
+  const [aiUseCasesLoading, setAiUseCasesLoading] = useState(false);
 
   const easings = useMemo(() => makeEasings(paramOverrides), [paramOverrides]);
   const bigRef = useRef<HTMLCanvasElement>(null);
@@ -481,6 +483,41 @@ export default function EasingPage() {
       setAiResult({ name: "Error", reason: "Failed to get recommendation. Check your API key." });
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  const fetchUseCases = async () => {
+    if (aiUseCasesLoading) return;
+    setAiUseCasesLoading(true);
+    setAiUseCases([]);
+    try {
+      const name = showCustom ? "custom cubic-bezier" : current.name;
+      const prompt = `List 3 specific game animation use cases for the ${name} easing function. Example uses, not explanations. Just a numbered list.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const lines = content
+        .split("\n")
+        .map((l: string) => l.replace(/^\d+[\.\)]\s*/, "").trim())
+        .filter((l: string) => l.length > 0);
+      setAiUseCases(lines.slice(0, 3));
+    } catch {
+      setAiUseCases(["Failed to fetch use cases. Check your API key."]);
+    } finally {
+      setAiUseCasesLoading(false);
     }
   };
 
@@ -711,6 +748,35 @@ export default function EasingPage() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {!compareMode && (
+              <div className="space-y-2 border-t border-[#2A2A2A] pt-3">
+                <button
+                  onClick={fetchUseCases}
+                  disabled={aiUseCasesLoading}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/15 disabled:opacity-40"
+                >
+                  {aiUseCasesLoading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  {aiUseCasesLoading ? "Thinking..." : "AI Use Cases"}
+                </button>
+                {aiUseCases.length > 0 && (
+                  <div className="space-y-1.5 rounded-lg border border-[#F59E0B]/15 bg-[#F59E0B]/5 p-3">
+                    {aiUseCases.map((uc, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#F59E0B]/20 text-[9px] font-bold text-[#F59E0B]">
+                          {i + 1}
+                        </span>
+                        <span className="text-xs leading-relaxed text-[#D1D5DB]">{uc}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
