@@ -1707,6 +1707,10 @@ export default function ProjectDetailPage() {
   const [newFeatureDesc, setNewFeatureDesc] = useState("");
   const [featureSortBy, setFeatureSortBy] = useState<"votes" | "newest">("votes");
 
+  const [taglineLoading, setTaglineLoading] = useState(false);
+  const [taglineOptions, setTaglineOptions] = useState<string[] | null>(null);
+  const [showTaglinePicker, setShowTaglinePicker] = useState(false);
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
@@ -2102,6 +2106,50 @@ export default function ProjectDetailPage() {
       setHealthLoading(false);
     }
   }, [tasks, bugs, devlog, doneTasks, inProgressTasks, openBugs, criticalBugs, projectAgeDays, project?.status]);
+
+  const generateTaglines = useCallback(async () => {
+    if (!project || taglineLoading) return;
+    setTaglineLoading(true);
+    setTaglineOptions(null);
+    setShowTaglinePicker(true);
+    try {
+      const prompt = `Generate 5 catchy game taglines for '${project.name}', a ${project.genre} game described as: '${project.description || "an indie game"}'. Each tagline should be max 8 words. Make them memorable and different in tone (epic, mysterious, funny, action, emotional). Just list them, one per line.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.9,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      const lines = content
+        .split("\n")
+        .map((l: string) => l.replace(/^\d+[\.\)]\s*/, "").replace(/^[-*]\s*/, "").replace(/^[""]|[""]$/g, "").trim())
+        .filter((l: string) => l.length > 0 && l.length < 80);
+      setTaglineOptions(lines.slice(0, 5));
+    } catch {
+      setTaglineOptions(null);
+      setShowTaglinePicker(false);
+    } finally {
+      setTaglineLoading(false);
+    }
+  }, [project, taglineLoading]);
+
+  const selectTagline = useCallback((tagline: string) => {
+    if (!project) return;
+    const updated = updateProject(project.id, { tagline });
+    if (updated) setProject(updated);
+    setShowTaglinePicker(false);
+    setTaglineOptions(null);
+  }, [project]);
 
   const generateAiSummary = useCallback(async () => {
     setAiSummaryLoading(true);
@@ -2559,6 +2607,11 @@ export default function ProjectDetailPage() {
               <p className="text-sm text-[#6B7280]">
                 {project.engine} &middot; {project.genre}
               </p>
+              {project.tagline && (
+                <p className="mt-0.5 text-sm italic text-[#F59E0B]/80">
+                  &ldquo;{project.tagline}&rdquo;
+                </p>
+              )}
             </div>
           </div>
           <div className="flex gap-2">
@@ -2714,14 +2767,74 @@ export default function ProjectDetailPage() {
           <p className="text-sm leading-relaxed text-[#D1D5DB]">
             {project.description}
           </p>
-          <div className="mt-2 flex items-center gap-3 text-xs text-[#6B7280]">
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              {projectAgeDays} days in development
-            </span>
-            <span>
-              Updated {timeAgo(project.updated_at)}
-            </span>
+          <div className="mt-2 flex items-center justify-between">
+            <div className="flex items-center gap-3 text-xs text-[#6B7280]">
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {projectAgeDays} days in development
+              </span>
+              <span>
+                Updated {timeAgo(project.updated_at)}
+              </span>
+            </div>
+            <div className="relative">
+              <button
+                onClick={generateTaglines}
+                disabled={taglineLoading}
+                className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/20 px-2.5 py-1 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50"
+              >
+                {taglineLoading ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Tag className="h-3 w-3" />
+                )}
+                AI Tagline
+              </button>
+              {showTaglinePicker && (
+                <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-xl">
+                  <div className="flex items-center justify-between border-b border-[#2A2A2A] px-4 py-2.5">
+                    <span className="text-xs font-semibold text-[#F59E0B]">Pick a tagline</span>
+                    <button
+                      onClick={() => { setShowTaglinePicker(false); setTaglineOptions(null); }}
+                      className="rounded p-0.5 text-[#6B7280] hover:text-[#F5F5F5]"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  {taglineLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-8">
+                      <Loader2 className="h-4 w-4 animate-spin text-[#F59E0B]" />
+                      <span className="text-xs text-[#6B7280]">Generating taglines...</span>
+                    </div>
+                  ) : taglineOptions && taglineOptions.length > 0 ? (
+                    <div className="py-1">
+                      {taglineOptions.map((tl, i) => (
+                        <button
+                          key={i}
+                          onClick={() => selectTagline(tl)}
+                          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#D1D5DB] transition-colors hover:bg-[#F59E0B]/5 hover:text-[#F5F5F5]"
+                        >
+                          <span className="shrink-0 text-[10px] font-bold text-[#6B7280]">{i + 1}</span>
+                          <span className="italic">&ldquo;{tl}&rdquo;</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center text-xs text-[#6B7280]">No taglines generated</div>
+                  )}
+                  <div className="border-t border-[#2A2A2A] px-4 py-2">
+                    <button
+                      onClick={generateTaglines}
+                      disabled={taglineLoading}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs text-[#9CA3AF] transition-colors hover:text-[#F59E0B] disabled:opacity-50"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      Regenerate
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

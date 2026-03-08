@@ -7,6 +7,7 @@ export interface Project {
   status: "concept" | "prototype" | "alpha" | "beta" | "gold" | "released";
   coverColor: string;
   archived?: boolean;
+  tagline?: string;
   created_at: string;
   updated_at: string;
 }

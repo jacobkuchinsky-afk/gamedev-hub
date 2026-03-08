@@ -19,6 +19,10 @@ import {
   Loader2,
   GitCompare,
   Braces,
+  BarChart3,
+  TrendingUp,
+  Hash,
+  Calendar,
 } from "lucide-react";
 import {
   getProject,
@@ -566,6 +570,51 @@ Be specific and brief. Only include sections that have items.`;
           )}
         </div>
       )}
+
+      {/* Changelog Analytics */}
+      {entries.length >= 2 && (() => {
+        const catCounts: Record<string, number> = {};
+        let totalChangeCount = 0;
+        for (const e of entries) {
+          for (const cat of CHANGE_CATEGORIES) {
+            const n = e.changes[cat]?.length || 0;
+            catCounts[cat] = (catCounts[cat] || 0) + n;
+            totalChangeCount += n;
+          }
+        }
+        const avgChanges = totalChangeCount / entries.length;
+        const topCategory = Object.entries(catCounts).sort((a, b) => b[1] - a[1])[0];
+        const dates = entries.map((e) => new Date(e.date).getTime()).sort((a, b) => a - b);
+        let avgDaysBetween = 0;
+        if (dates.length >= 2) {
+          const gaps: number[] = [];
+          for (let i = 1; i < dates.length; i++) {
+            gaps.push((dates[i] - dates[i - 1]) / (1000 * 60 * 60 * 24));
+          }
+          avgDaysBetween = Math.round(gaps.reduce((s, g) => s + g, 0) / gaps.length);
+        }
+        const stats = [
+          { label: "Versions", value: entries.length.toString(), icon: Hash, color: "#F59E0B" },
+          { label: "Total Changes", value: totalChangeCount.toString(), icon: BarChart3, color: "#3B82F6" },
+          { label: "Avg / Version", value: avgChanges.toFixed(1), icon: TrendingUp, color: "#10B981" },
+          { label: "Top Category", value: topCategory ? topCategory[0] : "-", sub: topCategory ? `${topCategory[1]} changes` : undefined, icon: Sparkles, color: CHANGE_CATEGORY_COLORS[topCategory?.[0] as keyof typeof CHANGE_CATEGORY_COLORS] || "#F59E0B" },
+          { label: "Release Freq", value: avgDaysBetween > 0 ? `${avgDaysBetween}d` : "-", sub: avgDaysBetween > 0 ? "avg between" : undefined, icon: Calendar, color: "#8B5CF6" },
+        ];
+        return (
+          <div className="grid grid-cols-5 gap-3">
+            {stats.map((s) => (
+              <div key={s.label} className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3">
+                <div className="mb-2 flex items-center gap-2">
+                  <s.icon className="h-3.5 w-3.5" style={{ color: s.color }} />
+                  <span className="text-[11px] font-medium text-[#6B7280]">{s.label}</span>
+                </div>
+                <p className="text-lg font-bold text-[#F5F5F5]">{s.value}</p>
+                {s.sub && <p className="mt-0.5 text-[10px] text-[#6B7280]">{s.sub}</p>}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Version Diff Modal */}
       {showDiff && diffEntryA && diffEntryB && (() => {
