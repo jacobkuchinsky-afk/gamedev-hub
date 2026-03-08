@@ -119,6 +119,29 @@ label {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+/* Card component utilities - reusable base styles */
+.card {
+  background: #1A1A1A;
+  border: 1px solid #2A2A2A;
+  border-radius: 12px;
+  padding: 16px;
+}
+.card-lg {
+  padding: 24px;
+}
+.card-sm {
+  padding: 12px;
+}
+.card-interactive {
+  cursor: pointer;
+  transition: all 200ms ease;
+}
+.card-interactive:hover {
+  border-color: rgba(245, 158, 11, 0.3);
+  transform: scale(1.01);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.08);
+}
+
 /* Glassmorphism utility - reusable frosted glass effect */
 .glass {
   background: rgba(26, 26, 26, 0.7);
