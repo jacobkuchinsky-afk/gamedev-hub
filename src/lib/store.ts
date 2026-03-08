@@ -433,3 +433,315 @@ export function getMoodEmoji(mood: DevlogEntry["mood"]): string {
   };
   return emojis[mood];
 }
+
+// ─── Asset Pipeline ───────────────────────────────────────────────────────────
+
+export type AssetType = "sprite" | "model" | "animation" | "audio" | "ui" | "level" | "vfx";
+export type AssetStatus = "concept" | "wip" | "review" | "approved" | "integrated";
+
+export interface GameAsset {
+  id: string;
+  projectId: string;
+  name: string;
+  type: AssetType;
+  status: AssetStatus;
+  assignee: string;
+  priority: "critical" | "high" | "medium" | "low";
+  fileRef: string;
+  notes: string;
+  created_at: string;
+}
+
+export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
+  sprite: "Sprites/Art",
+  model: "3D Models",
+  animation: "Animations",
+  audio: "Audio/Music",
+  ui: "UI Elements",
+  level: "Level Data",
+  vfx: "VFX",
+};
+
+export const ASSET_TYPE_COLORS: Record<AssetType, string> = {
+  sprite: "#F59E0B",
+  model: "#8B5CF6",
+  animation: "#3B82F6",
+  audio: "#10B981",
+  ui: "#EC4899",
+  level: "#F97316",
+  vfx: "#06B6D4",
+};
+
+export const ASSET_STATUS_LABELS: Record<AssetStatus, string> = {
+  concept: "Concept",
+  wip: "WIP",
+  review: "Review",
+  approved: "Approved",
+  integrated: "Integrated",
+};
+
+const ASSETS_KEY = "gameforge_assets";
+
+const SEED_ASSETS: GameAsset[] = [
+  {
+    id: "asset_001",
+    projectId: "proj_001",
+    name: "Player Ship - Main Hull",
+    type: "sprite",
+    status: "integrated",
+    assignee: "JacobK",
+    priority: "critical",
+    fileRef: "sprites/ships/player_hull_v3.png",
+    notes: "Final version with damage states. 4 directional frames.",
+    created_at: "2025-12-10T09:00:00Z",
+  },
+  {
+    id: "asset_002",
+    projectId: "proj_001",
+    name: "Space Station Interior",
+    type: "model",
+    status: "approved",
+    assignee: "JacobK",
+    priority: "high",
+    fileRef: "models/stations/interior_hub.glb",
+    notes: "Main hub area with trading desk, repair bay, and cantina. Needs LOD variants.",
+    created_at: "2026-01-15T14:00:00Z",
+  },
+  {
+    id: "asset_003",
+    projectId: "proj_001",
+    name: "Shield Activation VFX",
+    type: "vfx",
+    status: "wip",
+    assignee: "JacobK",
+    priority: "high",
+    fileRef: "vfx/shield_activate.vfx",
+    notes: "Blue energy bubble expanding from ship center. Shader-based, not particles.",
+    created_at: "2026-02-20T11:00:00Z",
+  },
+  {
+    id: "asset_004",
+    projectId: "proj_001",
+    name: "Docking Sequence Animation",
+    type: "animation",
+    status: "review",
+    assignee: "JacobK",
+    priority: "medium",
+    fileRef: "anims/docking_sequence_v2.anim",
+    notes: "3-second docking clamp animation. Syncs with magnetic clamp SFX.",
+    created_at: "2026-02-28T16:00:00Z",
+  },
+  {
+    id: "asset_005",
+    projectId: "proj_001",
+    name: "Combat Music - Asteroid Belt",
+    type: "audio",
+    status: "approved",
+    assignee: "JacobK",
+    priority: "medium",
+    fileRef: "audio/music/combat_asteroid.ogg",
+    notes: "High-tempo synth track. 2:45 loop with seamless crossfade points.",
+    created_at: "2026-01-22T10:00:00Z",
+  },
+  {
+    id: "asset_006",
+    projectId: "proj_001",
+    name: "HUD - Health & Shield Bars",
+    type: "ui",
+    status: "integrated",
+    assignee: "JacobK",
+    priority: "critical",
+    fileRef: "ui/hud/health_shield_bar.figma",
+    notes: "Animated bars with pulse effect on low health. Color transitions from green to red.",
+    created_at: "2025-11-20T08:00:00Z",
+  },
+  {
+    id: "asset_007",
+    projectId: "proj_001",
+    name: "Asteroid Belt - Sector 7",
+    type: "level",
+    status: "wip",
+    assignee: "JacobK",
+    priority: "high",
+    fileRef: "levels/sector7_asteroid_belt.json",
+    notes: "Dense asteroid field with hidden loot caches. Performance-critical zone.",
+    created_at: "2026-03-01T13:00:00Z",
+  },
+  {
+    id: "asset_008",
+    projectId: "proj_001",
+    name: "Explosion - Small Ship",
+    type: "vfx",
+    status: "concept",
+    assignee: "JacobK",
+    priority: "low",
+    fileRef: "",
+    notes: "Debris + fire particles + screen shake. Reference: FTL explosion style.",
+    created_at: "2026-03-05T09:00:00Z",
+  },
+  {
+    id: "asset_009",
+    projectId: "proj_001",
+    name: "Alien Artifact Sprite",
+    type: "sprite",
+    status: "review",
+    assignee: "JacobK",
+    priority: "medium",
+    fileRef: "sprites/items/alien_artifact_v1.png",
+    notes: "Glowing rune-covered object. Needs idle animation with soft pulse.",
+    created_at: "2026-03-03T15:00:00Z",
+  },
+  {
+    id: "asset_010",
+    projectId: "proj_001",
+    name: "Menu Click SFX",
+    type: "audio",
+    status: "integrated",
+    assignee: "JacobK",
+    priority: "low",
+    fileRef: "audio/sfx/menu_click.wav",
+    notes: "Subtle sci-fi click. 0.1s duration.",
+    created_at: "2025-12-05T07:00:00Z",
+  },
+];
+
+export function getAssets(projectId?: string): GameAsset[] {
+  const assets = getOrSeed(ASSETS_KEY, SEED_ASSETS);
+  return projectId ? assets.filter((a) => a.projectId === projectId) : assets;
+}
+
+export function addAsset(asset: Omit<GameAsset, "id" | "created_at">): GameAsset {
+  const assets = getAssets();
+  const newAsset: GameAsset = {
+    ...asset,
+    id: `asset_${Date.now()}`,
+    created_at: new Date().toISOString(),
+  };
+  assets.push(newAsset);
+  save(ASSETS_KEY, assets);
+  return newAsset;
+}
+
+export function updateAsset(id: string, updates: Partial<GameAsset>): GameAsset | undefined {
+  const assets = getAssets();
+  const idx = assets.findIndex((a) => a.id === id);
+  if (idx === -1) return undefined;
+  assets[idx] = { ...assets[idx], ...updates };
+  save(ASSETS_KEY, assets);
+  return assets[idx];
+}
+
+// ─── Playtesting Feedback ─────────────────────────────────────────────────────
+
+export interface PlaytestResponse {
+  id: string;
+  projectId: string;
+  testerName: string;
+  overallRating: number;
+  difficulty: "too-easy" | "just-right" | "too-hard";
+  favoriteMoment: string;
+  frustratingMoment: string;
+  bugEncountered: boolean;
+  bugDescription: string;
+  playAgain: "yes" | "definitely" | "maybe" | "no";
+  suggestions: string;
+  platform: "PC" | "Mac" | "Mobile" | "Console";
+  submitted_at: string;
+}
+
+const PLAYTEST_KEY = "gameforge_playtest";
+
+const SEED_PLAYTEST: PlaytestResponse[] = [
+  {
+    id: "pt_001",
+    projectId: "proj_001",
+    testerName: "Alex Chen",
+    overallRating: 4,
+    difficulty: "just-right",
+    favoriteMoment: "The first time I jumped to hyperspace and saw the star map unfold. Absolutely stunning visual.",
+    frustratingMoment: "Got stuck in the station walls after docking at high speed. Had to restart.",
+    bugEncountered: true,
+    bugDescription: "Clipped through station geometry when boosting into dock. Hard crash on alt-tab during loading.",
+    playAgain: "definitely",
+    suggestions: "Add a minimap for asteroid belt navigation. Also would love controller support.",
+    platform: "PC",
+    submitted_at: "2026-03-06T18:00:00Z",
+  },
+  {
+    id: "pt_002",
+    projectId: "proj_001",
+    testerName: "Maya Rodriguez",
+    overallRating: 5,
+    difficulty: "just-right",
+    favoriteMoment: "Trading system is addictive. Spent an hour just doing trade runs between stations.",
+    frustratingMoment: "Inventory management is clunky. No sorting or filtering options.",
+    bugEncountered: false,
+    bugDescription: "",
+    playAgain: "definitely",
+    suggestions: "Inventory sorting by value/weight. Also a trade route planner would be amazing.",
+    platform: "PC",
+    submitted_at: "2026-03-06T20:30:00Z",
+  },
+  {
+    id: "pt_003",
+    projectId: "proj_001",
+    testerName: "Sam Wilson",
+    overallRating: 3,
+    difficulty: "too-hard",
+    favoriteMoment: "Combat feels really satisfying when you land a perfect shield-dodge-fire combo.",
+    frustratingMoment: "Died 6 times in the first asteroid belt. No idea what I was supposed to do. Tutorial needed.",
+    bugEncountered: true,
+    bugDescription: "Music stopped playing after first track ended in asteroid belt. Silent for the rest of the session.",
+    playAgain: "maybe",
+    suggestions: "Needs a proper tutorial. Also difficulty options would help. I'm not great at action games but love space exploration.",
+    platform: "PC",
+    submitted_at: "2026-03-07T10:00:00Z",
+  },
+  {
+    id: "pt_004",
+    projectId: "proj_001",
+    testerName: "Jordan Lee",
+    overallRating: 4,
+    difficulty: "too-easy",
+    favoriteMoment: "Finding the hidden alien artifact in sector 7. The lore text was really cool.",
+    frustratingMoment: "Combat is too easy once you get the laser cannon. No challenge after the first hour.",
+    bugEncountered: false,
+    bugDescription: "",
+    playAgain: "yes",
+    suggestions: "Harder enemies in later sectors. Boss fights would be sick. Also multiplayer co-op?",
+    platform: "Mac",
+    submitted_at: "2026-03-07T12:15:00Z",
+  },
+  {
+    id: "pt_005",
+    projectId: "proj_001",
+    testerName: "Riley Park",
+    overallRating: 4,
+    difficulty: "just-right",
+    favoriteMoment: "Base building on a moon. The procedural terrain generation is impressive.",
+    frustratingMoment: "Save system lost my outpost progress once. Scary but didn't happen again.",
+    bugEncountered: true,
+    bugDescription: "Star map tooltip gets cut off when hovering stars near the edge of the screen.",
+    playAgain: "definitely",
+    suggestions: "More building options for outposts. Automated mining drones. A photo mode would be great too.",
+    platform: "PC",
+    submitted_at: "2026-03-07T14:45:00Z",
+  },
+];
+
+export function getPlaytestResponses(projectId?: string): PlaytestResponse[] {
+  const responses = getOrSeed(PLAYTEST_KEY, SEED_PLAYTEST);
+  return projectId ? responses.filter((r) => r.projectId === projectId) : responses;
+}
+
+export function addPlaytestResponse(response: Omit<PlaytestResponse, "id" | "submitted_at">): PlaytestResponse {
+  const responses = getPlaytestResponses();
+  const newResponse: PlaytestResponse = {
+    ...response,
+    id: `pt_${Date.now()}`,
+    submitted_at: new Date().toISOString(),
+  };
+  responses.push(newResponse);
+  save(PLAYTEST_KEY, responses);
+  return newResponse;
+}
