@@ -792,28 +792,28 @@ export default function LandingPage() {
             <div>
               <h4 className="mb-4 text-sm font-semibold text-[#F5F5F5]">Product</h4>
               <ul className="space-y-3">
-                <li><Link href="/dashboard" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">Dashboard</Link></li>
-                <li><Link href="/dashboard/tools" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">Tools</Link></li>
-                <li><Link href="/dashboard/projects" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">Projects</Link></li>
-                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">AI Features</Link></li>
+                <li><Link href="/dashboard" className="text-sm text-[#9CA3AF] transition-colors duration-150 hover:text-[#F59E0B]">Dashboard</Link></li>
+                <li><Link href="/dashboard/tools" className="text-sm text-[#9CA3AF] transition-colors duration-150 hover:text-[#F59E0B]">Tools</Link></li>
+                <li><Link href="/dashboard/projects" className="text-sm text-[#9CA3AF] transition-colors duration-150 hover:text-[#F59E0B]">Projects</Link></li>
+                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors duration-150 hover:text-[#F59E0B]">AI Features</Link></li>
               </ul>
             </div>
 
             <div>
               <h4 className="mb-4 text-sm font-semibold text-[#F5F5F5]">Resources</h4>
               <ul className="space-y-3">
-                <li><Link href="/dashboard/tools/cheatsheet" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">Cheat Sheet</Link></li>
-                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">Documentation</Link></li>
-                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">Changelog</Link></li>
+                <li><Link href="/dashboard/tools/cheatsheet" className="text-sm text-[#9CA3AF] transition-colors duration-150 hover:text-[#F59E0B]">Cheat Sheet</Link></li>
+                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors duration-150 hover:text-[#F59E0B]">Documentation</Link></li>
+                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors duration-150 hover:text-[#F59E0B]">Changelog</Link></li>
               </ul>
             </div>
 
             <div>
               <h4 className="mb-4 text-sm font-semibold text-[#F5F5F5]">Company</h4>
               <ul className="space-y-3">
-                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">About</Link></li>
-                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">Contact</Link></li>
-                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">Privacy</Link></li>
+                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors duration-150 hover:text-[#F59E0B]">About</Link></li>
+                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors duration-150 hover:text-[#F59E0B]">Contact</Link></li>
+                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors duration-150 hover:text-[#F59E0B]">Privacy</Link></li>
               </ul>
             </div>
 
@@ -821,19 +821,19 @@ export default function LandingPage() {
               <h4 className="mb-4 text-sm font-semibold text-[#F5F5F5]">Social</h4>
               <ul className="space-y-3">
                 <li>
-                  <a href="#" className="flex items-center gap-2 text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">
+                  <a href="#" className="flex items-center gap-2 text-sm text-[#9CA3AF] transition-colors duration-150 hover:text-[#F59E0B]">
                     <Twitter className="h-4 w-4" />
                     Twitter
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="flex items-center gap-2 text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">
+                  <a href="#" className="flex items-center gap-2 text-sm text-[#9CA3AF] transition-colors duration-150 hover:text-[#F59E0B]">
                     <MessageCircle className="h-4 w-4" />
                     Discord
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="flex items-center gap-2 text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">
+                  <a href="#" className="flex items-center gap-2 text-sm text-[#9CA3AF] transition-colors duration-150 hover:text-[#F59E0B]">
                     <Github className="h-4 w-4" />
                     GitHub
                   </a>
