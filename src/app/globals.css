@@ -142,6 +142,12 @@ label {
   box-shadow: 0 0 30px rgba(245, 158, 11, 0.1);
 }
 
+/* Focus-within highlight - accessibility for cards/forms when any child has focus */
+.focus-within-highlight:focus-within {
+  border-color: #F59E0B !important;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.3);
+}
+
 [class*="rounded-xl"][class*="1A1A1A"] {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
@@ -263,6 +269,14 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   background-clip: text;
   color: transparent;
   animation: gradient-shift 6s ease infinite;
+}
+
+/* Reusable amber gradient text utility */
+.text-gradient {
+  background: linear-gradient(135deg, #F59E0B, #EAB308);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .animate-fade-in {
