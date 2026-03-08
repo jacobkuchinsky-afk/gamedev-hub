@@ -172,6 +172,34 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(245,158,11,0.08)_0%,_transparent_60%)]" />
+        {/* Particle background */}
+        <div className="pointer-events-none absolute inset-0 print:hidden" aria-hidden>
+          {[
+            { left: "5%", top: "15%", delay: "0s" },
+            { left: "12%", top: "60%", delay: "2.5s" },
+            { left: "22%", top: "25%", delay: "5s" },
+            { left: "35%", top: "75%", delay: "1s" },
+            { left: "42%", top: "10%", delay: "3.5s" },
+            { left: "55%", top: "45%", delay: "6s" },
+            { left: "68%", top: "80%", delay: "0.5s" },
+            { left: "75%", top: "30%", delay: "4s" },
+            { left: "85%", top: "55%", delay: "2s" },
+            { left: "92%", top: "20%", delay: "5.5s" },
+            { left: "18%", top: "85%", delay: "4.5s" },
+            { left: "48%", top: "35%", delay: "1.5s" },
+          ].map((p, i) => (
+            <span
+              key={i}
+              className="absolute h-1.5 w-1.5 rounded-full bg-[#F59E0B] opacity-30"
+              style={{
+                left: p.left,
+                top: p.top,
+                animation: "particle-float 12s ease-in-out infinite",
+                animationDelay: p.delay,
+              }}
+            />
+          ))}
+        </div>
         <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-24 text-center md:pt-32 md:pb-28">
           <div className="animate-fade-in mb-6 inline-flex items-center gap-2 rounded-full border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-1.5 text-sm text-[#9CA3AF]">
             <Zap className="h-3.5 w-3.5 text-[#F59E0B]" />

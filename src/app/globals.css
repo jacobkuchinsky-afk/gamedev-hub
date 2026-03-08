@@ -61,6 +61,13 @@ input, textarea, select {
   50% { box-shadow: 0 0 30px rgba(245, 158, 11, 0.2); }
 }
 
+@keyframes particle-float {
+  0% { transform: translateY(100vh); opacity: 0.2; }
+  15% { opacity: 0.35; }
+  85% { opacity: 0.35; }
+  100% { transform: translateY(-100vh); opacity: 0.2; }
+}
+
 .animate-fade-in {
   animation: fadeIn 200ms ease-out forwards;
 }
