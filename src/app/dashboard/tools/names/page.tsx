@@ -240,6 +240,7 @@ export default function NamesPage() {
   const [aiMode, setAiMode] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiFallbackNotice, setAiFallbackNotice] = useState("");
+  const [customStyleDesc, setCustomStyleDesc] = useState("");
 
   useEffect(() => {
     try {
@@ -272,6 +273,9 @@ export default function NamesPage() {
   const generateAI = useCallback(async () => {
     setAiLoading(true);
     setAiFallbackNotice("");
+    const prompt = customStyleDesc.trim()
+      ? `Generate 12 ${category} names in the style described as: '${customStyleDesc.trim()}'. Just list the names, one per line.`
+      : `Generate ${batchSize} ${category} names in the ${style} style for a game. Just list the names, one per line, no numbering or explanation.`;
     try {
       const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
         method: "POST",
@@ -281,7 +285,7 @@ export default function NamesPage() {
         },
         body: JSON.stringify({
           model: "moonshotai/Kimi-K2.5-TEE",
-          messages: [{ role: "user", content: `Generate ${batchSize} ${category} names in the ${style} style for a game. Just list the names, one per line, no numbering or explanation.` }],
+          messages: [{ role: "user", content: prompt }],
           stream: false,
           max_tokens: 512,
           temperature: 0.8,
@@ -298,7 +302,7 @@ export default function NamesPage() {
         throw new Error("Empty AI response");
       }
     } catch {
-      setAiFallbackNotice("AI unavailable — fell back to local generation");
+      setAiFallbackNotice("AI unavailable -- fell back to local generation");
       const result = generateLocal();
       setNames(result);
       setTotalGenerated((prev) => prev + result.length);
@@ -306,7 +310,7 @@ export default function NamesPage() {
     } finally {
       setAiLoading(false);
     }
-  }, [category, style, batchSize, generateLocal]);
+  }, [category, style, batchSize, customStyleDesc, generateLocal]);
 
   const generate = useCallback(() => {
     if (aiMode) {
@@ -436,6 +440,40 @@ export default function NamesPage() {
           ))}
         </div>
       </div>
+
+      {/* AI Custom Style */}
+      {aiMode && (
+        <div className="rounded-xl border border-purple-500/20 bg-[#1A1A1A] p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Zap className="h-4 w-4 text-purple-400" />
+            <h2 className="text-sm font-semibold text-purple-400">AI Custom Style</h2>
+            <span className="text-xs text-[#6B7280]">- describe any style and AI will match it</span>
+          </div>
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={customStyleDesc}
+              onChange={(e) => setCustomStyleDesc(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && customStyleDesc.trim()) generate(); }}
+              placeholder='e.g. "ancient Egyptian", "cyberpunk Japanese", "fairy tale", "Lovecraftian cosmic"'
+              className="flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-purple-500/50 transition-colors"
+            />
+            <button
+              onClick={generate}
+              disabled={aiLoading || !customStyleDesc.trim()}
+              className="flex items-center gap-2 rounded-lg bg-purple-500/15 px-4 py-2.5 text-sm font-medium text-purple-400 transition-colors hover:bg-purple-500/25 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              Generate
+            </button>
+          </div>
+          {customStyleDesc.trim() && (
+            <p className="mt-2 text-xs text-[#6B7280]">
+              This overrides the style preset above. Clear the input to use presets again.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
         <div className="space-y-4">

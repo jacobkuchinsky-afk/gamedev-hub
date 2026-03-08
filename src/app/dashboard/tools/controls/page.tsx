@@ -13,6 +13,8 @@ import {
   Trash2,
   RotateCcw,
   X,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 
 type ActionCategory = "Movement" | "Action" | "UI" | "Camera";
@@ -302,6 +304,9 @@ export default function ControlsPage() {
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"keyboard" | "gamepad">("keyboard");
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [aiDescription, setAiDescription] = useState("");
+  const [aiDescLoading, setAiDescLoading] = useState(false);
+  const [aiDescCopied, setAiDescCopied] = useState(false);
 
   const conflicts = useMemo(() => {
     const seen = new Map<string, string[]>();
@@ -404,6 +409,47 @@ export default function ControlsPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [pressAnyKeyMode]);
 
+  const generateAIDescription = useCallback(async () => {
+    const allMappings: string[] = [];
+    keyMappings.forEach((m) => allMappings.push(`${m.key} = ${m.action}`));
+    gamepadMappings.forEach((m) => allMappings.push(`${m.button} (gamepad) = ${m.action}`));
+    if (allMappings.length === 0) return;
+
+    setAiDescLoading(true);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{
+            role: "user",
+            content: `Write a brief controls guide for a game with these keyboard mappings: ${allMappings.join(", ")}. Format as a clean reference card with categories. 5-6 lines max.`,
+          }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      setAiDescription(content.trim() || "Failed to generate description.");
+    } catch {
+      setAiDescription("AI unavailable. Try again later.");
+    } finally {
+      setAiDescLoading(false);
+    }
+  }, [keyMappings, gamepadMappings]);
+
+  const copyAiDescription = useCallback(() => {
+    navigator.clipboard.writeText(aiDescription);
+    setAiDescCopied(true);
+    setTimeout(() => setAiDescCopied(false), 1500);
+  }, [aiDescription]);
+
   const exportJSON = useCallback(() => {
     const data = { keyboard: keyMappings, gamepad: gamepadMappings };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -504,6 +550,14 @@ export default function ControlsPage() {
           >
             <Download className="h-3.5 w-3.5" />
             Document
+          </button>
+          <button
+            onClick={generateAIDescription}
+            disabled={aiDescLoading || (keyMappings.length === 0 && gamepadMappings.length === 0)}
+            className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B]/15 px-3 py-2 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/25 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {aiDescLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            {aiDescLoading ? "Writing..." : "AI Describe"}
           </button>
         </div>
       </div>
@@ -883,6 +937,45 @@ export default function ControlsPage() {
           </div>
         </div>
       </div>
+
+      {/* AI Description panel */}
+      {(aiDescription || aiDescLoading) && (
+        <div className="rounded-xl border border-[#F59E0B]/20 bg-[#1A1A1A] p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-[#F59E0B]">
+              <Sparkles className="h-4 w-4" />
+              Controls Reference Card
+            </h3>
+            <div className="flex items-center gap-2">
+              {aiDescription && !aiDescLoading && (
+                <>
+                  <button
+                    onClick={copyAiDescription}
+                    className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs font-medium text-[#9CA3AF] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                  >
+                    {aiDescCopied ? <Check className="h-3 w-3 text-[#10B981]" /> : <Copy className="h-3 w-3" />}
+                    {aiDescCopied ? "Copied" : "Copy"}
+                  </button>
+                  <button
+                    onClick={() => setAiDescription("")}
+                    className="rounded-lg p-1.5 text-[#6B7280] transition-colors hover:text-[#F5F5F5]"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+          {aiDescLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-[#F59E0B]" />
+              <span className="ml-3 text-sm text-[#9CA3AF]">Generating controls description...</span>
+            </div>
+          ) : (
+            <pre className="whitespace-pre-wrap rounded-lg bg-[#0F0F0F] p-4 text-sm leading-relaxed text-[#D1D5DB] font-mono">{aiDescription}</pre>
+          )}
+        </div>
+      )}
 
       {/* Assign modal */}
       {showAssignModal && (selectedKey || selectedGamepadBtn) && (
