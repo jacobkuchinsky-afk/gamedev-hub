@@ -241,6 +241,9 @@ export default function StateMachinePage() {
   const [saveAsOpen, setSaveAsOpen] = useState(false);
   const [saveAsName, setSaveAsName] = useState("");
 
+  const [stateDescriptions, setStateDescriptions] = useState<Record<string, string>>({});
+  const [aiDescLoading, setAiDescLoading] = useState<string | null>(null);
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const interRef = useRef<Interaction>({ type: "idle" });
   const panRef = useRef(pan);
@@ -633,6 +636,46 @@ Keep state names short (1-2 words). Include 4-8 states and relevant transitions 
     setAiLoading(false);
   }, [aiPrompt]);
 
+  const aiDescribeState = useCallback(async (stateId: string) => {
+    const state = states.find((s) => s.id === stateId);
+    if (!state || aiDescLoading) return;
+    setAiDescLoading(stateId);
+    try {
+      const outgoing = transitions.filter((t) => t.fromId === stateId);
+      const targets = outgoing
+        .map((t) => {
+          const to = states.find((s) => s.id === t.toId);
+          return to ? `${to.name}${t.condition ? ` (${t.condition})` : ""}` : null;
+        })
+        .filter(Boolean)
+        .join(", ") || "none";
+      const prompt = `Describe what a game entity should do in the '${state.name}' state (transitions to: ${targets}). 1 sentence max.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 128,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content =
+        data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const desc = content.replace(/[*"]/g, "").trim().split("\n")[0].trim();
+      if (desc) setStateDescriptions((prev) => ({ ...prev, [stateId]: desc }));
+    } catch {
+      // silently fail
+    } finally {
+      setAiDescLoading(null);
+    }
+  }, [states, transitions, aiDescLoading]);
+
   // ── Transition offset map (for parallel edges) ─────────
 
   const transOffsets = useMemo(() => {
@@ -1015,6 +1058,18 @@ Keep state names short (1-2 words). Include 4-8 states and relevant transitions 
                     </span>
                   </div>
 
+                  {/* AI description label */}
+                  {stateDescriptions[s.id] && (
+                    <div
+                      className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
+                      style={{ top: STATE_H + 4, width: STATE_W + 40 }}
+                    >
+                      <p className="text-center text-[9px] leading-tight text-gray-500 bg-[#111]/90 rounded px-1.5 py-0.5 border border-[#2A2A2A]/60 truncate">
+                        {stateDescriptions[s.id]}
+                      </p>
+                    </div>
+                  )}
+
                   {/* Delete button */}
                   <button
                     className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 z-20 shadow-lg"
@@ -1067,6 +1122,26 @@ Keep state names short (1-2 words). Include 4-8 states and relevant transitions 
                       value={selectedState.name}
                       onChange={(e) => updateState(selectedState.id, { name: e.target.value })}
                     />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-gray-500 uppercase tracking-wider font-semibold block mb-1">AI Behavior</label>
+                    <button
+                      onClick={() => aiDescribeState(selectedState.id)}
+                      disabled={aiDescLoading === selectedState.id}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-[#F59E0B]/10 border border-[#F59E0B]/30 text-[#F59E0B] rounded-lg text-xs hover:bg-[#F59E0B]/20 transition-colors disabled:opacity-50"
+                    >
+                      {aiDescLoading === selectedState.id ? (
+                        <><Loader2 className="w-3 h-3 animate-spin" /> Describing...</>
+                      ) : (
+                        <><Sparkles className="w-3 h-3" /> AI Describe</>
+                      )}
+                    </button>
+                    {stateDescriptions[selectedState.id] && (
+                      <p className="mt-1.5 text-[11px] text-gray-400 leading-snug bg-[#1A1A1A] rounded-lg px-2.5 py-2 border border-[#2A2A2A]">
+                        {stateDescriptions[selectedState.id]}
+                      </p>
+                    )}
                   </div>
 
                   <div>

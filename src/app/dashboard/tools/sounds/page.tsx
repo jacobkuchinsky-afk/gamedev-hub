@@ -205,6 +205,7 @@ export default function SoundsPage() {
   const [savedSounds, setSavedSounds] = useState<SavedSound[]>([]);
   const [saveName, setSaveName] = useState("");
   const [showLibrary, setShowLibrary] = useState(true);
+  const [aiNamingLoading, setAiNamingLoading] = useState(false);
 
   const toggleAdvisorCheck = (catIdx: number, itemIdx: number) => {
     setAdvisorResults((prev) =>
@@ -434,6 +435,37 @@ export default function SoundsPage() {
     persistSounds([newSound, ...savedSounds]);
     setSaveName("");
   }, [saveName, params, savedSounds, persistSounds]);
+
+  const handleAIName = useCallback(async () => {
+    if (aiNamingLoading) return;
+    setAiNamingLoading(true);
+    try {
+      const prompt = `Name this retro game sound effect: waveform=${params.waveType}, freq=${Math.round(params.freqStart)}Hz to ${Math.round(params.freqEnd)}Hz, duration=${params.duration.toFixed(2)}s. Give a descriptive name like 'laser_shot_01' or 'coin_pickup'. Just the name.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 128,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content =
+        data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const name = content.replace(/[`'"*\n]/g, "").trim().split(/\s*[\n,]/)[0].trim();
+      if (name) setSaveName(name);
+    } catch {
+      // silently fail
+    } finally {
+      setAiNamingLoading(false);
+    }
+  }, [aiNamingLoading, params]);
 
   const deleteSavedSound = useCallback(
     (id: string) => {
@@ -919,6 +951,18 @@ export default function SoundsPage() {
                 placeholder="Name this sound..."
                 className="flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/40"
               />
+              <button
+                onClick={handleAIName}
+                disabled={aiNamingLoading}
+                title="AI Name"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 text-[#F59E0B] transition-all hover:bg-[#F59E0B]/20 active:scale-[0.93] disabled:opacity-50"
+              >
+                {aiNamingLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+              </button>
               <button
                 onClick={saveCurrentSound}
                 disabled={!saveName.trim()}
