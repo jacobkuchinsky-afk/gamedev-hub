@@ -10,6 +10,8 @@ import {
   Filter,
   Flame,
   Type,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import {
   getDevlog,
@@ -151,6 +153,39 @@ export default function DevlogPage() {
   const [formTitle, setFormTitle] = useState("");
   const [formContent, setFormContent] = useState("");
   const [formMood, setFormMood] = useState<DevlogEntry["mood"]>("productive");
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const handleAiAssist = async () => {
+    setAiLoading(true);
+    try {
+      const prompt = `Help me write a game dev log entry. Title: ${formTitle || "Untitled"}. What I've written so far: ${formContent || "nothing yet"}. Write a thoughtful devlog entry about game development progress. Be personal, practical, and specific. 150-250 words.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      if (content) {
+        setFormContent(content);
+      } else {
+        toast({ title: "AI couldn't generate content", description: "Try again or write manually.", type: "error" });
+      }
+    } catch {
+      toast({ title: "AI assist failed", description: "Check your connection and try again.", type: "error" });
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const reload = useCallback(() => {
     setEntries(getDevlog());
@@ -583,16 +618,31 @@ export default function DevlogPage() {
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <label className="text-sm text-[#9CA3AF]">Content</label>
-                  <span
-                    className={`text-xs ${
-                      formContent.length > MAX_CHARS * 0.9
-                        ? "text-[#EF4444]"
-                        : "text-[#6B7280]"
-                    }`}
-                  >
-                    {formContent.length.toLocaleString()} / {MAX_CHARS.toLocaleString()} chars
-                    &middot; {wordCount(formContent)} words
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleAiAssist}
+                      disabled={aiLoading}
+                      className="flex items-center gap-1.5 rounded-md border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-2.5 py-1 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {aiLoading ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3 w-3" />
+                      )}
+                      {aiLoading ? "Writing..." : "AI Assist"}
+                    </button>
+                    <span
+                      className={`text-xs ${
+                        formContent.length > MAX_CHARS * 0.9
+                          ? "text-[#EF4444]"
+                          : "text-[#6B7280]"
+                      }`}
+                    >
+                      {formContent.length.toLocaleString()} / {MAX_CHARS.toLocaleString()} chars
+                      &middot; {wordCount(formContent)} words
+                    </span>
+                  </div>
                 </div>
                 <textarea
                   placeholder="Write about your progress, blockers, decisions... Supports **bold**, *italic*, `code`, and - bullet lists."

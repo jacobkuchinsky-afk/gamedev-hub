@@ -21,6 +21,8 @@ import {
   Eye,
   ExternalLink,
   Tag,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import {
   getProject,
@@ -108,6 +110,43 @@ export default function PlaytestPage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [filterCategory, setFilterCategory] = useState<FeedbackCategory | "all">("all");
+  const [aiSummary, setAiSummary] = useState("");
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+
+  const handleAiSummary = async () => {
+    if (responses.length === 0) return;
+    setAiSummaryLoading(true);
+    try {
+      const allFeedback = responses
+        .map(
+          (r) =>
+            `Tester: ${r.testerName}, Rating: ${r.overallRating}/5, Difficulty: ${DIFFICULTY_LABELS[r.difficulty]}, Favorite: ${r.favoriteMoment || "N/A"}, Frustrating: ${r.frustratingMoment || "N/A"}, Bug: ${r.bugEncountered ? r.bugDescription || "Yes" : "No"}, Play Again: ${PLAY_AGAIN_LABELS[r.playAgain]}, Suggestions: ${r.suggestions || "N/A"}`
+        )
+        .join("\n");
+      const prompt = `Summarize this playtesting feedback for a game:\n${allFeedback}\n\nIdentify: top 3 issues, top 3 things players liked, overall sentiment (positive/negative/mixed), and 3 actionable next steps. Be brief.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      setAiSummary(content || "Could not generate a summary. Try again later.");
+    } catch {
+      setAiSummary("Failed to generate summary. Check your connection and try again.");
+    } finally {
+      setAiSummaryLoading(false);
+    }
+  };
 
   // Playtester form state
   const [ptName, setPtName] = useState("");
@@ -466,6 +505,41 @@ export default function PlaytestPage() {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* AI Summary */}
+          {responses.length > 0 && (
+            <div className="space-y-3">
+              <button
+                onClick={handleAiSummary}
+                disabled={aiSummaryLoading}
+                className="flex items-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-4 py-2.5 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {aiSummaryLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {aiSummaryLoading ? "Analyzing feedback..." : "AI Summary"}
+              </button>
+              {aiSummary && (
+                <div className="rounded-xl border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+                      <h3 className="text-sm font-semibold text-[#F59E0B]">AI Feedback Summary</h3>
+                    </div>
+                    <button
+                      onClick={() => setAiSummary("")}
+                      className="rounded p-1 text-[#6B7280] transition-colors hover:text-[#9CA3AF]"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <div className="text-sm leading-relaxed text-[#D1D5DB] whitespace-pre-wrap">{aiSummary}</div>
+                </div>
+              )}
             </div>
           )}
 
