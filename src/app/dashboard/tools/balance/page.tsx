@@ -20,6 +20,9 @@ import {
   Activity,
   Package,
   Download,
+  Shield,
+  Zap,
+  ArrowRightLeft,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -136,6 +139,38 @@ interface SimResult {
   actual: number;
 }
 
+type ItemType = "Weapon" | "Armor" | "Consumable" | "Material" | "Key Item";
+type ItemRarity = "Common" | "Uncommon" | "Rare" | "Epic" | "Legendary";
+
+interface GameItem {
+  id: string;
+  name: string;
+  type: ItemType;
+  rarity: ItemRarity;
+  stats: { attack: number; defense: number; hp: number; speed: number };
+  description: string;
+  specialAbility: string;
+}
+
+const ITEM_TYPES: ItemType[] = ["Weapon", "Armor", "Consumable", "Material", "Key Item"];
+const ITEM_RARITIES: ItemRarity[] = ["Common", "Uncommon", "Rare", "Epic", "Legendary"];
+
+const RARITY_COLORS: Record<ItemRarity, string> = {
+  Common: "#9CA3AF",
+  Uncommon: "#10B981",
+  Rare: "#3B82F6",
+  Epic: "#8B5CF6",
+  Legendary: "#F59E0B",
+};
+
+const RARITY_BG: Record<ItemRarity, string> = {
+  Common: "border-neutral-500/40",
+  Uncommon: "border-emerald-500/40",
+  Rare: "border-blue-500/40",
+  Epic: "border-purple-500/40",
+  Legendary: "border-amber-500/40",
+};
+
 // ── Constants ──
 
 const TABS = [
@@ -146,6 +181,7 @@ const TABS = [
   { id: "economy-designer", label: "Economy Designer", icon: Gem },
   { id: "difficulty", label: "Difficulty", icon: Activity },
   { id: "loot", label: "Loot Tables", icon: Package },
+  { id: "items", label: "Items", icon: Shield },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -3210,6 +3246,463 @@ function LootTableDesigner() {
   );
 }
 
+// ── Item Designer Tab ──
+
+function ItemDesigner() {
+  const [items, setItems] = useState<GameItem[]>([]);
+  const [genre, setGenre] = useState("RPG");
+  const [loading, setLoading] = useState(false);
+  const [filterType, setFilterType] = useState<ItemType | "All">("All");
+  const [compareIds, setCompareIds] = useState<[string | null, string | null]>([null, null]);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [newItem, setNewItem] = useState<Omit<GameItem, "id">>({
+    name: "",
+    type: "Weapon",
+    rarity: "Common",
+    stats: { attack: 0, defense: 0, hp: 0, speed: 0 },
+    description: "",
+    specialAbility: "",
+  });
+
+  const filteredItems = useMemo(
+    () => (filterType === "All" ? items : items.filter((i) => i.type === filterType)),
+    [items, filterType]
+  );
+
+  const compareA = useMemo(() => items.find((i) => i.id === compareIds[0]) || null, [items, compareIds]);
+  const compareB = useMemo(() => items.find((i) => i.id === compareIds[1]) || null, [items, compareIds]);
+
+  const generateItems = async () => {
+    setLoading(true);
+    try {
+      const prompt = `Design 8 game items for a ${genre} game. Include 2 weapons, 2 armor pieces, 2 consumables, and 2 key items. For each item provide: name, type (Weapon/Armor/Consumable/Material/Key Item), rarity (Common/Uncommon/Rare/Epic/Legendary), stats object with attack/defense/hp/speed as numbers, description (1 sentence), and specialAbility (1 sentence). Return ONLY a valid JSON array, no markdown fences.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const raw = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const jsonStr = raw.replace(/```json\s*/g, "").replace(/```/g, "").trim();
+      const parsed: unknown[] = JSON.parse(jsonStr);
+      const generated: GameItem[] = parsed.map((p: any) => ({
+        id: uid(),
+        name: p.name || "Unknown",
+        type: ITEM_TYPES.includes(p.type) ? p.type : "Material",
+        rarity: ITEM_RARITIES.includes(p.rarity) ? p.rarity : "Common",
+        stats: {
+          attack: Number(p.stats?.attack) || 0,
+          defense: Number(p.stats?.defense) || 0,
+          hp: Number(p.stats?.hp) || 0,
+          speed: Number(p.stats?.speed) || 0,
+        },
+        description: p.description || "",
+        specialAbility: p.specialAbility || p.special_ability || "",
+      }));
+      setItems((prev) => [...prev, ...generated]);
+    } catch {
+      // silently fail
+    }
+    setLoading(false);
+  };
+
+  const addManualItem = () => {
+    if (!newItem.name.trim()) return;
+    setItems((prev) => [...prev, { ...newItem, id: uid() }]);
+    setNewItem({
+      name: "",
+      type: "Weapon",
+      rarity: "Common",
+      stats: { attack: 0, defense: 0, hp: 0, speed: 0 },
+      description: "",
+      specialAbility: "",
+    });
+    setManualOpen(false);
+  };
+
+  const removeItem = (id: string) => {
+    setItems((prev) => prev.filter((i) => i.id !== id));
+    setCompareIds((prev) => [
+      prev[0] === id ? null : prev[0],
+      prev[1] === id ? null : prev[1],
+    ]);
+  };
+
+  const toggleCompare = (id: string) => {
+    setCompareIds((prev) => {
+      if (prev[0] === id) return [null, prev[1]];
+      if (prev[1] === id) return [prev[0], null];
+      if (!prev[0]) return [id, prev[1]];
+      if (!prev[1]) return [prev[0], id];
+      return [id, prev[1]];
+    });
+  };
+
+  const exportItems = () => {
+    const blob = new Blob([JSON.stringify(items, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "item_database.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const statMax = useMemo(() => {
+    if (!items.length) return { attack: 100, defense: 100, hp: 100, speed: 100 };
+    return {
+      attack: Math.max(...items.map((i) => i.stats.attack), 1),
+      defense: Math.max(...items.map((i) => i.stats.defense), 1),
+      hp: Math.max(...items.map((i) => i.stats.hp), 1),
+      speed: Math.max(...items.map((i) => i.stats.speed), 1),
+    };
+  }, [items]);
+
+  return (
+    <div className="space-y-6">
+      {/* Controls */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">AI Item Designer</h2>
+          <div className="flex items-center gap-2">
+            {items.length > 0 && (
+              <button
+                onClick={exportItems}
+                className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-neutral-300 transition hover:border-amber-500/30 hover:text-amber-400"
+              >
+                <Download size={14} />
+                Export JSON
+              </button>
+            )}
+            <button
+              onClick={() => setManualOpen(!manualOpen)}
+              className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-neutral-300 transition hover:border-amber-500/30 hover:text-amber-400"
+            >
+              <Plus size={14} />
+              Add Item
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-neutral-400">Game Genre</label>
+            <input
+              type="text"
+              value={genre}
+              onChange={(e) => setGenre(e.target.value)}
+              placeholder="RPG, Roguelike, MMORPG..."
+              className="w-48 rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-white outline-none focus:border-amber-500/50"
+            />
+          </div>
+          <button
+            onClick={generateItems}
+            disabled={loading}
+            className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-400 transition hover:bg-amber-500/20 disabled:opacity-50"
+          >
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+            {loading ? "Designing..." : "Design Item Set"}
+          </button>
+        </div>
+
+        {loading && (
+          <div className="mt-4 flex items-center gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+            <Loader2 size={16} className="animate-spin text-amber-400" />
+            <span className="text-sm text-amber-300">
+              AI is crafting items for your {genre} game...
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Manual Add Form */}
+      {manualOpen && (
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6">
+          <h3 className="mb-4 text-sm font-semibold text-neutral-300">Create Item Manually</h3>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            <TextInput label="Name" value={newItem.name} onChange={(v) => setNewItem((p) => ({ ...p, name: v }))} placeholder="Excalibur" />
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-neutral-400">Type</label>
+              <select
+                value={newItem.type}
+                onChange={(e) => setNewItem((p) => ({ ...p, type: e.target.value as ItemType }))}
+                className="rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-white outline-none focus:border-amber-500/50"
+              >
+                {ITEM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-neutral-400">Rarity</label>
+              <select
+                value={newItem.rarity}
+                onChange={(e) => setNewItem((p) => ({ ...p, rarity: e.target.value as ItemRarity }))}
+                className="rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-white outline-none focus:border-amber-500/50"
+              >
+                {ITEM_RARITIES.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <NumInput label="Attack" value={newItem.stats.attack} onChange={(v) => setNewItem((p) => ({ ...p, stats: { ...p.stats, attack: v } }))} min={0} />
+            <NumInput label="Defense" value={newItem.stats.defense} onChange={(v) => setNewItem((p) => ({ ...p, stats: { ...p.stats, defense: v } }))} min={0} />
+            <NumInput label="HP" value={newItem.stats.hp} onChange={(v) => setNewItem((p) => ({ ...p, stats: { ...p.stats, hp: v } }))} min={0} />
+            <NumInput label="Speed" value={newItem.stats.speed} onChange={(v) => setNewItem((p) => ({ ...p, stats: { ...p.stats, speed: v } }))} min={0} />
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <TextInput label="Description" value={newItem.description} onChange={(v) => setNewItem((p) => ({ ...p, description: v }))} placeholder="A legendary blade..." />
+            <TextInput label="Special Ability" value={newItem.specialAbility} onChange={(v) => setNewItem((p) => ({ ...p, specialAbility: v }))} placeholder="Deals 2x damage to undead" />
+          </div>
+          <div className="mt-4 flex justify-end">
+            <button
+              onClick={addManualItem}
+              disabled={!newItem.name.trim()}
+              className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-black transition hover:bg-amber-400 disabled:opacity-40"
+            >
+              Add Item
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Filter Bar */}
+      {items.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-neutral-500">Filter:</span>
+          {(["All", ...ITEM_TYPES] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setFilterType(t)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                filterType === t
+                  ? "bg-amber-500/15 text-amber-400"
+                  : "bg-[#1A1A1A] text-neutral-400 hover:text-neutral-200"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+          <span className="ml-auto text-xs text-neutral-500">
+            {filteredItems.length} item{filteredItems.length !== 1 && "s"}
+          </span>
+        </div>
+      )}
+
+      {/* Item Cards */}
+      {filteredItems.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filteredItems.map((item) => {
+            const isComparing = compareIds.includes(item.id);
+            return (
+              <div
+                key={item.id}
+                className={`group relative rounded-xl border-2 bg-[#1A1A1A] p-4 transition ${RARITY_BG[item.rarity]} ${
+                  isComparing ? "ring-2 ring-amber-500/50" : ""
+                }`}
+              >
+                <div className="mb-3 flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-white">{item.name}</h3>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                        style={{ color: RARITY_COLORS[item.rarity], backgroundColor: RARITY_COLORS[item.rarity] + "15" }}
+                      >
+                        {item.rarity}
+                      </span>
+                      <span className="text-[10px] uppercase tracking-wider text-neutral-500">{item.type}</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+                    <button
+                      onClick={() => toggleCompare(item.id)}
+                      title={isComparing ? "Remove from comparison" : "Compare"}
+                      className={`rounded-md p-1 transition ${
+                        isComparing
+                          ? "bg-amber-500/20 text-amber-400"
+                          : "text-neutral-500 hover:bg-[#2A2A2A] hover:text-white"
+                      }`}
+                    >
+                      <ArrowRightLeft size={14} />
+                    </button>
+                    <button
+                      onClick={() => removeItem(item.id)}
+                      className="rounded-md p-1 text-neutral-500 transition hover:bg-red-500/10 hover:text-red-400"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Stat Bars */}
+                <div className="mb-3 space-y-1.5">
+                  {(["attack", "defense", "hp", "speed"] as const).map((stat) => {
+                    const val = item.stats[stat];
+                    const pct = statMax[stat] > 0 ? (val / statMax[stat]) * 100 : 0;
+                    const barColor =
+                      stat === "attack" ? "#EF4444" : stat === "defense" ? "#3B82F6" : stat === "hp" ? "#10B981" : "#F59E0B";
+                    return (
+                      <div key={stat} className="flex items-center gap-2">
+                        <span className="w-10 text-[10px] uppercase text-neutral-500">{stat === "hp" ? "HP" : stat.slice(0, 3)}</span>
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#111]">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{ width: `${pct}%`, backgroundColor: barColor }}
+                          />
+                        </div>
+                        <span className="w-8 text-right font-mono text-[10px] text-neutral-400">{val}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <p className="mb-2 text-xs leading-relaxed text-neutral-400">{item.description}</p>
+
+                {item.specialAbility && (
+                  <div className="flex items-start gap-1.5 rounded-md bg-amber-500/5 px-2 py-1.5">
+                    <Zap size={12} className="mt-0.5 shrink-0 text-amber-500" />
+                    <span className="text-[11px] leading-snug text-amber-300">{item.specialAbility}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Empty State */}
+      {items.length === 0 && !loading && (
+        <div className="rounded-xl border border-dashed border-[#2A2A2A] py-16 text-center">
+          <Shield size={40} className="mx-auto mb-3 text-neutral-600" />
+          <p className="text-sm text-neutral-400">No items yet. Use AI to design a set or add items manually.</p>
+        </div>
+      )}
+
+      {/* Comparison Panel */}
+      {(compareA || compareB) && (
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-neutral-300">
+              <ArrowRightLeft size={16} className="text-amber-400" />
+              Item Comparison
+            </h3>
+            <button
+              onClick={() => setCompareIds([null, null])}
+              className="text-xs text-neutral-500 transition hover:text-neutral-300"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-6">
+            {[compareA, compareB].map((item, idx) => (
+              <div key={idx}>
+                {item ? (
+                  <div>
+                    <div className="mb-3 flex items-center gap-2">
+                      <h4 className="font-semibold text-white">{item.name}</h4>
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
+                        style={{ color: RARITY_COLORS[item.rarity], backgroundColor: RARITY_COLORS[item.rarity] + "15" }}
+                      >
+                        {item.rarity}
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {(["attack", "defense", "hp", "speed"] as const).map((stat) => {
+                        const val = item.stats[stat];
+                        const other = idx === 0 ? compareB : compareA;
+                        const otherVal = other?.stats[stat] ?? 0;
+                        const diff = val - otherVal;
+                        return (
+                          <div key={stat} className="flex items-center justify-between">
+                            <span className="text-xs uppercase text-neutral-500">{stat === "hp" ? "HP" : stat}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-sm text-white">{val}</span>
+                              {other && diff !== 0 && (
+                                <span className={`font-mono text-xs ${diff > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                                  {diff > 0 ? "+" : ""}{diff}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {item.specialAbility && (
+                      <div className="mt-3 flex items-start gap-1.5 rounded-md bg-amber-500/5 px-2 py-1.5">
+                        <Zap size={12} className="mt-0.5 shrink-0 text-amber-500" />
+                        <span className="text-[11px] text-amber-300">{item.specialAbility}</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-[#2A2A2A] py-8">
+                    <p className="text-xs text-neutral-500">
+                      Click <ArrowRightLeft size={12} className="mx-1 inline text-neutral-500" /> on a card to compare
+                    </p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Side by Side Stat Bar Comparison */}
+          {compareA && compareB && (
+            <div className="mt-6 space-y-3 border-t border-[#2A2A2A] pt-4">
+              <h4 className="text-xs font-medium uppercase tracking-wider text-neutral-500">Visual Comparison</h4>
+              {(["attack", "defense", "hp", "speed"] as const).map((stat) => {
+                const aVal = compareA.stats[stat];
+                const bVal = compareB.stats[stat];
+                const maxVal = Math.max(aVal, bVal, 1);
+                return (
+                  <div key={stat} className="flex items-center gap-3">
+                    <span className="w-14 text-right text-xs uppercase text-neutral-500">{stat === "hp" ? "HP" : stat}</span>
+                    <div className="flex flex-1 items-center gap-1">
+                      <span className="w-8 text-right font-mono text-xs text-neutral-300">{aVal}</span>
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#111]">
+                        <div
+                          className="h-full rounded-full bg-amber-500 transition-all"
+                          style={{ width: `${(aVal / maxVal) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-neutral-600">vs</span>
+                    <div className="flex flex-1 items-center gap-1">
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#111]">
+                        <div
+                          className="h-full rounded-full bg-blue-500 transition-all"
+                          style={{ width: `${(bVal / maxVal) * 100}%` }}
+                        />
+                      </div>
+                      <span className="w-8 font-mono text-xs text-neutral-300">{bVal}</span>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="mt-2 flex items-center justify-center gap-6 text-[10px] text-neutral-500">
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                  {compareA.name}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
+                  {compareB.name}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ──
 
 export default function BalanceCalculatorPage() {
@@ -3264,6 +3757,7 @@ export default function BalanceCalculatorPage() {
         {activeTab === "economy-designer" && <EconomyDesigner />}
         {activeTab === "difficulty" && <DifficultyAnalyzer />}
         {activeTab === "loot" && <LootTableDesigner />}
+        {activeTab === "items" && <ItemDesigner />}
       </div>
     </div>
   );
