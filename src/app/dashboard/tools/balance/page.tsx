@@ -11,6 +11,8 @@ import {
   Trash2,
   AlertTriangle,
   Info,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -349,6 +351,45 @@ function DPSCalculator() {
     return points;
   }, [results]);
 
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+
+  const analyzeBalance = async () => {
+    if (aiLoading) return;
+    setAiLoading(true);
+    setAiAnalysis(null);
+    try {
+      const weaponList = results.map(r =>
+        `${r.name}: ${r.baseDamage} base dmg, ${r.attackSpeed} atk/s, ${r.critChance}% crit, ${r.critMultiplier}x crit mult, effective DPS = ${r.effectiveDps.toFixed(1)}`
+      ).join('\n');
+
+      const response = await fetch('https://llm.chutes.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ''),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'moonshotai/Kimi-K2.5-TEE',
+          messages: [{
+            role: 'user',
+            content: `I have these weapons in my game:\n${weaponList}\nAnalyze the balance. Are any weapons overpowered or underpowered? Suggest specific number changes to improve balance. Be brief and specific.`
+          }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || '';
+      setAiAnalysis(content || 'No analysis returned from AI.');
+    } catch {
+      setAiAnalysis('AI advisor is currently unavailable. Try again later.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
       {/* Inputs */}
@@ -518,6 +559,51 @@ function DPSCalculator() {
               </LineChart>
             </ResponsiveContainer>
           </div>
+        </div>
+
+        {/* AI Balance Advisor */}
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-amber-400" />
+              <p className="text-sm font-medium text-neutral-300">AI Balance Advisor</p>
+            </div>
+            <button
+              onClick={analyzeBalance}
+              disabled={aiLoading || weapons.length < 2}
+              className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20 disabled:opacity-40 disabled:hover:bg-amber-500/10"
+            >
+              {aiLoading ? (
+                <><Loader2 size={14} className="animate-spin" /> Analyzing...</>
+              ) : (
+                <><Sparkles size={14} /> Analyze Balance</>
+              )}
+            </button>
+          </div>
+
+          {weapons.length < 2 && !aiAnalysis && (
+            <p className="text-xs text-neutral-500">Add at least 2 weapons to get AI balance analysis.</p>
+          )}
+
+          {aiLoading && !aiAnalysis && (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 size={24} className="animate-spin text-amber-400" />
+            </div>
+          )}
+
+          {aiAnalysis && (
+            <div className="rounded-lg border border-[#2A2A2A] bg-[#111] p-4">
+              <div className="whitespace-pre-wrap text-sm leading-relaxed text-neutral-300">
+                {aiAnalysis}
+              </div>
+            </div>
+          )}
+
+          {!aiLoading && !aiAnalysis && weapons.length >= 2 && (
+            <p className="text-xs text-neutral-500">
+              Click &quot;Analyze Balance&quot; to get AI-powered feedback on your weapon stats.
+            </p>
+          )}
         </div>
       </div>
     </div>

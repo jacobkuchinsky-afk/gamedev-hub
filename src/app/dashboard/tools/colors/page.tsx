@@ -13,6 +13,8 @@ import {
   Bookmark,
   Code,
   Palette,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -172,6 +174,8 @@ export default function ColorsPage() {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [paletteName, setPaletteName] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -245,6 +249,45 @@ export default function ColorsPage() {
     const config = `// tailwind.config.ts\ncolors: {\n  palette: {\n${hexes.map((h, i) => `    '${shades[i]}': '${h}',`).join("\n")}\n  },\n}`;
     navigator.clipboard.writeText(config);
     showToast("Tailwind config copied!");
+  };
+
+  const generateAiPalette = async () => {
+    if (!aiPrompt.trim() || aiLoading) return;
+    setAiLoading(true);
+    try {
+      const response = await fetch('https://llm.chutes.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ''),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'moonshotai/Kimi-K2.5-TEE',
+          messages: [{
+            role: 'user',
+            content: `Suggest a 5-color palette for a game with theme: ${aiPrompt.trim()}. Return exactly 5 hex color codes, one per line, no other text.`
+          }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || '';
+      const hexCodes = content.match(/#[0-9A-Fa-f]{6}/g);
+      if (hexCodes && hexCodes.length >= 5) {
+        setColors(hexCodes.slice(0, 5).map((hex: string) => ({ hex: hex.toUpperCase(), locked: false })));
+        showToast("AI palette generated!");
+      } else {
+        regenerate();
+        showToast("AI returned unexpected format — random palette used");
+      }
+    } catch {
+      regenerate();
+      showToast("AI unavailable — random palette generated");
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const exportPalette = (format: ExportFormat) => {
@@ -423,6 +466,38 @@ export default function ColorsPage() {
                   </span>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* AI Suggest */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+              AI Suggest
+            </h2>
+            <p className="mb-3 text-xs text-[#6B7280]">
+              Describe a mood, environment, or genre and let AI generate a palette.
+            </p>
+            <div className="flex gap-2">
+              <input
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && generateAiPalette()}
+                placeholder="e.g. underwater cave, haunted forest, cyberpunk city..."
+                className="min-w-0 flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none transition-colors focus:border-[#F59E0B]/50"
+                disabled={aiLoading}
+              />
+              <button
+                onClick={generateAiPalette}
+                disabled={aiLoading || !aiPrompt.trim()}
+                className="flex shrink-0 items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2.5 text-sm font-bold text-[#0F0F0F] transition-all hover:bg-[#D97706] active:scale-[0.97] disabled:opacity-50 disabled:hover:bg-[#F59E0B]"
+              >
+                {aiLoading ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
+                ) : (
+                  <><Sparkles className="h-4 w-4" /> Generate</>
+                )}
+              </button>
             </div>
           </div>
 
