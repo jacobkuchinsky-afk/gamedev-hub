@@ -649,6 +649,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [hasUsedSearch, setHasUsedSearch] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
@@ -728,6 +729,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     if ((e.metaKey || e.ctrlKey) && e.key === "k") {
       e.preventDefault();
       setCmdOpen((prev) => !prev);
+      setHasUsedSearch(true);
       clearPending();
       return;
     }
@@ -1152,8 +1154,10 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
             <FocusTimer />
             <NotificationCenter />
             <button
-              onClick={() => setCmdOpen(true)}
-              className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-sm text-[#6B7280] transition-colors hover:border-[#F59E0B]/30 hover:text-[#9CA3AF]"
+              onClick={() => { setCmdOpen(true); setHasUsedSearch(true); }}
+              className={`flex items-center gap-2 rounded-lg border border-[#3A3A3A] bg-[#1A1A1A] px-3 py-1.5 text-sm text-[#6B7280] transition-colors hover:border-[#F59E0B]/30 hover:bg-[#F59E0B]/10 hover:text-[#9CA3AF] ${
+                !hasUsedSearch ? "animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.2)]" : ""
+              }`}
             >
               <Search className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Search</span>
