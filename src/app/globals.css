@@ -68,6 +68,16 @@ button {
   transition: all 150ms ease;
 }
 
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button:disabled:hover {
+  transform: none;
+  filter: none;
+}
+
 ::selection {
   background: #F59E0B;
   color: #0F0F0F;
