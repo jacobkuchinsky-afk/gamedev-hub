@@ -745,3 +745,267 @@ export function addPlaytestResponse(response: Omit<PlaytestResponse, "id" | "sub
   save(PLAYTEST_KEY, responses);
   return newResponse;
 }
+
+// ─── Reference Board ──────────────────────────────────────────────────────────
+
+export type ReferenceCategory = "Art" | "Gameplay" | "UI" | "Audio" | "Story" | "Marketing";
+
+export interface Reference {
+  id: string;
+  projectId: string;
+  title: string;
+  url: string;
+  category: ReferenceCategory;
+  notes: string;
+  colorLabel: string;
+  created_at: string;
+}
+
+export const REFERENCE_CATEGORY_COLORS: Record<ReferenceCategory, string> = {
+  Art: "#F59E0B",
+  Gameplay: "#3B82F6",
+  UI: "#EC4899",
+  Audio: "#10B981",
+  Story: "#8B5CF6",
+  Marketing: "#F97316",
+};
+
+const REFERENCES_KEY = "gameforge_references";
+
+const SEED_REFERENCES: Reference[] = [
+  {
+    id: "ref_001",
+    projectId: "proj_001",
+    title: "FTL: Faster Than Light - Art Style",
+    url: "https://store.steampowered.com/app/212680/FTL_Faster_Than_Light/",
+    category: "Art",
+    notes: "Clean pixel art with glowing VFX. Great reference for shield and weapon effects.",
+    colorLabel: "#F59E0B",
+    created_at: "2025-12-01T10:00:00Z",
+  },
+  {
+    id: "ref_002",
+    projectId: "proj_001",
+    title: "No Man's Sky - Procedural Generation",
+    url: "https://www.nomanssky.com/",
+    category: "Gameplay",
+    notes: "Study how they handle seamless planet transitions and star system generation at scale.",
+    colorLabel: "#3B82F6",
+    created_at: "2025-12-05T14:00:00Z",
+  },
+  {
+    id: "ref_003",
+    projectId: "proj_001",
+    title: "Dead Cells - HUD Design",
+    url: "https://dead-cells.com/",
+    category: "UI",
+    notes: "Minimal HUD that stays out of the way. Health bar animation is buttery smooth.",
+    colorLabel: "#EC4899",
+    created_at: "2026-01-10T09:00:00Z",
+  },
+  {
+    id: "ref_004",
+    projectId: "proj_001",
+    title: "Outer Wilds - Soundtrack Approach",
+    url: "https://www.mobiusdigitalgames.com/outer-wilds.html",
+    category: "Audio",
+    notes: "Adaptive music that blends with environment. Instruments fade in/out based on proximity.",
+    colorLabel: "#10B981",
+    created_at: "2026-01-15T11:00:00Z",
+  },
+  {
+    id: "ref_005",
+    projectId: "proj_001",
+    title: "Mass Effect - Alien Lore Writing",
+    url: "https://www.ea.com/games/mass-effect",
+    category: "Story",
+    notes: "Codex system for deep lore without interrupting gameplay. Artifact descriptions should feel this detailed.",
+    colorLabel: "#8B5CF6",
+    created_at: "2026-02-01T08:00:00Z",
+  },
+  {
+    id: "ref_006",
+    projectId: "proj_001",
+    title: "Hollow Knight - Launch Trailer Pacing",
+    url: "https://www.youtube.com/watch?v=UAO2urG23S4",
+    category: "Marketing",
+    notes: "Perfect trailer pacing: atmosphere first, then gameplay hooks, then title card. No voiceover needed.",
+    colorLabel: "#F97316",
+    created_at: "2026-02-20T16:00:00Z",
+  },
+];
+
+export function getReferences(projectId?: string): Reference[] {
+  const refs = getOrSeed(REFERENCES_KEY, SEED_REFERENCES);
+  return projectId ? refs.filter((r) => r.projectId === projectId) : refs;
+}
+
+export function addReference(ref: Omit<Reference, "id" | "created_at">): Reference {
+  const refs = getReferences();
+  const newRef: Reference = {
+    ...ref,
+    id: `ref_${Date.now()}`,
+    created_at: new Date().toISOString(),
+  };
+  refs.push(newRef);
+  save(REFERENCES_KEY, refs);
+  return newRef;
+}
+
+export function deleteReference(id: string): boolean {
+  const refs = getReferences();
+  const filtered = refs.filter((r) => r.id !== id);
+  if (filtered.length === refs.length) return false;
+  save(REFERENCES_KEY, filtered);
+  return true;
+}
+
+// ─── Changelog / Patch Notes ──────────────────────────────────────────────────
+
+export type VersionType = "Major" | "Minor" | "Patch" | "Hotfix";
+export type ChangeCategory = "Added" | "Changed" | "Fixed" | "Removed" | "Known Issues";
+
+export interface ChangelogEntry {
+  id: string;
+  projectId: string;
+  version: string;
+  title: string;
+  date: string;
+  type: VersionType;
+  changes: Record<ChangeCategory, string[]>;
+}
+
+export const VERSION_TYPE_COLORS: Record<VersionType, string> = {
+  Major: "#EF4444",
+  Minor: "#3B82F6",
+  Patch: "#F59E0B",
+  Hotfix: "#F97316",
+};
+
+export const CHANGE_CATEGORY_COLORS: Record<ChangeCategory, string> = {
+  Added: "#10B981",
+  Changed: "#3B82F6",
+  Fixed: "#F59E0B",
+  Removed: "#EF4444",
+  "Known Issues": "#9CA3AF",
+};
+
+const CHANGELOG_KEY = "gameforge_changelog";
+
+const SEED_CHANGELOG: ChangelogEntry[] = [
+  {
+    id: "cl_001",
+    projectId: "proj_001",
+    version: "0.9.2-beta",
+    title: "Stability & Performance",
+    date: "2026-03-07",
+    type: "Patch",
+    changes: {
+      Added: [
+        "LOD system for asteroid fields — steady 60 FPS in dense zones",
+        "Frustum culling for off-screen objects",
+      ],
+      Changed: [
+        "Shield VFX switched to shader-based rendering (fixes flicker at low FPS)",
+        "Star map tooltip repositions when near screen edges",
+      ],
+      Fixed: [
+        "Music now loops correctly in asteroid belt zones",
+        "Inventory transfer no longer duplicates items on rapid clicks",
+      ],
+      Removed: [],
+      "Known Issues": [
+        "Alt-tab during loading screen causes crash (investigating)",
+        "Player can clip through station walls when boosting at max speed",
+      ],
+    },
+  },
+  {
+    id: "cl_002",
+    projectId: "proj_001",
+    version: "0.9.1-beta",
+    title: "Trading & Economy",
+    date: "2026-03-03",
+    type: "Minor",
+    changes: {
+      Added: [
+        "Trading system with dynamic pricing based on supply/demand",
+        "Station storage with transfer UI",
+        "Trade history log viewable at any station",
+      ],
+      Changed: [
+        "Station interior lighting improved for trading desk area",
+        "NPC merchant portraits updated with new art style",
+      ],
+      Fixed: [
+        "Save system now correctly persists discovered star systems",
+        "Docking animation sync issue with SFX resolved",
+      ],
+      Removed: [
+        "Placeholder barter system replaced by full trading",
+      ],
+      "Known Issues": [
+        "Inventory duplication possible with rapid transfer clicks",
+        "Music stops after first track in asteroid belt",
+      ],
+    },
+  },
+  {
+    id: "cl_003",
+    projectId: "proj_001",
+    version: "0.9.0-beta",
+    title: "First Beta Release",
+    date: "2026-02-28",
+    type: "Major",
+    changes: {
+      Added: [
+        "Complete save/load system for player state, inventory, and star map",
+        "Main menu with New Game, Continue, Settings, Credits",
+        "Animated starfield background for main menu",
+        "Base building on planetary surfaces",
+        "Alien artifact discovery system with lore entries",
+      ],
+      Changed: [
+        "Combat damage model rebalanced for beta feedback",
+        "Player ship hull sprite updated to v3 with damage states",
+        "HUD health/shield bars now pulse on low health",
+      ],
+      Fixed: [
+        "Hyperspace jump transition no longer freezes for 2 seconds",
+        "Weapon cooldown timer now displays correctly",
+      ],
+      Removed: [
+        "Debug console access in release builds",
+        "Placeholder star map (replaced with procedural generation)",
+      ],
+      "Known Issues": [
+        "Performance drops in dense asteroid fields",
+        "Some station collision boundaries are too generous",
+      ],
+    },
+  },
+];
+
+export function getChangelog(projectId?: string): ChangelogEntry[] {
+  const entries = getOrSeed(CHANGELOG_KEY, SEED_CHANGELOG);
+  return projectId ? entries.filter((e) => e.projectId === projectId) : entries;
+}
+
+export function addChangelogEntry(entry: Omit<ChangelogEntry, "id">): ChangelogEntry {
+  const entries = getChangelog();
+  const newEntry: ChangelogEntry = {
+    ...entry,
+    id: `cl_${Date.now()}`,
+  };
+  entries.push(newEntry);
+  save(CHANGELOG_KEY, entries);
+  return newEntry;
+}
+
+export function deleteChangelogEntry(id: string): boolean {
+  const entries = getChangelog();
+  const filtered = entries.filter((e) => e.id !== id);
+  if (filtered.length === entries.length) return false;
+  save(CHANGELOG_KEY, filtered);
+  return true;
+}

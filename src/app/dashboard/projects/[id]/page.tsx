@@ -15,6 +15,8 @@ import {
   FileText,
   Rocket,
   Gamepad2,
+  Image,
+  ScrollText,
 } from "lucide-react";
 import {
   getProject,
@@ -46,7 +48,7 @@ const TASK_STATUS_STYLES: Record<string, string> = {
   done: "bg-[#10B981]/10 text-[#10B981]",
 };
 
-type Tab = "overview" | "tasks" | "bugs" | "assets" | "devlog" | "gdd" | "launch" | "playtest";
+type Tab = "overview" | "tasks" | "bugs" | "assets" | "devlog" | "gdd" | "launch" | "playtest" | "references" | "changelog";
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -97,6 +99,8 @@ export default function ProjectDetailPage() {
     { key: "assets", label: "Assets", href: `/dashboard/projects/${projectId}/assets`, icon: Package },
     { key: "devlog", label: "Devlog", href: `/dashboard/projects/${projectId}/devlog`, icon: BookOpen },
     { key: "gdd", label: "GDD", href: `/dashboard/projects/${projectId}/gdd`, icon: FileText },
+    { key: "references", label: "References", href: `/dashboard/projects/${projectId}/references`, icon: Image },
+    { key: "changelog", label: "Changelog", href: `/dashboard/projects/${projectId}/changelog`, icon: ScrollText },
     { key: "launch", label: "Launch", href: `/dashboard/projects/${projectId}/launch`, icon: Rocket },
     { key: "playtest", label: "Playtest", href: `/dashboard/projects/${projectId}/playtest`, icon: Gamepad2 },
   ];
