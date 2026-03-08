@@ -41,6 +41,7 @@ import {
   Star,
   Anchor,
   Zap,
+  RefreshCw,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -649,6 +650,11 @@ export default function GDDPage() {
   const [showMechanics, setShowMechanics] = useState(false);
   const [mechanicsCopied, setMechanicsCopied] = useState(false);
 
+  const [gameLoopLoading, setGameLoopLoading] = useState(false);
+  const [gameLoopResult, setGameLoopResult] = useState("");
+  const [showGameLoop, setShowGameLoop] = useState(false);
+  const [gameLoopCopied, setGameLoopCopied] = useState(false);
+
   const [showWiki, setShowWiki] = useState(false);
   const [wikiTopic, setWikiTopic] = useState("");
   const [wikiLoading, setWikiLoading] = useState(false);
@@ -975,6 +981,46 @@ export default function GDDPage() {
       setToast({ message: "Failed to generate mechanics — try again", type: "error" });
     } finally {
       setMechanicsLoading(false);
+    }
+  }, [project, data]);
+
+  const handleGameLoop = useCallback(async () => {
+    if (!project) return;
+    setGameLoopLoading(true);
+    setShowGameLoop(true);
+
+    const genre = data.genre || project.genre || "unspecified";
+    const name = data.gameTitle || project.name || "Untitled";
+
+    const prompt = `Describe the core game loop for a ${genre} game called '${name}'. Identify: the primary loop (what players do every 30 seconds), the secondary loop (what players do every 10-30 minutes), and the meta loop (long-term progression). For each loop: name it, describe the steps (3-4), and explain what makes it engaging. Be brief.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+      const apiData = await response.json();
+      const content = apiData.choices?.[0]?.message?.content || apiData.choices?.[0]?.message?.reasoning || "";
+      setGameLoopResult(content);
+      setToast({ message: "Generated game loop diagram!", type: "success" });
+    } catch (err) {
+      console.error("[GDD Game Loop]", err);
+      setGameLoopResult("Failed to generate game loop. Please try again.");
+      setToast({ message: "Failed to generate game loop -- try again", type: "error" });
+    } finally {
+      setGameLoopLoading(false);
     }
   }, [project, data]);
 
@@ -1611,6 +1657,18 @@ export default function GDDPage() {
                 AI Mechanics
               </button>
               <button
+                onClick={handleGameLoop}
+                disabled={gameLoopLoading}
+                className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {gameLoopLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                AI Game Loop
+              </button>
+              <button
                 onClick={() => { setShowWiki(true); setCodexView(false); }}
                 className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10"
               >
@@ -2145,6 +2203,82 @@ export default function GDDPage() {
                 <button
                   onClick={handleMechanicsAdvisor}
                   disabled={mechanicsLoading}
+                  className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black hover:bg-[#F59E0B]/90 disabled:opacity-50"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Regenerate
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* AI Game Loop Panel */}
+        {showGameLoop && (
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                  <RefreshCw className="h-4 w-4 text-[#F59E0B]" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">AI Game Loop Diagram</h3>
+                  <p className="text-xs text-[#6B7280]">
+                    Core loops for {project?.name}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {gameLoopResult && !gameLoopLoading && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(gameLoopResult);
+                      setGameLoopCopied(true);
+                      setTimeout(() => setGameLoopCopied(false), 2000);
+                    }}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                      gameLoopCopied
+                        ? "bg-[#10B981] text-white"
+                        : "border border-[#2A2A2A] text-[#9CA3AF] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                    }`}
+                  >
+                    {gameLoopCopied ? (
+                      <><CheckCircle2 className="h-3.5 w-3.5" /> Copied!</>
+                    ) : (
+                      <><Copy className="h-3.5 w-3.5" /> Copy</>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowGameLoop(false)}
+                  className="rounded-lg p-1 text-[#9CA3AF] hover:text-[#F5F5F5]"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5">
+              {gameLoopLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#F59E0B]" />
+                  <p className="text-sm text-[#6B7280]">Mapping your game loops...</p>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4">
+                  <pre className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB] font-sans">
+                    {gameLoopResult}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            {gameLoopResult && !gameLoopLoading && (
+              <div className="flex items-center justify-between border-t border-[#2A2A2A] px-5 py-3">
+                <p className="text-xs text-[#6B7280]">Primary, secondary, and meta loops</p>
+                <button
+                  onClick={handleGameLoop}
+                  disabled={gameLoopLoading}
                   className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black hover:bg-[#F59E0B]/90 disabled:opacity-50"
                 >
                   <Sparkles className="h-3.5 w-3.5" />

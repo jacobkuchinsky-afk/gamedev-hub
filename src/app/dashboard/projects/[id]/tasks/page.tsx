@@ -1583,6 +1583,40 @@ export default function TaskBoardPage() {
               Sprint Burndown
             </h3>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const rows: string[] = ["Day,Ideal Remaining,Actual Remaining"];
+                  const total = burndownData.total;
+                  const totalDays = burndownData.totalDays;
+                  const doneTasks = tasks.filter(
+                    (t) => t.sprint === selectedSprint && t.status === "done"
+                  ).length;
+                  for (let d = 0; d <= totalDays; d++) {
+                    const ideal = Math.round((total - (total * d) / totalDays) * 100) / 100;
+                    const actual = d <= burndownData.elapsedDays
+                      ? d === burndownData.elapsedDays
+                        ? burndownData.remaining
+                        : d === 0
+                          ? total
+                          : ""
+                      : "";
+                    rows.push(`${d},${ideal},${actual}`);
+                  }
+                  const csv = rows.join("\n");
+                  const blob = new Blob([csv], { type: "text/csv" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${currentSprintInfo.name.replace(/\s+/g, "_")}_burndown.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] px-2 py-1 text-[10px] text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                title="Export burndown as CSV"
+              >
+                <Download className="h-3 w-3" />
+                CSV
+              </button>
               <span className="text-[10px] text-[#6B7280]">
                 {currentSprintInfo.startDate?.slice(5)} &mdash;{" "}
                 {currentSprintInfo.endDate?.slice(5)}
