@@ -12,6 +12,7 @@ import {
   sendPasswordResetEmail,
   type User as FirebaseUser,
 } from "firebase/auth";
+import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAZmriHWdg7IUssFqzNe3Rq0oH1bGjFV0w",
@@ -24,9 +25,14 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const auth = getAuth(app);
+const db = getFirestore(app);
 
 export {
   auth,
+  db,
+  doc,
+  getDoc,
+  setDoc,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,

@@ -8,6 +8,7 @@ import {
   EmailAuthProvider,
   reauthenticateWithCredential,
 } from "./firebase";
+import { syncAllOnLogin, pushAllToFirestore } from "./db";
 
 export interface User {
   id: string;
@@ -67,6 +68,7 @@ export async function signup(
     const user = firebaseUserToUser(cred.user);
     localStorage.setItem(SESSION_KEY, JSON.stringify(user));
     trackLogin();
+    syncAllOnLogin().catch(() => {});
     return { success: true, user };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Signup failed";
@@ -92,6 +94,7 @@ export async function login(
     const user = firebaseUserToUser(cred.user);
     localStorage.setItem(SESSION_KEY, JSON.stringify(user));
     trackLogin();
+    syncAllOnLogin().catch(() => {});
     return { success: true, user };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Login failed";
@@ -106,6 +109,11 @@ export async function login(
 }
 
 export async function logout() {
+  try {
+    await pushAllToFirestore();
+  } catch {
+    // best-effort save before logout
+  }
   try {
     await firebaseSignOut(auth);
   } catch {
@@ -221,6 +229,7 @@ function fallbackSignup(
   const { password: _, ...u } = newUser;
   localStorage.setItem(SESSION_KEY, JSON.stringify(u));
   trackLogin();
+  syncAllOnLogin().catch(() => {});
   return { success: true, user: u };
 }
 
@@ -237,5 +246,6 @@ function fallbackLogin(
   const { password: _, ...u } = found;
   localStorage.setItem(SESSION_KEY, JSON.stringify(u));
   trackLogin();
+  syncAllOnLogin().catch(() => {});
   return { success: true, user: u };
 }

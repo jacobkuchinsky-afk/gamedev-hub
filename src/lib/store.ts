@@ -424,18 +424,15 @@ const SEED_DEVLOG: DevlogEntry[] = [
   },
 ];
 
+import { scopedGet, scopedSave } from "./db";
+
 function getOrSeed<T>(key: string, seed: T[]): T[] {
   if (typeof window === "undefined") return [];
-  const raw = localStorage.getItem(key);
-  if (!raw) {
-    localStorage.setItem(key, JSON.stringify(seed));
-    return [...seed];
-  }
-  return JSON.parse(raw);
+  return scopedGet(key, seed);
 }
 
 function save<T>(key: string, data: T[]) {
-  localStorage.setItem(key, JSON.stringify(data));
+  scopedSave(key, data);
 }
 
 export function getProjects(): Project[] {
