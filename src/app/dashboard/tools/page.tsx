@@ -441,7 +441,7 @@ export default function ToolsPage() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((tool) => {
+          {filtered.map((tool, index) => {
             const isFav = favorites.includes(tool.href);
             const usageCount = toolUsage[tool.href] || 0;
             const isPopular = popularHrefs.has(tool.href);
@@ -449,8 +449,8 @@ export default function ToolsPage() {
               <Link
                 key={tool.href}
                 href={tool.href}
-                style={{ ["--tool-color"]: tool.color } as React.CSSProperties}
-                className="group relative rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6 transition-all duration-200 ease-out hover:scale-[1.02] hover:border-[#F59E0B]/30 hover:shadow-[0_0_24px_color-mix(in_srgb,var(--tool-color)_25%,transparent)]"
+                style={{ ["--tool-color"]: tool.color, animationDelay: `${index * 30}ms`, animationFillMode: "backwards" } as React.CSSProperties}
+                className="group relative animate-slide-up rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6 transition-all duration-200 ease-out hover:scale-[1.02] hover:border-[#F59E0B]/30 hover:shadow-[0_0_24px_color-mix(in_srgb,var(--tool-color)_25%,transparent)]"
               >
                 <button
                   onClick={(e) => toggleFavorite(tool.href, e)}
