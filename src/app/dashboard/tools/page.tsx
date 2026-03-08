@@ -24,6 +24,7 @@ import {
   ArrowUpDown,
   Code2,
   BookOpen,
+  Sigma,
 } from "lucide-react";
 import { getToolUsage } from "./layout";
 
@@ -178,6 +179,15 @@ const TOOLS: {
     name: "Cheat Sheet",
     description:
       "Quick-reference formulas and patterns for math, physics, AI, UI, audio, and optimization.",
+    color: "#F59E0B",
+    category: "Game Design",
+  },
+  {
+    href: "/dashboard/tools/math",
+    icon: Sigma,
+    name: "Game Math",
+    description:
+      "Distance, lerp, projectile motion, random ranges, grid snapping, FPS timing, and damage calculators.",
     color: "#F59E0B",
     category: "Game Design",
   },
