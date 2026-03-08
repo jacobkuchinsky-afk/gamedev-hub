@@ -564,6 +564,24 @@ Be concise and professional. Fill in any missing sections based on the title and
     URL.revokeObjectURL(url);
   };
 
+  const exportBugTrends = () => {
+    if (!project || !bugStats?.weeklyTrend) return;
+    const header = "Week,Blocker,Critical,Major,Minor,Total";
+    const rows = bugStats.weeklyTrend.map((w) => {
+      const total = w.blocker + w.critical + w.major + w.minor;
+      return [w.label, w.blocker, w.critical, w.major, w.minor, total].join(",");
+    });
+    const csv = [header, ...rows].join("\n");
+    const slug = project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${slug}-bug-trends.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const openBugs = useMemo(() => bugs.filter((b) => b.status !== "closed"), [bugs]);
   const closedBugs = useMemo(() => bugs.filter((b) => b.status === "closed"), [bugs]);
 
@@ -1044,6 +1062,16 @@ Be concise and professional. Fill in any missing sections based on the title and
                   <FileSpreadsheet className="h-4 w-4" />
                   CSV
                 </button>
+                {bugStats?.weeklyTrend?.some((w) => w.blocker + w.critical + w.major + w.minor > 0) && (
+                  <button
+                    onClick={exportBugTrends}
+                    className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                    title="Export severity trend data as CSV"
+                  >
+                    <TrendingUp className="h-4 w-4" />
+                    Trends
+                  </button>
+                )}
               </>
             )}
             <button

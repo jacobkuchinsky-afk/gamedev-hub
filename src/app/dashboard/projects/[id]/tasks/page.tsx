@@ -14,6 +14,7 @@ import {
   ArrowUpDown,
   Target,
   TrendingUp,
+  TrendingDown,
   Sparkles,
   Loader2,
   Tag,
@@ -272,6 +273,10 @@ export default function TaskBoardPage() {
   const [wipLimits, setWipLimits] = useState<Record<string, number | null>>({});
   const [wipEditingCol, setWipEditingCol] = useState<string | null>(null);
   const [wipEditValue, setWipEditValue] = useState("");
+
+  const [showSprintCompare, setShowSprintCompare] = useState(false);
+  const [compareSprint1, setCompareSprint1] = useState("");
+  const [compareSprint2, setCompareSprint2] = useState("");
 
   const handleConvertToBug = (taskId: string) => {
     const task = tasks.find((t) => t.id === taskId);
@@ -1163,6 +1168,27 @@ export default function TaskBoardPage() {
     return { completed, total, totalEstimated, totalLogged, avgTime, bugsFound, velocity: completed };
   }, [tasks, currentSprintInfo]);
 
+  const completedSprintsForCompare = useMemo(
+    () => sprints.filter((s) => s.status === "completed"),
+    [sprints]
+  );
+
+  const comparisonData = useMemo(() => {
+    if (!compareSprint1 || !compareSprint2) return null;
+    const getStats = (name: string) => {
+      const st = tasks.filter((t) => t.sprint === name);
+      const done = st.filter((t) => t.status === "done").length;
+      const totalLogged = st.reduce((s, t) => s + (t.loggedHours || 0), 0);
+      const avgTime =
+        done > 0 && totalLogged > 0
+          ? Math.round((totalLogged / done) * 10) / 10
+          : 0;
+      const bugs = st.filter((t) => t.tags?.includes("Bugfix")).length;
+      return { completed: done, total: st.length, velocity: done, avgTime, bugsFound: bugs };
+    };
+    return { s1: getStats(compareSprint1), s2: getStats(compareSprint2) };
+  }, [compareSprint1, compareSprint2, tasks]);
+
   const saveRetro = (sprintName: string, field: "wentWell" | "didntGoWell" | "improve", value: string) => {
     setRetroNotes((prev) => {
       const defaults = { wentWell: "", didntGoWell: "", improve: "" };
@@ -1710,6 +1736,20 @@ export default function TaskBoardPage() {
           )}
           AI Plan Sprint
         </button>
+        {sprints.filter((s) => s.status === "completed").length >= 2 && (
+          <button
+            onClick={() => {
+              const done = sprints.filter((s) => s.status === "completed");
+              setCompareSprint1(done[done.length - 2]?.name || "");
+              setCompareSprint2(done[done.length - 1]?.name || "");
+              setShowSprintCompare(true);
+            }}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+          >
+            <ArrowUpDown className="h-3 w-3" />
+            Compare Sprints
+          </button>
+        )}
       </div>
 
       {/* Sprint Summary */}
@@ -2364,6 +2404,111 @@ export default function TaskBoardPage() {
                 Create Sprint
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Sprint Comparison Modal */}
+      {showSprintCompare && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-lg rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6">
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-lg font-semibold">
+                <ArrowUpDown className="h-5 w-5 text-[#F59E0B]" />
+                Compare Sprints
+              </h3>
+              <button
+                onClick={() => setShowSprintCompare(false)}
+                className="rounded-lg p-1 text-[#9CA3AF] hover:text-[#F5F5F5]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mb-5 grid grid-cols-2 gap-3">
+              <select
+                value={compareSprint1}
+                onChange={(e) => setCompareSprint1(e.target.value)}
+                className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+              >
+                <option value="">Select sprint...</option>
+                {completedSprintsForCompare.map((s) => (
+                  <option key={s.id} value={s.name} disabled={s.name === compareSprint2}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={compareSprint2}
+                onChange={(e) => setCompareSprint2(e.target.value)}
+                className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+              >
+                <option value="">Select sprint...</option>
+                {completedSprintsForCompare.map((s) => (
+                  <option key={s.id} value={s.name} disabled={s.name === compareSprint1}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {comparisonData ? (
+              <div className="space-y-2">
+                <div className="grid grid-cols-[1fr_80px_40px_80px] items-center gap-2 px-1 pb-2 text-[10px] font-medium uppercase tracking-wider text-[#6B7280]">
+                  <span>Metric</span>
+                  <span className="text-center">{compareSprint1}</span>
+                  <span />
+                  <span className="text-center">{compareSprint2}</span>
+                </div>
+                {([
+                  { label: "Tasks Completed", v1: comparisonData.s1.completed, v2: comparisonData.s2.completed, unit: "", invert: false },
+                  { label: "Velocity", v1: comparisonData.s1.velocity, v2: comparisonData.s2.velocity, unit: " tasks", invert: false },
+                  { label: "Avg Task Time", v1: comparisonData.s1.avgTime, v2: comparisonData.s2.avgTime, unit: "h", invert: true },
+                  { label: "Bugs Found", v1: comparisonData.s1.bugsFound, v2: comparisonData.s2.bugsFound, unit: "", invert: true },
+                ] as const).map((row) => {
+                  const diff = row.v2 - row.v1;
+                  const improved = row.invert ? diff < 0 : diff > 0;
+                  const regressed = row.invert ? diff > 0 : diff < 0;
+                  return (
+                    <div
+                      key={row.label}
+                      className="grid grid-cols-[1fr_80px_40px_80px] items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-3"
+                    >
+                      <span className="text-sm text-[#9CA3AF]">{row.label}</span>
+                      <span className="text-center text-sm font-semibold text-[#F5F5F5]">
+                        {row.v1}{row.unit}
+                      </span>
+                      <span className="flex items-center justify-center">
+                        {diff === 0 ? (
+                          <span className="text-[10px] text-[#6B7280]">--</span>
+                        ) : improved ? (
+                          <TrendingUp className="h-4 w-4 text-[#10B981]" />
+                        ) : regressed ? (
+                          <TrendingDown className="h-4 w-4 text-[#EF4444]" />
+                        ) : null}
+                      </span>
+                      <span className="text-center text-sm font-semibold text-[#F5F5F5]">
+                        {row.v2}{row.unit}
+                      </span>
+                    </div>
+                  );
+                })}
+                {(() => {
+                  const d = comparisonData.s2.completed - comparisonData.s1.completed;
+                  return d !== 0 ? (
+                    <p className={`mt-2 text-center text-xs font-medium ${d > 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+                      {d > 0 ? "+" : ""}{d} task{Math.abs(d) !== 1 ? "s" : ""} completed {d > 0 ? "improvement" : "regression"}
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-center text-xs text-[#6B7280]">Same completion across both sprints</p>
+                  );
+                })()}
+              </div>
+            ) : (
+              <p className="py-8 text-center text-sm text-[#6B7280]">
+                Select two completed sprints to compare
+              </p>
+            )}
           </div>
         </div>
       )}
