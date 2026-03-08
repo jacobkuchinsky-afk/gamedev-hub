@@ -26,6 +26,7 @@ import {
   BookOpen,
   Sigma,
   Network,
+  Gamepad2,
 } from "lucide-react";
 import { getToolUsage } from "./layout";
 
@@ -209,6 +210,15 @@ const TOOLS: {
       "Visual state machine editor for game AI and character behavior. Drag states, connect transitions, and generate with AI.",
     color: "#F59E0B",
     category: "AI-Powered",
+  },
+  {
+    href: "/dashboard/tools/controls",
+    icon: Gamepad2,
+    name: "Input Mapper",
+    description:
+      "Design game control schemes with a visual keyboard, gamepad mapping, presets, and conflict detection.",
+    color: "#F59E0B",
+    category: "Game Design",
   },
 ];
 
