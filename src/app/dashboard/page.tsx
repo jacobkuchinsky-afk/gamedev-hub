@@ -37,6 +37,10 @@ import {
   Search,
   Zap,
   Award,
+  Timer,
+  Play,
+  Pause,
+  RotateCcw,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
 import {
@@ -249,6 +253,52 @@ const LAUNCH_ITEMS = [
   { id: "pl_support", label: "Set up support system" },
 ];
 
+interface GameJamState {
+  active: boolean;
+  projectId: string | null;
+  startTime: number;
+  durationMs: number;
+  theme: string;
+  phase: "start-coding" | "first-playable" | "polish" | "submit" | "done";
+}
+
+const JAM_PHASES = [
+  { id: "start-coding" as const, label: "Start Coding", pct: 0 },
+  { id: "first-playable" as const, label: "First Playable", pct: 33 },
+  { id: "polish" as const, label: "Polish", pct: 66 },
+  { id: "submit" as const, label: "Submit", pct: 100 },
+] as const;
+
+const JAM_DURATIONS = [
+  { label: "24 hours", ms: 24 * 60 * 60 * 1000 },
+  { label: "48 hours", ms: 48 * 60 * 60 * 1000 },
+  { label: "72 hours", ms: 72 * 60 * 60 * 1000 },
+] as const;
+
+function getJamState(): GameJamState | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem("gameforge_game_jam");
+  if (!raw) return null;
+  return JSON.parse(raw);
+}
+
+function saveJamState(state: GameJamState | null) {
+  if (!state) {
+    localStorage.removeItem("gameforge_game_jam");
+    return;
+  }
+  localStorage.setItem("gameforge_game_jam", JSON.stringify(state));
+}
+
+function formatJamTime(ms: number): string {
+  if (ms <= 0) return "00:00:00";
+  const totalSec = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSec / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+  return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
 function relativeTime(dateStr: string): string {
   const now = Date.now();
   const then = new Date(dateStr).getTime();
@@ -316,6 +366,15 @@ export default function DashboardPage() {
   const [badgeStats, setBadgeStats] = useState<ReturnType<typeof getGamificationStats>>({ projects: 0, bugs: 0, devlogs: 0, completedSprints: 0, toolsUsed: 0, aiUses: 0 });
   const [streak, setStreak] = useState<StreakData>({ lastActiveDate: "", currentStreak: 0, longestStreak: 0 });
 
+  const [showJamSetup, setShowJamSetup] = useState(false);
+  const [jamState, setJamState] = useState<GameJamState | null>(null);
+  const [jamTimeLeft, setJamTimeLeft] = useState("");
+  const [jamPct, setJamPct] = useState(0);
+  const [jamCustomHours, setJamCustomHours] = useState(48);
+  const [jamDurationMs, setJamDurationMs] = useState(48 * 60 * 60 * 1000);
+  const [jamThemeLoading, setJamThemeLoading] = useState(false);
+  const [jamTheme, setJamTheme] = useState("");
+
   const [weeklySummary, setWeeklySummary] = useState<{
     tasksCompleted: Task[];
     bugsClosed: BugType[];
@@ -339,12 +398,90 @@ export default function DashboardPage() {
     setLastBackup(ts);
     setBackupLoaded(true);
     setStreak(updateStreak());
+    setJamState(getJamState());
   }, []);
 
   const handleDismissWelcome = () => {
     setWelcomeDismissed(true);
     localStorage.setItem("gameforge_welcome_dismissed", "true");
   };
+
+  useEffect(() => {
+    if (!jamState?.active) return;
+    const tick = () => {
+      const elapsed = Date.now() - jamState.startTime;
+      const remaining = Math.max(0, jamState.durationMs - elapsed);
+      setJamTimeLeft(formatJamTime(remaining));
+      setJamPct(Math.min(100, Math.round((elapsed / jamState.durationMs) * 100)));
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [jamState]);
+
+  const generateJamTheme = useCallback(async () => {
+    setJamThemeLoading(true);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: "Generate one creative, unique game jam theme. Just the theme, 2-5 words max. Examples: 'Reverse Gravity', 'Only One Bullet', 'Unstable Ground'. Be creative and original. Return ONLY the theme, nothing else." }],
+          stream: false,
+          max_tokens: 32,
+          temperature: 1.0,
+        }),
+      });
+      const d = await response.json();
+      const content = d.choices?.[0]?.message?.content || d.choices?.[0]?.message?.reasoning || "Unexpected Connections";
+      setJamTheme(content.trim().replace(/^["']|["']$/g, ""));
+    } catch {
+      setJamTheme("Unexpected Connections");
+    } finally {
+      setJamThemeLoading(false);
+    }
+  }, []);
+
+  const startGameJam = useCallback(() => {
+    const color = QC_COLORS[Math.floor(Math.random() * QC_COLORS.length)];
+    const created = addProject({
+      name: `Jam: ${jamTheme || "Untitled Jam"}`,
+      description: `Game Jam project. Theme: ${jamTheme || "None"}. Duration: ${Math.round(jamDurationMs / 3600000)}h.`,
+      engine: "Unity",
+      genre: "Other",
+      status: "prototype",
+      coverColor: color,
+    });
+
+    const state: GameJamState = {
+      active: true,
+      projectId: created.id,
+      startTime: Date.now(),
+      durationMs: jamDurationMs,
+      theme: jamTheme || "Freestyle",
+      phase: "start-coding",
+    };
+    saveJamState(state);
+    setJamState(state);
+    setShowJamSetup(false);
+  }, [jamTheme, jamDurationMs]);
+
+  const advanceJamPhase = useCallback((phase: GameJamState["phase"]) => {
+    if (!jamState) return;
+    const updated = { ...jamState, phase };
+    saveJamState(updated);
+    setJamState(updated);
+  }, [jamState]);
+
+  const endGameJam = useCallback(() => {
+    saveJamState(null);
+    setJamState(null);
+    setJamTheme("");
+  }, []);
 
   const generateStandup = async () => {
     setStandupLoading(true);
@@ -784,20 +921,127 @@ export default function DashboardPage() {
                 Here&apos;s what&apos;s happening with your games.
               </p>
             </div>
-            <button
-              onClick={generateStandup}
-              disabled={standupLoading}
-              className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-2.5 text-sm font-medium text-[#F5F5F5] transition-all hover:border-[#F59E0B]/30 hover:bg-[#1F1F1F] disabled:opacity-50"
-            >
-              {standupLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin text-[#F59E0B]" />
-              ) : (
-                <MessageSquare className="h-4 w-4 text-[#F59E0B]" />
+            <div className="flex items-center gap-2">
+              {!jamState?.active && (
+                <button
+                  onClick={() => {
+                    setShowJamSetup(true);
+                    if (!jamTheme) generateJamTheme();
+                  }}
+                  className="flex items-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-4 py-2.5 text-sm font-medium text-[#F59E0B] transition-all hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10"
+                >
+                  <Timer className="h-4 w-4" />
+                  Game Jam Mode
+                </button>
               )}
-              AI Standup
-            </button>
+              <button
+                onClick={generateStandup}
+                disabled={standupLoading}
+                className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-2.5 text-sm font-medium text-[#F5F5F5] transition-all hover:border-[#F59E0B]/30 hover:bg-[#1F1F1F] disabled:opacity-50"
+              >
+                {standupLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-[#F59E0B]" />
+                ) : (
+                  <MessageSquare className="h-4 w-4 text-[#F59E0B]" />
+                )}
+                AI Standup
+              </button>
+            </div>
           </div>
         </>
+      )}
+
+      {/* Active Game Jam Banner */}
+      {jamState?.active && (
+        <div className="rounded-2xl border-2 border-[#F59E0B]/40 bg-gradient-to-br from-[#F59E0B]/10 via-[#1A1A1A] to-[#1A1A1A] overflow-hidden">
+          <div className="px-6 py-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="relative flex h-16 w-16 shrink-0 items-center justify-center">
+                  <div className="absolute inset-0 rounded-2xl bg-[#F59E0B]/15 animate-pulse" />
+                  <Timer className="relative h-8 w-8 text-[#F59E0B]" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-[#F59E0B]">Game Jam Mode</h2>
+                    <span className="rounded-full bg-[#F59E0B]/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#F59E0B] animate-pulse">
+                      LIVE
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-sm text-[#9CA3AF]">
+                    Theme: <span className="font-semibold text-[#F5F5F5]">{jamState.theme}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col items-end gap-2">
+                <div className="font-mono text-3xl font-extrabold tabular-nums text-[#F59E0B]">
+                  {jamTimeLeft}
+                </div>
+                <button
+                  onClick={endGameJam}
+                  className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10"
+                >
+                  <X className="h-3 w-3" />
+                  End Jam
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="text-[#9CA3AF]">Time Elapsed</span>
+                <span className="font-medium tabular-nums text-[#F59E0B]">{jamPct}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-[#2A2A2A]">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-[#F59E0B] to-[#EF4444] transition-all duration-1000"
+                  style={{ width: `${jamPct}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-4 gap-2">
+              {JAM_PHASES.map((phase) => {
+                const isCurrent = jamState.phase === phase.id;
+                const phaseIndex = JAM_PHASES.findIndex((p) => p.id === phase.id);
+                const currentIndex = JAM_PHASES.findIndex((p) => p.id === jamState.phase);
+                const isDone = phaseIndex < currentIndex;
+                return (
+                  <button
+                    key={phase.id}
+                    onClick={() => advanceJamPhase(phase.id)}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2.5 text-xs font-medium transition-all ${
+                      isCurrent
+                        ? "border-[#F59E0B] bg-[#F59E0B] text-black"
+                        : isDone
+                          ? "border-[#10B981]/40 bg-[#10B981]/10 text-[#10B981]"
+                          : "border-[#2A2A2A] bg-[#0F0F0F] text-[#6B7280] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                    }`}
+                  >
+                    {isDone && <CheckCircle2 className="h-3 w-3" />}
+                    {isCurrent && <Play className="h-3 w-3" />}
+                    {phase.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {jamState.projectId && (
+              <div className="mt-3 flex items-center justify-between">
+                <p className="text-xs text-[#6B7280]">
+                  Project created for this jam
+                </p>
+                <Link
+                  href={`/dashboard/projects/${jamState.projectId}`}
+                  className="flex items-center gap-1.5 text-xs font-medium text-[#F59E0B] transition-colors hover:text-[#FBBF24]"
+                >
+                  Open Project <ChevronRight className="h-3 w-3" />
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Stats */}
@@ -1415,6 +1659,106 @@ export default function DashboardPage() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Game Jam Setup Modal */}
+      {showJamSetup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowJamSetup(false)} />
+          <div className="relative w-full max-w-md rounded-2xl border border-[#F59E0B]/30 bg-[#1A1A1A] p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#F59E0B]/10">
+                  <Timer className="h-4 w-4 text-[#F59E0B]" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold">Game Jam Mode</h2>
+                  <p className="text-xs text-[#6B7280]">Set up your jam and start building</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowJamSetup(false)}
+                className="rounded-lg p-1.5 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-xl border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-4">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#F59E0B]">Your Jam Theme</p>
+                  <button
+                    onClick={generateJamTheme}
+                    disabled={jamThemeLoading}
+                    className="flex items-center gap-1 text-[11px] text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
+                  >
+                    {jamThemeLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                    Reroll
+                  </button>
+                </div>
+                <p className="text-lg font-bold text-[#F5F5F5]">
+                  {jamThemeLoading ? "Generating..." : jamTheme || "Loading..."}
+                </p>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-medium text-[#9CA3AF]">Jam Duration</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {JAM_DURATIONS.map((d) => (
+                    <button
+                      key={d.ms}
+                      onClick={() => {
+                        setJamDurationMs(d.ms);
+                        setJamCustomHours(d.ms / 3600000);
+                      }}
+                      className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
+                        jamDurationMs === d.ms
+                          ? "border-[#F59E0B] bg-[#F59E0B]/10 text-[#F59E0B]"
+                          : "border-[#2A2A2A] bg-[#0F0F0F] text-[#9CA3AF] hover:border-[#F59E0B]/30"
+                      }`}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-xs text-[#6B7280]">Custom:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={168}
+                    value={jamCustomHours}
+                    onChange={(e) => {
+                      const h = parseInt(e.target.value) || 1;
+                      setJamCustomHours(h);
+                      setJamDurationMs(h * 3600000);
+                    }}
+                    className="w-20 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-2.5 py-1.5 text-sm text-[#F5F5F5] outline-none transition-colors focus:border-[#F59E0B]/50"
+                  />
+                  <span className="text-xs text-[#6B7280]">hours</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowJamSetup(false)}
+                className="rounded-lg border border-[#2A2A2A] px-4 py-2.5 text-sm text-[#9CA3AF] transition-colors hover:text-[#F5F5F5]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={startGameJam}
+                disabled={jamThemeLoading || !jamTheme}
+                className="flex items-center gap-2 rounded-lg bg-[#F59E0B] px-5 py-2.5 text-sm font-semibold text-[#0F0F0F] transition-all hover:bg-[#F59E0B]/90 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Play className="h-4 w-4" />
+                Start Jam
+              </button>
+            </div>
           </div>
         </div>
       )}
