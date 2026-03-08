@@ -249,7 +249,7 @@ export default function TaskBoardPage() {
   const [taskExportOpen, setTaskExportOpen] = useState(false);
   const taskExportRef = useRef<HTMLDivElement>(null);
 
-  const [viewMode, setViewMode] = useState<"board" | "list">("board");
+  const [viewMode, setViewMode] = useState<"board" | "list" | "matrix">("board");
   const [listSortField, setListSortField] = useState<string>("priority");
   const [listSortDir, setListSortDir] = useState<"asc" | "desc">("asc");
 
@@ -1190,6 +1190,14 @@ export default function TaskBoardPage() {
                 title="List view"
               >
                 <List className="h-4 w-4" />
+              </button>
+              <div className="h-5 w-px bg-[#2A2A2A]" />
+              <button
+                onClick={() => setViewMode("matrix")}
+                className={`p-2 transition-colors ${viewMode === "matrix" ? "bg-[#F59E0B]/15 text-[#F59E0B]" : "text-[#6B7280] hover:text-[#F5F5F5] hover:bg-[#1F1F1F]"}`}
+                title="Priority Matrix"
+              >
+                <Target className="h-4 w-4" />
               </button>
             </div>
           </div>
@@ -2442,6 +2450,130 @@ export default function TaskBoardPage() {
           </div>
         </div>
       )}
+
+      {/* Priority Matrix */}
+      {viewMode === "matrix" && (() => {
+        const isHighPriority = (t: Task) => t.priority === "critical" || t.priority === "high";
+        const isUrgent = (t: Task) => {
+          if (!t.dueDate) return false;
+          const now = new Date();
+          now.setHours(0, 0, 0, 0);
+          const due = new Date(t.dueDate + "T00:00:00");
+          const diff = Math.round((due.getTime() - now.getTime()) / 86400000);
+          return diff <= 3;
+        };
+
+        const activeTasks = sortedFilteredTasks.filter((t) => t.status !== "done");
+        const q1 = activeTasks.filter((t) => isHighPriority(t) && isUrgent(t));
+        const q2 = activeTasks.filter((t) => isHighPriority(t) && !isUrgent(t));
+        const q3 = activeTasks.filter((t) => !isHighPriority(t) && isUrgent(t));
+        const q4 = activeTasks.filter((t) => !isHighPriority(t) && !isUrgent(t));
+
+        const quadrants = [
+          { label: "Do First", subtitle: "Urgent + Important", tasks: q1, border: "#EF4444", bg: "rgba(239,68,68,0.04)" },
+          { label: "Schedule", subtitle: "Important, Not Urgent", tasks: q2, border: "#F59E0B", bg: "rgba(245,158,11,0.04)" },
+          { label: "Delegate", subtitle: "Urgent, Not Important", tasks: q3, border: "#3B82F6", bg: "rgba(59,130,246,0.04)" },
+          { label: "Eliminate", subtitle: "Neither", tasks: q4, border: "#6B7280", bg: "rgba(107,114,128,0.04)" },
+        ];
+
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs text-[#6B7280]">
+                <Target className="h-3.5 w-3.5 text-[#F59E0B]" />
+                <span>{activeTasks.length} active task{activeTasks.length !== 1 ? "s" : ""}</span>
+                <span className="text-[#2A2A2A]">|</span>
+                <span>Urgent = due within 3 days</span>
+                <span className="text-[#2A2A2A]">|</span>
+                <span>Important = critical/high priority</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {quadrants.map((q) => (
+                <div
+                  key={q.label}
+                  className="rounded-xl border bg-[#1A1A1A] overflow-hidden"
+                  style={{ borderColor: `${q.border}40` }}
+                >
+                  <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: q.bg }}>
+                    <div>
+                      <h3 className="text-sm font-semibold" style={{ color: q.border }}>{q.label}</h3>
+                      <p className="text-[10px] text-[#6B7280]">{q.subtitle}</p>
+                    </div>
+                    <span
+                      className="rounded-full px-2 py-0.5 text-xs font-semibold"
+                      style={{ backgroundColor: `${q.border}15`, color: q.border }}
+                    >
+                      {q.tasks.length}
+                    </span>
+                  </div>
+                  <div className="min-h-[120px] p-2 space-y-1.5">
+                    {q.tasks.length === 0 ? (
+                      <div className="flex items-center justify-center py-8 text-xs text-[#4B5563]">
+                        No tasks
+                      </div>
+                    ) : (
+                      q.tasks.map((task) => {
+                        const dueDateInfo = getDueDateInfo(task.dueDate);
+                        return (
+                          <div
+                            key={task.id}
+                            className="flex items-start gap-2 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 transition-colors hover:border-[#3A3A3A]"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-medium text-[#F5F5F5] leading-tight">{task.title}</p>
+                              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                <span
+                                  className="rounded px-1.5 py-0.5 text-[10px] font-medium"
+                                  style={{
+                                    backgroundColor: `${getPriorityColor(task.priority)}15`,
+                                    color: getPriorityColor(task.priority),
+                                  }}
+                                >
+                                  {task.priority}
+                                </span>
+                                <span
+                                  className="rounded px-1.5 py-0.5 text-[10px] font-medium"
+                                  style={{
+                                    backgroundColor: `${COLUMNS.find((c) => c.key === task.status)?.color || "#6B7280"}15`,
+                                    color: COLUMNS.find((c) => c.key === task.status)?.color || "#6B7280",
+                                  }}
+                                >
+                                  {COLUMNS.find((c) => c.key === task.status)?.label || task.status}
+                                </span>
+                                {dueDateInfo && (
+                                  <span
+                                    className={`flex items-center gap-1 text-[10px] ${
+                                      dueDateInfo.urgency === "overdue"
+                                        ? "text-[#EF4444]"
+                                        : dueDateInfo.urgency === "urgent"
+                                          ? "text-[#F59E0B]"
+                                          : "text-[#6B7280]"
+                                    }`}
+                                  >
+                                    <Clock className="h-2.5 w-2.5" />
+                                    {dueDateInfo.label}
+                                  </span>
+                                )}
+                                {task.assignee && (
+                                  <span className="flex items-center gap-1 text-[10px] text-[#6B7280]">
+                                    <User className="h-2.5 w-2.5" />
+                                    {task.assignee}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Kanban Board */}
       {viewMode === "board" && <div className="grid gap-4 lg:grid-cols-4">

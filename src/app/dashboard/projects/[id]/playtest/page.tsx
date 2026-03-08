@@ -203,6 +203,11 @@ export default function PlaytestPage() {
   const [testPlanLoading, setTestPlanLoading] = useState(false);
   const [showTestPlan, setShowTestPlan] = useState(false);
 
+  const [sessionPlan, setSessionPlan] = useState("");
+  const [sessionPlanLoading, setSessionPlanLoading] = useState(false);
+  const [showSessionPlan, setShowSessionPlan] = useState(false);
+  const [sessionPlanCopied, setSessionPlanCopied] = useState(false);
+
   const [sessions, setSessions] = useState<PlaytestSession[]>([]);
   const [showSessionForm, setShowSessionForm] = useState(false);
   const [filterSessionId, setFilterSessionId] = useState<string | "all">("all");
@@ -362,6 +367,44 @@ export default function PlaytestPage() {
     } finally {
       setTestPlanLoading(false);
     }
+  };
+
+  const handleAiSessionPlan = async () => {
+    if (!project) return;
+    setSessionPlanLoading(true);
+    setShowSessionPlan(true);
+    try {
+      const prompt = `Plan a 30-minute playtest session for a ${project.genre} game in ${project.status} stage. Include: what to test (5 areas), what to observe, what questions to ask after, success metrics, and things NOT to help the player with. Be practical and brief.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      setSessionPlan(content || "Could not generate a session plan. Try again later.");
+    } catch {
+      setSessionPlan("Failed to generate session plan. Check your connection and try again.");
+    } finally {
+      setSessionPlanLoading(false);
+    }
+  };
+
+  const copySessionPlan = () => {
+    if (!sessionPlan) return;
+    navigator.clipboard.writeText(sessionPlan).then(() => {
+      setSessionPlanCopied(true);
+      setTimeout(() => setSessionPlanCopied(false), 2000);
+    });
   };
 
   const toggleTestStatus = (id: string, status: TestCase["status"]) => {
@@ -623,6 +666,18 @@ export default function PlaytestPage() {
               </button>
             </div>
             <button
+              onClick={handleAiSessionPlan}
+              disabled={sessionPlanLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {sessionPlanLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ClipboardList className="h-4 w-4" />
+              )}
+              AI Plan Session
+            </button>
+            <button
               onClick={handleAiQuestions}
               disabled={aiQuestionsLoading}
               className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -715,6 +770,85 @@ export default function PlaytestPage() {
             </div>
           ) : (
             <div className="text-sm leading-relaxed text-[#D1D5DB] whitespace-pre-wrap">{aiQuestions}</div>
+          )}
+        </div>
+      )}
+
+      {/* ─── AI SESSION PLAN PANEL ─── */}
+      {showSessionPlan && (
+        <div className="rounded-xl border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <ClipboardList className="h-4 w-4 text-[#F59E0B]" />
+              <h3 className="text-sm font-semibold text-[#F59E0B]">AI Session Plan</h3>
+              <span className="rounded bg-[#F59E0B]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B]">
+                30 min &middot; {project.genre} &middot; {project.status}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {sessionPlan && !sessionPlanLoading && (
+                <button
+                  onClick={copySessionPlan}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    sessionPlanCopied
+                      ? "bg-[#10B981]/10 text-[#10B981]"
+                      : "bg-[#F59E0B]/10 text-[#F59E0B] hover:bg-[#F59E0B]/20"
+                  }`}
+                >
+                  {sessionPlanCopied ? (
+                    <>
+                      <Check className="h-3.5 w-3.5" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <ClipboardCopy className="h-3.5 w-3.5" />
+                      Copy Plan
+                    </>
+                  )}
+                </button>
+              )}
+              <button
+                onClick={() => setShowSessionPlan(false)}
+                className="rounded p-1 text-[#6B7280] transition-colors hover:text-[#9CA3AF]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+          {sessionPlanLoading ? (
+            <div className="flex items-center gap-3 py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-[#F59E0B]" />
+              <span className="text-sm text-[#9CA3AF]">Planning your playtest session...</span>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {sessionPlan.split("\n").map((line, i) => {
+                const trimmed = line.trim();
+                if (!trimmed) return null;
+                const isHeading = /^#{1,3}\s/.test(trimmed) || /^\*\*[^*]+\*\*\s*$/.test(trimmed);
+                const isBullet = /^[-*]\s/.test(trimmed) || /^\d+[\.\)]\s/.test(trimmed);
+                if (isHeading) {
+                  return (
+                    <p key={i} className="mt-3 text-xs font-semibold uppercase tracking-wider text-[#F59E0B]">
+                      {trimmed.replace(/^#{1,3}\s+/, "").replace(/\*\*/g, "")}
+                    </p>
+                  );
+                }
+                if (isBullet) {
+                  const content = trimmed.replace(/^[-*]\s+/, "").replace(/^\d+[\.\)]\s+/, "");
+                  return (
+                    <div key={i} className="flex items-start gap-2 py-0.5 pl-1">
+                      <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#F59E0B]/40" />
+                      <span className="text-sm leading-relaxed text-[#D1D5DB]">{content}</span>
+                    </div>
+                  );
+                }
+                return (
+                  <p key={i} className="text-sm leading-relaxed text-[#D1D5DB]">{trimmed}</p>
+                );
+              })}
+            </div>
           )}
         </div>
       )}
