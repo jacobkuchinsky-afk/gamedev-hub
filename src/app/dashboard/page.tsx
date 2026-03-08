@@ -54,6 +54,7 @@ import {
   getSeverityColor,
   getMoodEmoji,
   addProject,
+  addTask,
   type Project,
   type Task,
   type Bug as BugType,
@@ -392,6 +393,10 @@ export default function DashboardPage() {
     message: "",
   });
 
+  const [quickTaskName, setQuickTaskName] = useState("");
+  const [quickTaskProjectId, setQuickTaskProjectId] = useState("");
+  const [quickTaskConfirm, setQuickTaskConfirm] = useState<string | null>(null);
+
   useEffect(() => {
     const dismissed = localStorage.getItem("gameforge_welcome_dismissed") === "true";
     setWelcomeDismissed(dismissed);
@@ -540,6 +545,27 @@ export default function DashboardPage() {
     setStandupLoading(false);
   };
 
+  const handleQuickTask = useCallback(() => {
+    if (!quickTaskName.trim() || !quickTaskProjectId) return;
+    const projects = getProjects();
+    const proj = projects.find((p) => p.id === quickTaskProjectId);
+    if (!proj) return;
+
+    addTask({
+      projectId: quickTaskProjectId,
+      title: quickTaskName.trim(),
+      description: "",
+      status: "todo",
+      priority: "medium",
+      sprint: "",
+      assignee: "",
+    });
+
+    setQuickTaskName("");
+    setQuickTaskConfirm(proj.name);
+    setTimeout(() => setQuickTaskConfirm(null), 2500);
+  }, [quickTaskName, quickTaskProjectId]);
+
   useEffect(() => {
     const projects = getProjects();
     const tasks = getTasks();
@@ -547,6 +573,9 @@ export default function DashboardPage() {
     const devlog = getDevlog();
 
     setTotalProjects(projects.length);
+    if (projects.length > 0 && !quickTaskProjectId) {
+      setQuickTaskProjectId(projects[0].id);
+    }
     const projectMap = Object.fromEntries(projects.map((p) => [p.id, p.name]));
 
     setAllProjects(
@@ -1085,6 +1114,49 @@ export default function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      {/* Quick Task */}
+      {allProjects.length > 0 && (
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+              <Zap className="h-4 w-4 text-[#F59E0B]" />
+            </div>
+            <div className="flex flex-1 items-center gap-2">
+              <input
+                type="text"
+                value={quickTaskName}
+                onChange={(e) => setQuickTaskName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleQuickTask(); }}
+                placeholder="Quick task... press Enter to add"
+                className="flex-1 bg-transparent text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none"
+              />
+              <select
+                value={quickTaskProjectId}
+                onChange={(e) => setQuickTaskProjectId(e.target.value)}
+                className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-2.5 py-1.5 text-xs text-[#9CA3AF] outline-none transition-colors focus:border-[#F59E0B]/50"
+              >
+                {allProjects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleQuickTask}
+                disabled={!quickTaskName.trim() || !quickTaskProjectId}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#F59E0B] text-[#0F0F0F] transition-all hover:bg-[#F59E0B]/90 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          {quickTaskConfirm && (
+            <div className="mt-2 flex items-center gap-1.5 pl-11">
+              <CheckCircle2 className="h-3.5 w-3.5 text-[#10B981]" />
+              <span className="text-xs text-[#10B981]">Task added to {quickTaskConfirm}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Dev Streak */}
       <div className="rounded-2xl border border-[#F59E0B]/20 bg-gradient-to-r from-[#F59E0B]/8 via-[#1A1A1A] to-[#1A1A1A] overflow-hidden">
