@@ -794,21 +794,23 @@ export default function DevlogPage() {
       <div className="space-y-1">
         {filtered.length === 0 && (
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-16 text-center">
-            <BookOpen className="mx-auto h-12 w-12 text-[#F59E0B]/30" />
+            <BookOpen className="mx-auto h-12 w-12 text-[#F59E0B]/50" />
             {entries.length === 0 ? (
               <>
-                <p className="mt-4 text-base font-semibold text-[#F5F5F5]">
-                  Start your devlog journey
+                <p className="mt-4 text-lg font-semibold text-[#F5F5F5]">
+                  No devlog entries yet. Start documenting your game development journey!
                 </p>
-                <p className="mt-1 text-sm text-[#6B7280]">
-                  Every day counts. Document your progress, wins, and blockers.
-                </p>
+                <ul className="mt-3 flex flex-wrap justify-center gap-x-6 gap-y-1 text-sm text-[#9CA3AF]">
+                  <li>Track progress</li>
+                  <li>Share reflections</li>
+                  <li>Build a development story</li>
+                </ul>
                 <button
                   onClick={() => setShowModal(true)}
-                  className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-[#D97706]"
+                  className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#F59E0B] px-6 py-3 text-base font-semibold text-black transition-colors hover:bg-[#D97706]"
                 >
-                  <Plus className="h-4 w-4" />
-                  Write your first entry
+                  <Plus className="h-5 w-5" />
+                  Write Entry
                 </button>
               </>
             ) : (
