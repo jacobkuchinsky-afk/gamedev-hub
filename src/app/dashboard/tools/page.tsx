@@ -27,6 +27,7 @@ import {
   Sigma,
   Network,
   Gamepad2,
+  Layout,
 } from "lucide-react";
 import { getToolUsage } from "./layout";
 
@@ -219,6 +220,15 @@ const TOOLS: {
       "Design game control schemes with a visual keyboard, gamepad mapping, presets, and conflict detection.",
     color: "#F59E0B",
     category: "Game Design",
+  },
+  {
+    href: "/dashboard/tools/uimockup",
+    icon: Layout,
+    name: "UI Mockup Builder",
+    description:
+      "Design game HUD and menu layouts with drag-and-drop elements, presets for platformer/RPG/FPS, and JSON export.",
+    color: "#F59E0B",
+    category: "Art & Design",
   },
 ];
 
