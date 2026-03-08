@@ -30,6 +30,7 @@ import {
   Clock,
   ChevronUp,
   Download,
+  Printer,
 } from "lucide-react";
 import {
   getProject,
@@ -409,6 +410,13 @@ export default function AssetPipelinePage() {
                 </button>
               ))}
             </div>
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] px-4 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+            >
+              <Printer className="h-4 w-4" />
+              Print
+            </button>
             {assets.length > 0 && (
               <button
                 onClick={() => {

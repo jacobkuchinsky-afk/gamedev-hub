@@ -40,6 +40,7 @@ import {
   DollarSign,
   MousePointerClick,
   Star,
+  Printer,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -1210,6 +1211,13 @@ export default function LaunchChecklistPage() {
             >
               <Download className="h-3.5 w-3.5" />
               Export Checklist
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Print
             </button>
             <button
               onClick={handleReset}
