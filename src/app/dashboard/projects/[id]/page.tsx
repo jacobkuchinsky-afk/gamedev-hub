@@ -1825,6 +1825,28 @@ export default function ProjectDetailPage() {
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     .slice(0, 5);
 
+  const activityHeatMap = useMemo(() => {
+    const days: { date: string; count: number; label: string }[] = [];
+    const now = new Date();
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      let count = 0;
+      tasks.forEach((t) => { if (t.created_at.slice(0, 10) === key) count++; });
+      bugs.forEach((b) => { if (b.created_at.slice(0, 10) === key) count++; });
+      devlog.forEach((e) => { if (e.date.slice(0, 10) === key) count++; });
+      days.push({
+        date: key,
+        count,
+        label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      });
+    }
+    return days;
+  }, [tasks, bugs, devlog]);
+
+  const activeDaysCount = activityHeatMap.filter((d) => d.count > 0).length;
+
   const tabs: { key: Tab; label: string; href?: string; icon: typeof ListTodo }[] = [
     { key: "overview", label: "Overview", icon: ChevronRight },
     { key: "tasks", label: "Tasks", href: `/dashboard/projects/${projectId}/tasks`, icon: ListTodo },
@@ -3355,6 +3377,63 @@ export default function ProjectDetailPage() {
           <span>{inProgressTasks} in progress</span>
           <span>{tasks.filter((t) => t.status === "testing").length} testing</span>
           <span>{doneTasks} done</span>
+        </div>
+      </div>
+
+      {/* Activity Heat Map */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-[#F59E0B]" />
+            <span className="text-sm font-semibold text-[#D1D5DB]">Activity</span>
+          </div>
+          <span className="text-xs text-[#6B7280]">
+            {activeDaysCount} active day{activeDaysCount !== 1 ? "s" : ""} in the last 30
+          </span>
+        </div>
+        <div className="flex items-start gap-5">
+          <div className="inline-grid grid-cols-10 gap-[4px]">
+            {activityHeatMap.map((day) => (
+              <div
+                key={day.date}
+                className="group relative h-[18px] w-[18px] rounded-[3px] cursor-default transition-all hover:ring-1 hover:ring-white/20"
+                style={{
+                  backgroundColor:
+                    day.count === 0
+                      ? "#1F1F1F"
+                      : day.count === 1
+                        ? "#422006"
+                        : day.count <= 3
+                          ? "#78350F"
+                          : "#F59E0B",
+                }}
+              >
+                <div className="pointer-events-none absolute -top-8 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md border border-[#2A2A2A] bg-[#0F0F0F] px-2 py-1 text-[10px] text-[#D1D5DB] opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+                  {day.label}: {day.count} {day.count === 1 ? "event" : "events"}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-col items-end justify-center ml-auto">
+            <p className="text-2xl font-extrabold tabular-nums text-[#F59E0B]">
+              {activityHeatMap.reduce((s, d) => s + d.count, 0)}
+            </p>
+            <p className="text-[11px] text-[#6B7280]">events / 30 days</p>
+          </div>
+        </div>
+        <div className="mt-2.5 flex items-center gap-1.5">
+          <span className="text-[10px] text-[#6B7280]">Less</span>
+          {[0, 1, 2, 3].map((level) => (
+            <div
+              key={level}
+              className="h-2.5 w-2.5 rounded-[2px]"
+              style={{
+                backgroundColor:
+                  level === 0 ? "#1F1F1F" : level === 1 ? "#422006" : level === 2 ? "#78350F" : "#F59E0B",
+              }}
+            />
+          ))}
+          <span className="text-[10px] text-[#6B7280]">More</span>
         </div>
       </div>
 
