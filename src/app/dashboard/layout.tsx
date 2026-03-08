@@ -872,6 +872,11 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                         {pendingCount}
                       </span>
                     )}
+                    {item.label === "Tools" && (
+                      <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#F59E0B] px-1 text-[10px] font-bold leading-none text-[#0F0F0F]">
+                        23
+                      </span>
+                    )}
                   </Link>
                   <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md bg-[#2A2A2A] px-2.5 py-1.5 text-xs font-medium text-[#F5F5F5] opacity-0 shadow-lg transition-opacity duration-150 group-hover/tip:opacity-100">
                     {item.label}
