@@ -31,9 +31,11 @@ import {
   Play,
   Pause,
   RotateCcw,
+  CheckSquare,
+  AlertTriangle,
 } from "lucide-react";
 import { AuthProvider, useAuthContext } from "@/components/AuthProvider";
-import { getProjects, getStatusColor, getTasks, getBugs, validateStorage, type Project } from "@/lib/store";
+import { getProjects, getStatusColor, getTasks, getBugs, getDevlog, validateStorage, type Project, type Task, type Bug, type DevlogEntry } from "@/lib/store";
 import ShortcutsModal from "@/components/ShortcutsModal";
 import WhatsNew from "@/components/WhatsNew";
 import { ToastProvider } from "@/components/Toast";
@@ -249,12 +251,18 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [allBugs, setAllBugs] = useState<Bug[]>([]);
+  const [allDevlogs, setAllDevlogs] = useState<DevlogEntry[]>([]);
   const [recentPages, setRecentPages] = useState<Array<{ href: string; label: string; ts: number }>>([]);
 
   useEffect(() => {
     if (open) {
       setQuery("");
       setProjects(getProjects());
+      setAllTasks(getTasks());
+      setAllBugs(getBugs());
+      setAllDevlogs(getDevlog());
       try {
         setRecentPages(JSON.parse(localStorage.getItem("gameforge_recent_pages") || "[]"));
       } catch { setRecentPages([]); }
@@ -263,13 +271,12 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
   }, [open]);
 
   const lq = query.toLowerCase();
+  const MAX = 3;
+
+  const projectName = (id: string) => projects.find((p) => p.id === id)?.name || "Unknown";
 
   const filteredStatic = CMD_ITEMS.filter(
     (item) => !query || item.label.toLowerCase().includes(lq)
-  );
-
-  const filteredProjects = projects.filter(
-    (p) => !query || p.name.toLowerCase().includes(lq) || p.engine.toLowerCase().includes(lq) || p.genre.toLowerCase().includes(lq)
   );
 
   const sections = filteredStatic.reduce<Record<string, typeof CMD_ITEMS>>((acc, item) => {
@@ -277,14 +284,40 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
     return acc;
   }, {});
 
-  const allEmpty = filteredStatic.length === 0 && filteredProjects.length === 0;
+  if (query) {
+    for (const key of Object.keys(sections)) {
+      sections[key] = sections[key].slice(0, MAX);
+    }
+  }
+
+  const filteredProjects = projects.filter(
+    (p) => !query || p.name.toLowerCase().includes(lq) || p.engine.toLowerCase().includes(lq) || p.genre.toLowerCase().includes(lq)
+  );
+  const limitedProjects = query ? filteredProjects.slice(0, MAX) : filteredProjects;
+
+  const filteredTasks = query
+    ? allTasks.filter((t) => t.title.toLowerCase().includes(lq)).slice(0, MAX)
+    : [];
+  const filteredBugs = query
+    ? allBugs.filter((b) => b.title.toLowerCase().includes(lq)).slice(0, MAX)
+    : [];
+  const filteredDevlogs = query
+    ? allDevlogs.filter((d) => d.title.toLowerCase().includes(lq)).slice(0, MAX)
+    : [];
 
   const showRecent = !query && recentPages.length > 0;
 
+  const navCount = Object.values(sections).reduce((s, items) => s + items.length, 0);
+  const totalResults = navCount + limitedProjects.length + filteredTasks.length + filteredBugs.length + filteredDevlogs.length;
+  const allEmpty = query.length > 0 && totalResults === 0;
+
   const allItems = [
     ...(showRecent ? recentPages.map((p) => p.href) : []),
-    ...filteredStatic.map((i) => i.href),
-    ...filteredProjects.map((p) => `/dashboard/projects/${p.id}`),
+    ...limitedProjects.map((p) => `/dashboard/projects/${p.id}`),
+    ...Object.values(sections).flat().map((i) => i.href),
+    ...filteredTasks.map((t) => `/dashboard/projects/${t.projectId}/tasks`),
+    ...filteredBugs.map((b) => `/dashboard/projects/${b.projectId}/bugs`),
+    ...filteredDevlogs.map((d) => `/dashboard/projects/${d.projectId}/devlog`),
   ];
 
   const go = (href: string) => {
@@ -312,21 +345,24 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
               if (e.key === "Escape") onClose();
               if (e.key === "Enter" && allItems.length > 0) go(allItems[0]);
             }}
-            placeholder="Search pages, tools, and projects..."
+            placeholder="Search everything..."
             className="flex-1 bg-transparent text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none"
           />
           <kbd className="rounded bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] text-[#6B7280]">ESC</kbd>
         </div>
         <div className="max-h-80 overflow-y-auto p-2">
           {allEmpty && (
-            <p className="px-3 py-6 text-center text-sm text-[#6B7280]">No results</p>
+            <p className="px-3 py-6 text-center text-sm text-[#6B7280]">
+              No results for &ldquo;{query}&rdquo;
+            </p>
           )}
+
           {showRecent && (
             <div>
               <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
                 Recent
               </p>
-              {recentPages.map((page) => (
+              {recentPages.slice(0, MAX).map((page) => (
                 <button
                   key={page.href}
                   onClick={() => go(page.href)}
@@ -338,12 +374,13 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
               ))}
             </div>
           )}
-          {filteredProjects.length > 0 && (
+
+          {limitedProjects.length > 0 && (
             <div>
               <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
                 Projects
               </p>
-              {filteredProjects.map((project) => (
+              {limitedProjects.map((project) => (
                 <button
                   key={project.id}
                   onClick={() => go(`/dashboard/projects/${project.id}`)}
@@ -361,6 +398,7 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
               ))}
             </div>
           )}
+
           {Object.entries(sections).map(([section, items]) => (
             <div key={section}>
               <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
@@ -378,7 +416,87 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
               ))}
             </div>
           ))}
+
+          {filteredTasks.length > 0 && (
+            <div>
+              <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                Tasks
+              </p>
+              {filteredTasks.map((task) => (
+                <button
+                  key={task.id}
+                  onClick={() => go(`/dashboard/projects/${task.projectId}/tasks`)}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
+                >
+                  <CheckSquare className="h-4 w-4 shrink-0" />
+                  <span className="flex-1 truncate text-left">
+                    <span className="text-[#6B7280]">Task:</span> {task.title}
+                  </span>
+                  <span className="shrink-0 rounded bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] text-[#6B7280]">
+                    {projectName(task.projectId)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {filteredBugs.length > 0 && (
+            <div>
+              <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                Bugs
+              </p>
+              {filteredBugs.map((bug) => (
+                <button
+                  key={bug.id}
+                  onClick={() => go(`/dashboard/projects/${bug.projectId}/bugs`)}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
+                >
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span className="flex-1 truncate text-left">
+                    <span className="text-[#6B7280]">Bug:</span> {bug.title}
+                  </span>
+                  <span className="shrink-0 rounded bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] text-[#6B7280]">
+                    {projectName(bug.projectId)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {filteredDevlogs.length > 0 && (
+            <div>
+              <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                Devlogs
+              </p>
+              {filteredDevlogs.map((entry) => (
+                <button
+                  key={entry.id}
+                  onClick={() => go(`/dashboard/projects/${entry.projectId}/devlog`)}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
+                >
+                  <BookOpen className="h-4 w-4 shrink-0" />
+                  <span className="flex-1 truncate text-left">
+                    <span className="text-[#6B7280]">Devlog:</span> {entry.title}
+                  </span>
+                  <span className="shrink-0 rounded bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] text-[#6B7280]">
+                    {projectName(entry.projectId)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+
+        {query && (
+          <div className="flex items-center justify-between border-t border-[#2A2A2A] px-4 py-2">
+            <span className="text-[11px] text-[#6B7280]">
+              {totalResults} result{totalResults !== 1 ? "s" : ""}
+            </span>
+            <span className="text-[10px] text-[#6B7280]">
+              <kbd className="rounded bg-[#0F0F0F] px-1 py-0.5 text-[10px]">Enter</kbd> to select
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
