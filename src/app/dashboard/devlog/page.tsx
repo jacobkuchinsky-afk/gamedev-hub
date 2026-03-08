@@ -183,6 +183,7 @@ export default function DevlogPage() {
   const [formMood, setFormMood] = useState<DevlogEntry["mood"]>("productive");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiTopicLoading, setAiTopicLoading] = useState(false);
+  const [aiTitleLoading, setAiTitleLoading] = useState(false);
   const [aiTopics, setAiTopics] = useState<string[]>([]);
   const [weeklySummary, setWeeklySummary] = useState("");
   const [weeklySummaryLoading, setWeeklySummaryLoading] = useState(false);
@@ -312,6 +313,33 @@ export default function DevlogPage() {
     } finally {
       setAiLoading(false);
     }
+  };
+
+  const handleAiTitle = async () => {
+    if (!formContent.trim() || aiTitleLoading) return;
+    setAiTitleLoading(true);
+    try {
+      const snippet = formContent.trim().slice(0, 100);
+      const prompt = `Suggest a catchy devlog title for this game development entry: '${snippet}'. Max 8 words. Just the title.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 128,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim().replace(/^["']|["']$/g, "");
+      if (content) setFormTitle(content);
+    } catch { /* silently fail */ }
+    finally { setAiTitleLoading(false); }
   };
 
   const handleAiTopics = async () => {
@@ -858,13 +886,28 @@ export default function DevlogPage() {
                   <label className="mb-1 block text-sm text-[#9CA3AF]">
                     Title
                   </label>
-                  <input
-                    type="text"
-                    placeholder="What did you work on?"
-                    value={formTitle}
-                    onChange={(e) => setFormTitle(e.target.value)}
-                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="What did you work on?"
+                      value={formTitle}
+                      onChange={(e) => setFormTitle(e.target.value)}
+                      className="min-w-0 flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAiTitle}
+                      disabled={!formContent.trim() || aiTitleLoading}
+                      title="AI suggest title from content"
+                      className="flex shrink-0 items-center justify-center rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 p-2.5 text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/15 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {aiTitleLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
 

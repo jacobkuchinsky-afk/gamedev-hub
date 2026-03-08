@@ -209,6 +209,7 @@ export default function TaskBoardPage() {
   const [filterTag, setFilterTag] = useState<TaskTag | "all">("all");
   const [aiDetailLoading, setAiDetailLoading] = useState(false);
   const [aiImprovingTitle, setAiImprovingTitle] = useState(false);
+  const [aiTagsLoading, setAiTagsLoading] = useState(false);
   const [editEstimate, setEditEstimate] = useState<Record<string, string>>({});
 
   const [sprints, setSprints] = useState<Sprint[]>([]);
@@ -401,6 +402,35 @@ export default function TaskBoardPage() {
     } finally {
       setAiImprovingTitle(false);
     }
+  };
+
+  const handleAiTags = async () => {
+    if (!newTitle.trim() || aiTagsLoading) return;
+    setAiTagsLoading(true);
+    try {
+      const prompt = `Suggest 1-3 tags for this game development task: '${newTitle.trim()}'. Choose from: UI, Gameplay, Art, Audio, Backend, Polish, Bugfix, Feature, Optimization. Return only the tag names separated by commas.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 128,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      if (content) {
+        const suggested = content.split(",").map((t: string) => t.trim()).filter((t: string) => ALL_TASK_TAGS.includes(t as TaskTag)).slice(0, 3) as TaskTag[];
+        if (suggested.length > 0) setNewTags(suggested);
+      }
+    } catch { /* silently fail */ }
+    finally { setAiTagsLoading(false); }
   };
 
   const handleAiSprintPlan = async () => {
@@ -2253,9 +2283,22 @@ export default function TaskBoardPage() {
                 </div>
               </div>
               <div>
-                <label className="mb-1.5 block text-xs text-[#6B7280]">
-                  Tags (max 3)
-                </label>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="text-xs text-[#6B7280]">Tags (max 3)</label>
+                  <button
+                    type="button"
+                    onClick={handleAiTags}
+                    disabled={!newTitle.trim() || aiTagsLoading}
+                    className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {aiTagsLoading ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3 w-3" />
+                    )}
+                    AI Tags
+                  </button>
+                </div>
                 <div className="flex flex-wrap gap-1.5">
                   {ALL_TASK_TAGS.map((tag) => {
                     const selected = newTags.includes(tag);
