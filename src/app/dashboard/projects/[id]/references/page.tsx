@@ -17,6 +17,8 @@ import {
   Copy,
   Check,
   Tags,
+  Gamepad2,
+  PlusCircle,
 } from "lucide-react";
 import {
   getProject,
@@ -54,6 +56,8 @@ export default function ReferenceBoardPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [categorizingProgress, setCategorizingProgress] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [similarGames, setSimilarGames] = useState<{ title: string; year: string; study: string; relation: string }[]>([]);
+  const [similarLoading, setSimilarLoading] = useState(false);
 
   const fetchAiSuggestions = async () => {
     if (!project) return;
@@ -144,6 +148,52 @@ export default function ReferenceBoardPage() {
     }
     setCategorizingProgress("Done!");
     setTimeout(() => setCategorizingProgress(null), 1500);
+  };
+
+  const fetchSimilarGames = async () => {
+    if (!project) return;
+    setSimilarLoading(true);
+    setSimilarGames([]);
+    try {
+      const prompt = `Recommend 5 indie games similar to '${project.name}', a ${project.genre || "general"} game described as: '${project.description || project.name}'. For each: game title, year, what to study from it, and how it relates. Return as JSON array: [{"title":"...","year":"...","study":"...","relation":"..."}]. Return ONLY raw JSON, no markdown.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const raw = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const jsonMatch = raw.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) return;
+      const parsed = JSON.parse(jsonMatch[0]);
+      setSimilarGames(parsed);
+    } catch {
+      // silently fail
+    } finally {
+      setSimilarLoading(false);
+    }
+  };
+
+  const addSimilarToReferences = (game: { title: string; year: string; study: string; relation: string }) => {
+    const ref = addReference({
+      projectId,
+      title: `${game.title} (${game.year})`,
+      url: `https://www.google.com/search?q=${encodeURIComponent(game.title + " indie game")}`,
+      category: "Gameplay" as ReferenceCategory,
+      notes: `Study: ${game.study}\n\nRelation: ${game.relation}`,
+      colorLabel: COLOR_OPTIONS[Math.floor(Math.random() * COLOR_OPTIONS.length)],
+    });
+    setReferences((prev) => [...prev, ref]);
+    setSimilarGames((prev) => prev.filter((g) => g.title !== game.title));
   };
 
   const handleExportMarkdown = () => {
@@ -328,6 +378,18 @@ export default function ReferenceBoardPage() {
               {aiLoading ? "Suggesting..." : "AI Suggest"}
             </button>
             <button
+              onClick={fetchSimilarGames}
+              disabled={similarLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-3 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20 disabled:opacity-50"
+            >
+              {similarLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Gamepad2 className="h-4 w-4" />
+              )}
+              {similarLoading ? "Finding..." : "AI Find Similar Games"}
+            </button>
+            <button
               onClick={handleExportMarkdown}
               disabled={references.length === 0}
               className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B] disabled:opacity-40"
@@ -406,6 +468,61 @@ export default function ReferenceBoardPage() {
           </button>
         ))}
       </div>
+
+      {/* Similar Games Recommendations */}
+      {(similarGames.length > 0 || similarLoading) && (
+        <div className="rounded-xl border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Gamepad2 className="h-4 w-4 text-[#F59E0B]" />
+              <h3 className="text-sm font-semibold text-[#F59E0B]">Similar Games</h3>
+            </div>
+            {similarGames.length > 0 && (
+              <button
+                onClick={() => setSimilarGames([])}
+                className="text-xs text-[#6B7280] hover:text-[#F5F5F5]"
+              >
+                Dismiss
+              </button>
+            )}
+          </div>
+          {similarLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-[#F59E0B]" />
+              <span className="ml-2 text-sm text-[#9CA3AF]">Finding similar games...</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {similarGames.map((game) => (
+                <div
+                  key={game.title}
+                  className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-semibold text-[#F5F5F5]">{game.title}</h4>
+                      <span className="text-xs text-[#6B7280]">{game.year}</span>
+                    </div>
+                    <button
+                      onClick={() => addSimilarToReferences(game)}
+                      className="shrink-0 rounded-md bg-[#F59E0B]/10 p-1.5 text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20"
+                      title="Add to references"
+                    >
+                      <PlusCircle className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-[#9CA3AF]">
+                    <span className="font-medium text-[#D1D5DB]">Study:</span> {game.study}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-[#9CA3AF]">
+                    <span className="font-medium text-[#D1D5DB]">Relates:</span> {game.relation}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Add Form Modal */}
       {showForm && (

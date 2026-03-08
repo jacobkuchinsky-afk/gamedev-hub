@@ -1674,6 +1674,7 @@ export default function ProjectDetailPage() {
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const [readmeLoading, setReadmeLoading] = useState(false);
@@ -1886,6 +1887,66 @@ export default function ProjectDetailPage() {
     a.click();
     URL.revokeObjectURL(url);
     setExportOpen(false);
+  }, [project, tasks, bugs, devlog, playtest, sprints, projectId]);
+
+  const handleExportEverything = useCallback(() => {
+    if (!project) return;
+    const gddRaw = localStorage.getItem(`gameforge_gdd_${projectId}`);
+    const launchRaw = localStorage.getItem(`gameforge_launch_${projectId}`);
+    const pillarsRaw = localStorage.getItem(`gameforge_pillars_${projectId}`);
+    const quickNotesRaw = localStorage.getItem(`gameforge_quicknotes_${projectId}`);
+    const featuresRaw = localStorage.getItem(`gameforge_features_${projectId}`);
+    const settingsRaw = localStorage.getItem(`gameforge_settings_${projectId}`);
+
+    const allData = {
+      meta: {
+        exportVersion: "1.0",
+        exportedAt: new Date().toISOString(),
+        exportType: "full",
+      },
+      project,
+      tasks,
+      bugs,
+      sprints,
+      devlog,
+      changelog: getChangelog(projectId),
+      gdd: gddRaw ? JSON.parse(gddRaw) : null,
+      references: getReferences(projectId),
+      assets: getAssets(projectId),
+      milestones: getMilestones(projectId),
+      launchChecklist: launchRaw ? JSON.parse(launchRaw) : {},
+      playtest,
+      featureIdeas: featuresRaw ? JSON.parse(featuresRaw) : [],
+      quickNotes: quickNotesRaw || "",
+      designPillars: pillarsRaw ? JSON.parse(pillarsRaw) : [],
+      projectSettings: settingsRaw ? JSON.parse(settingsRaw) : {},
+    };
+
+    let itemCount = 0;
+    itemCount += tasks.length;
+    itemCount += bugs.length;
+    itemCount += sprints.length;
+    itemCount += devlog.length;
+    itemCount += allData.changelog.length;
+    itemCount += allData.references.length;
+    itemCount += allData.assets.length;
+    itemCount += allData.milestones.length;
+    itemCount += playtest.length;
+    itemCount += allData.featureIdeas.length;
+    itemCount += allData.designPillars.length;
+    if (allData.gdd) itemCount += Object.keys(allData.gdd).length;
+    if (allData.quickNotes) itemCount += 1;
+
+    const blob = new Blob([JSON.stringify(allData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.name.replace(/\s+/g, "-").toLowerCase()}-full-export.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setExportOpen(false);
+    setExportMsg(`Exported ${itemCount} items`);
+    setTimeout(() => setExportMsg(null), 3000);
   }, [project, tasks, bugs, devlog, playtest, sprints, projectId]);
 
   const handleExportMarkdown = useCallback(() => {
@@ -2674,6 +2735,14 @@ export default function ProjectDetailPage() {
                       <Sparkles className="h-4 w-4 text-[#F59E0B]" />
                     )}
                     Generate README
+                  </button>
+                  <div className="mx-3 border-t border-[#2A2A2A]" />
+                  <button
+                    onClick={handleExportEverything}
+                    className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm text-[#D1D5DB] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                  >
+                    <Package className="h-4 w-4 text-[#10B981]" />
+                    Export Everything
                   </button>
                 </div>
               )}
@@ -3643,6 +3712,12 @@ export default function ProjectDetailPage() {
           </div>
         </div>
       </div>
+      {exportMsg && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg border border-[#10B981]/30 bg-[#1A1A1A] px-4 py-3 shadow-xl">
+          <Package className="h-4 w-4 text-[#10B981]" />
+          <span className="text-sm text-[#D1D5DB]">{exportMsg}</span>
+        </div>
+      )}
     </div>
   );
 }
