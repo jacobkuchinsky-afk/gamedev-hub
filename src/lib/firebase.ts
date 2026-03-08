@@ -9,6 +9,7 @@ import {
   updatePassword,
   EmailAuthProvider,
   reauthenticateWithCredential,
+  sendPasswordResetEmail,
   type User as FirebaseUser,
 } from "firebase/auth";
 
@@ -34,5 +35,6 @@ export {
   updatePassword,
   EmailAuthProvider,
   reauthenticateWithCredential,
+  sendPasswordResetEmail,
 };
 export type { FirebaseUser };
