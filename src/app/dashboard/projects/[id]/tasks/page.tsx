@@ -32,6 +32,8 @@ import {
   FileText,
   MessageSquare,
   Send,
+  Download,
+  ScrollText,
 } from "lucide-react";
 import {
   getProject,
@@ -237,6 +239,9 @@ export default function TaskBoardPage() {
   const [retroNotes, setRetroNotes] = useState<Record<string, { wentWell: string; didntGoWell: string; improve: string }>>({});
   const [aiRetroLoading, setAiRetroLoading] = useState(false);
 
+  const [taskExportOpen, setTaskExportOpen] = useState(false);
+  const taskExportRef = useRef<HTMLDivElement>(null);
+
   const handleConvertToBug = (taskId: string) => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
@@ -267,6 +272,16 @@ export default function TaskBoardPage() {
     if (p) setProject(p);
     reload();
   }, [projectId, reload]);
+
+  useEffect(() => {
+    function handleClickOutsideExport(e: MouseEvent) {
+      if (taskExportRef.current && !taskExportRef.current.contains(e.target as Node)) {
+        setTaskExportOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutsideExport);
+    return () => document.removeEventListener("mousedown", handleClickOutsideExport);
+  }, []);
 
   const defaultSprint = useMemo(() => {
     if (selectedSprint !== "all" && selectedSprint !== "backlog")
@@ -892,6 +907,52 @@ export default function TaskBoardPage() {
     });
   }, [tasks, filterPriority, filterTag, filterAssignee, sortBy, selectedSprint]);
 
+  const handleExportTasksJSON = useCallback(() => {
+    if (!project) return;
+    const exportData = tasks.map((t) => ({
+      title: t.title,
+      status: t.status,
+      priority: t.priority,
+      sprint: t.sprint,
+      assignee: t.assignee,
+      dueDate: t.dueDate || "",
+      loggedHours: t.loggedHours || 0,
+      tags: (t.tags || []).join(", "),
+    }));
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.name.replace(/\s+/g, "-").toLowerCase()}-tasks.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setTaskExportOpen(false);
+  }, [project, tasks]);
+
+  const handleExportTasksMarkdown = useCallback(() => {
+    if (!project) return;
+    const lines: string[] = [];
+    lines.push(`# ${project.name} — Tasks`);
+    lines.push("");
+    lines.push("| Title | Status | Priority | Sprint | Assignee | Due Date | Hours | Tags |");
+    lines.push("|-------|--------|----------|--------|----------|----------|-------|------|");
+    for (const t of tasks) {
+      lines.push(
+        `| ${t.title} | ${t.status} | ${t.priority} | ${t.sprint} | ${t.assignee} | ${t.dueDate || "—"} | ${t.loggedHours || 0} | ${(t.tags || []).join(", ") || "—"} |`
+      );
+    }
+    lines.push("");
+    lines.push(`*Exported ${new Date().toLocaleString()}*`);
+    const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.name.replace(/\s+/g, "-").toLowerCase()}-tasks.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setTaskExportOpen(false);
+  }, [project, tasks]);
+
   if (!project) return null;
 
   return (
@@ -979,6 +1040,35 @@ export default function TaskBoardPage() {
                 ))}
               </select>
               <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+            </div>
+            <div className="relative" ref={taskExportRef}>
+              <button
+                onClick={() => setTaskExportOpen(!taskExportOpen)}
+                className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export
+                <ChevronDown className={`h-3 w-3 transition-transform ${taskExportOpen ? "rotate-180" : ""}`} />
+              </button>
+              {taskExportOpen && (
+                <div className="absolute right-0 top-full z-50 mt-1.5 w-48 overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-xl">
+                  <button
+                    onClick={handleExportTasksMarkdown}
+                    className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm text-[#D1D5DB] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                  >
+                    <ScrollText className="h-4 w-4 text-[#3B82F6]" />
+                    Export as Markdown
+                  </button>
+                  <div className="mx-3 border-t border-[#2A2A2A]" />
+                  <button
+                    onClick={handleExportTasksJSON}
+                    className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm text-[#D1D5DB] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                  >
+                    <FileText className="h-4 w-4 text-[#F59E0B]" />
+                    Export as JSON
+                  </button>
+                </div>
+              )}
             </div>
             <button
               onClick={() => {

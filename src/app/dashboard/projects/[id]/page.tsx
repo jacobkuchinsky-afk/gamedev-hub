@@ -833,6 +833,8 @@ export default function ProjectDetailPage() {
   const [msDate, setMsDate] = useState("");
   const [msStatus, setMsStatus] = useState<Milestone["status"]>("upcoming");
 
+  const [aiMilestoneLoading, setAiMilestoneLoading] = useState(false);
+
   const [riskLoading, setRiskLoading] = useState(false);
   const [riskCards, setRiskCards] = useState<{ title: string; level: "High" | "Medium" | "Low"; description: string; mitigation: string }[] | null>(null);
   const [riskError, setRiskError] = useState<string | null>(null);
@@ -1380,6 +1382,62 @@ export default function ProjectDetailPage() {
     }
   }, [project, tasks, bugs, sprints, milestones, doneTasks, riskLoading]);
 
+  const suggestMilestones = useCallback(async () => {
+    if (!project || aiMilestoneLoading) return;
+    setAiMilestoneLoading(true);
+
+    const prompt = `Suggest 5 development milestones for a ${project.genre} game called '${project.name}' that is currently ${taskPct}% complete in ${project.status} stage. Include: milestone name, target date (from today ${new Date().toISOString().split("T")[0]}), and a one-line description. Format as JSON array: [{name, targetDate, description}]. Return ONLY the JSON array, no other text.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+
+      const result = await response.json();
+      const content =
+        result.choices?.[0]?.message?.content ||
+        result.choices?.[0]?.message?.reasoning ||
+        "";
+
+      if (!content) throw new Error("No response from AI");
+
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) throw new Error("Could not parse milestones");
+
+      const parsed: { name: string; targetDate: string; description: string }[] = JSON.parse(jsonMatch[0]);
+
+      for (const ms of parsed) {
+        if (ms.name && ms.targetDate) {
+          addMilestone({
+            projectId,
+            name: ms.name,
+            targetDate: ms.targetDate,
+            status: "upcoming",
+          });
+        }
+      }
+
+      setMilestones(getMilestones(projectId));
+    } catch {
+      // silently fail
+    } finally {
+      setAiMilestoneLoading(false);
+    }
+  }, [project, projectId, taskPct, aiMilestoneLoading]);
+
   const handleProjectSave = (updated: Project) => {
     setProject(updated);
   };
@@ -1808,13 +1866,27 @@ export default function ProjectDetailPage() {
             <Flag className="h-4 w-4" />
             Milestones
           </h2>
-          <button
-            onClick={() => setShowAddMilestone(!showAddMilestone)}
-            className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
-          >
-            <Plus className="h-3 w-3" />
-            Add Milestone
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={suggestMilestones}
+              disabled={aiMilestoneLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-1.5 text-xs text-[#F59E0B] transition-colors hover:border-[#F59E0B]/40 hover:bg-[#F59E0B]/10 disabled:opacity-50"
+            >
+              {aiMilestoneLoading ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Sparkles className="h-3 w-3" />
+              )}
+              AI Suggest Milestones
+            </button>
+            <button
+              onClick={() => setShowAddMilestone(!showAddMilestone)}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+            >
+              <Plus className="h-3 w-3" />
+              Add Milestone
+            </button>
+          </div>
         </div>
 
         {showAddMilestone && (
