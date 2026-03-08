@@ -137,6 +137,7 @@ const faqs = [
 export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [scrollOpacity, setScrollOpacity] = useState(1);
+  const [isScrolled, setIsScrolled] = useState(false);
   const [visibleSections, setVisibleSections] = useState<Record<number, boolean>>({});
   const sectionRefs = useRef<(HTMLElement | null)[]>([]);
   const setSectionRef = (i: number) => (el: HTMLElement | null) => {
@@ -147,6 +148,7 @@ export default function LandingPage() {
     const onScroll = () => {
       const opacity = Math.max(0, 1 - window.scrollY / 200);
       setScrollOpacity(opacity);
+      setIsScrolled(window.scrollY > 20);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -193,7 +195,13 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[#0F0F0F] text-[#F5F5F5]">
       {/* Nav */}
-      <nav className="sticky top-0 z-50 border-b border-[#2A2A2A] bg-[#0F0F0F]/80 backdrop-blur-xl">
+      <nav
+        className={`sticky top-0 z-50 transition-all duration-300 ease-out ${
+          isScrolled
+            ? "border-b border-[#2A2A2A] bg-[#0F0F0F]/80 backdrop-blur-xl"
+            : "border-b border-transparent bg-transparent"
+        }`}
+      >
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link href="/" className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F59E0B]/10">
