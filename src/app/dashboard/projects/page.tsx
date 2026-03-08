@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Plus,
   FolderKanban,
+  FolderOpen,
   ListTodo,
   Bug,
   LayoutGrid,
@@ -845,19 +846,19 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      {/* Empty state */}
+      {/* Empty state — no projects at all */}
       {filtered.length === 0 && projectData.length === 0 && (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-20">
-          <FolderKanban className="h-12 w-12 text-[#6B7280]" />
-          <p className="mt-4 text-lg font-medium text-[#9CA3AF]">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-24">
+          <FolderOpen className="h-12 w-12 text-[#F59E0B]/80" />
+          <p className="mt-5 text-lg font-medium text-[#F5F5F5]">
             No projects yet
           </p>
-          <p className="mt-1 text-sm text-[#6B7280]">
-            Create your first game project to get started
+          <p className="mt-2 max-w-sm text-center text-sm text-[#9CA3AF]">
+            Create your first game project to start tracking your development.
           </p>
           <Link
             href="/dashboard/projects/new"
-            className="mt-6 flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2.5 text-sm font-medium text-black transition-colors hover:bg-[#F59E0B]/90"
+            className="mt-8 flex items-center gap-2 rounded-lg bg-[#F59E0B] px-6 py-3 text-sm font-semibold text-black transition-colors hover:bg-[#F59E0B]/90"
           >
             <Plus className="h-4 w-4" />
             New Project
@@ -865,12 +866,22 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {/* No search results */}
-      {filtered.length === 0 && projectData.length > 0 && (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-16">
-          <Search className="h-10 w-10 text-[#6B7280]" />
-          <p className="mt-3 text-sm text-[#9CA3AF]">
-            No projects match &ldquo;{search}&rdquo;
+      {/* No search results — search active, filtered empty */}
+      {filtered.length === 0 && projectData.length > 0 && search.trim() && (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-20">
+          <Search className="h-12 w-12 text-[#6B7280]" />
+          <p className="mt-4 text-base font-medium text-[#9CA3AF]">
+            No projects match your search.
+          </p>
+        </div>
+      )}
+
+      {/* Filter excludes all (e.g. archived only, no archived) */}
+      {filtered.length === 0 && projectData.length > 0 && !search.trim() && (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-20">
+          <FolderOpen className="h-12 w-12 text-[#6B7280]" />
+          <p className="mt-4 text-base font-medium text-[#9CA3AF]">
+            No projects match your filters.
           </p>
         </div>
       )}
