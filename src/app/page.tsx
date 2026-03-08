@@ -236,6 +236,24 @@ export default function LandingPage() {
           </Link>
           {/* Desktop nav links */}
           <div className="hidden items-center gap-3 md:flex">
+            <a
+              href="#tools"
+              className="rounded-lg px-4 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
+            >
+              Tools
+            </a>
+            <a
+              href="#ai"
+              className="rounded-lg px-4 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
+            >
+              AI Features
+            </a>
+            <a
+              href="#pricing"
+              className="rounded-lg px-4 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
+            >
+              Pricing
+            </a>
             <Link
               href="/login"
               className="rounded-lg px-4 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:text-[#F5F5F5]"
@@ -266,10 +284,31 @@ export default function LandingPage() {
         {/* Mobile dropdown */}
         <div
           className={`overflow-hidden transition-all duration-200 ease-out md:hidden ${
-            mobileMenuOpen ? "max-h-32 opacity-100" : "max-h-0 opacity-0"
+            mobileMenuOpen ? "max-h-80 opacity-100" : "max-h-0 opacity-0"
           }`}
         >
           <div className="border-t border-[#2A2A2A] bg-[#0F0F0F] px-6 py-3">
+            <a
+              href="#tools"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block rounded-lg px-4 py-3 text-sm font-medium text-[#9CA3AF] transition-colors hover:bg-[#1A1A1A] hover:text-[#F59E0B]"
+            >
+              Tools
+            </a>
+            <a
+              href="#ai"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block rounded-lg px-4 py-3 text-sm font-medium text-[#9CA3AF] transition-colors hover:bg-[#1A1A1A] hover:text-[#F59E0B]"
+            >
+              AI Features
+            </a>
+            <a
+              href="#pricing"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block rounded-lg px-4 py-3 text-sm font-medium text-[#9CA3AF] transition-colors hover:bg-[#1A1A1A] hover:text-[#F59E0B]"
+            >
+              Pricing
+            </a>
             <Link
               href="/login"
               onClick={() => setMobileMenuOpen(false)}
@@ -435,6 +474,7 @@ export default function LandingPage() {
 
       {/* AI-Powered Section */}
       <section
+        id="ai"
         ref={setSectionRef(2)}
         className="relative border-t border-[#2A2A2A] py-24 overflow-hidden transition-all duration-500 ease-out"
         style={{
@@ -644,6 +684,7 @@ export default function LandingPage() {
 
       {/* Pricing */}
       <section
+        id="pricing"
         ref={setSectionRef(7)}
         className="border-t border-[#2A2A2A] py-24 transition-all duration-500 ease-out"
         style={{
