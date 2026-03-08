@@ -505,7 +505,7 @@ export default function LandingPage() {
             {aiFeatures.map((feat) => (
               <div
                 key={feat.title}
-                className="group relative rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-7 transition-all hover:border-[#F59E0B]/25 hover:bg-[#1F1F1F]"
+                className="group relative rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-7 transition-all transition-transform duration-200 hover:scale-[1.02] hover:border-[#F59E0B]/25 hover:bg-[#1F1F1F]"
               >
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-transparent via-transparent to-[#F59E0B]/[0.02] opacity-0 transition-opacity group-hover:opacity-100" />
                 <div className="relative flex gap-5">
@@ -584,7 +584,7 @@ export default function LandingPage() {
               { step: "2", title: "Create a Project", desc: "Name your game, pick a genre, and your workspace is ready to go." },
               { step: "3", title: "Start Building", desc: "Use tools, track progress, write your GDD, and ship your game." },
             ].map((item) => (
-              <div key={item.step} className="relative flex flex-col items-center text-center">
+              <div key={item.step} className="relative flex flex-col items-center text-center transition-transform duration-200 hover:scale-[1.02]">
                 <div className="relative z-10 mb-5 flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#F59E0B] bg-[#0F0F0F] text-xl font-bold text-[#F59E0B]">
                   {item.step}
                 </div>
