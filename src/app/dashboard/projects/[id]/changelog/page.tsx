@@ -23,6 +23,7 @@ import {
   TrendingUp,
   Hash,
   Calendar,
+  Printer,
 } from "lucide-react";
 import {
   getProject,
@@ -630,6 +631,13 @@ Be specific and brief. Only include sections that have items.`;
             </div>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+            >
+              <Printer className="h-4 w-4" />
+              Print
+            </button>
             <button
               onClick={copyAllAsMarkdown}
               className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors ${

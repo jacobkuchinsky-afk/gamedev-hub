@@ -17,6 +17,7 @@ import {
   Loader2,
   CalendarDays,
   Download,
+  Printer,
 } from "lucide-react";
 import {
   getProject,
@@ -464,6 +465,13 @@ export default function DevlogPage() {
         <div className="mt-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Development Log</h1>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+            >
+              <Printer className="h-4 w-4" />
+              Print
+            </button>
             <button
               onClick={handleExportAllEntries}
               disabled={entries.length === 0}
