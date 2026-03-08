@@ -339,6 +339,20 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   display: none;
 }
 
+/* Text truncation - clamp lines in cards and previews */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .collapse-transition {
   overflow: hidden;
   transition: max-height 300ms ease, opacity 300ms ease;
