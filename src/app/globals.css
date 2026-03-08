@@ -339,6 +339,19 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   display: none;
 }
 
+/* Screen-reader only - accessible labels visible only to assistive tech */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 /* Text truncation - clamp lines in cards and previews */
 .line-clamp-2 {
   display: -webkit-box;
