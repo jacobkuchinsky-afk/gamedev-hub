@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -27,6 +27,7 @@ import {
   Trash2,
   HeartPulse,
   Loader2,
+  BarChart3,
 } from "lucide-react";
 import {
   getProject,
@@ -34,6 +35,7 @@ import {
   getBugs,
   getDevlog,
   getPlaytestResponses,
+  getSprints,
   getStatusColor,
   getPriorityColor,
   getSeverityColor,
@@ -45,6 +47,7 @@ import {
   type Bug as BugType,
   type DevlogEntry,
   type PlaytestResponse,
+  type Sprint,
 } from "@/lib/store";
 
 const STATUS_BADGE_STYLES: Record<Project["status"], string> = {
@@ -450,6 +453,200 @@ function HealthReportModal({
   );
 }
 
+function ProductivitySection({
+  tasks,
+  bugs,
+  devlog,
+  sprints,
+}: {
+  tasks: Task[];
+  bugs: BugType[];
+  devlog: DevlogEntry[];
+  sprints: Sprint[];
+}) {
+  const sprintBurndown = useMemo(() => {
+    const sorted = [...sprints]
+      .sort((a, b) => a.startDate.localeCompare(b.startDate))
+      .slice(-5);
+
+    return sorted.map((s) => {
+      const sprintTasks = tasks.filter((t) => t.sprint === s.name);
+      const remaining = sprintTasks.filter((t) => t.status !== "done").length;
+      const total = sprintTasks.length;
+      return { name: s.name.replace("Sprint ", "S"), remaining, total, status: s.status };
+    });
+  }, [tasks, sprints]);
+
+  const maxBurndown = Math.max(...sprintBurndown.map((s) => s.total), 1);
+
+  const closedBugs = bugs.filter((b) => b.status === "closed").length;
+  const totalBugs = bugs.length;
+  const openBugsCount = totalBugs - closedBugs;
+  const closedPct = totalBugs > 0 ? Math.round((closedBugs / totalBugs) * 100) : 0;
+  const openPct = 100 - closedPct;
+
+  const devlogWeeks = useMemo(() => {
+    const now = new Date();
+    const weeks: { label: string; count: number }[] = [];
+    for (let i = 3; i >= 0; i--) {
+      const weekEnd = new Date(now.getTime() - i * 7 * 86400000);
+      const weekStart = new Date(weekEnd.getTime() - 7 * 86400000);
+      const count = devlog.filter((d) => {
+        const date = new Date(d.date);
+        return date >= weekStart && date < weekEnd;
+      }).length;
+      weeks.push({
+        label: i === 0 ? "This wk" : i === 1 ? "Last wk" : `${i}w ago`,
+        count,
+      });
+    }
+    return weeks;
+  }, [devlog]);
+
+  const maxDevlog = Math.max(...devlogWeeks.map((w) => w.count), 1);
+
+  const donutRadius = 36;
+  const donutStroke = 8;
+  const circumference = 2 * Math.PI * donutRadius;
+  const closedDash = (closedPct / 100) * circumference;
+  const openDash = (openPct / 100) * circumference;
+
+  return (
+    <div>
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#9CA3AF]">
+        <BarChart3 className="h-4 w-4" />
+        Productivity
+      </h2>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {/* Sprint Burndown */}
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+          <p className="text-xs font-medium text-[#9CA3AF]">Task Burndown</p>
+          <p className="mb-3 text-[10px] text-[#6B7280]">Remaining tasks per sprint</p>
+          {sprintBurndown.length > 0 ? (
+            <div className="flex items-end gap-2" style={{ height: 80 }}>
+              {sprintBurndown.map((s) => {
+                const totalH = s.total > 0 ? (s.total / maxBurndown) * 100 : 0;
+                return (
+                  <div key={s.name} className="flex flex-1 flex-col items-center gap-1">
+                    <span className="text-[10px] font-medium tabular-nums text-[#D1D5DB]">
+                      {s.remaining}
+                    </span>
+                    <div className="relative w-full overflow-hidden rounded-sm" style={{ height: `${totalH}%`, minHeight: 4 }}>
+                      <div className="absolute inset-0 bg-[#2A2A2A]" />
+                      <div
+                        className="absolute bottom-0 left-0 right-0 rounded-sm transition-all duration-500"
+                        style={{
+                          height: `${s.total > 0 ? (s.remaining / s.total) * 100 : 0}%`,
+                          backgroundColor: s.status === "completed" ? "#10B981" : s.status === "active" ? "#F59E0B" : "#3B82F6",
+                        }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-[#6B7280]">{s.name}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex h-20 items-center justify-center">
+              <span className="text-xs text-[#6B7280]">No sprints yet</span>
+            </div>
+          )}
+        </div>
+
+        {/* Bug Resolution Donut */}
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+          <p className="text-xs font-medium text-[#9CA3AF]">Bug Resolution</p>
+          <p className="mb-3 text-[10px] text-[#6B7280]">Open vs closed bugs</p>
+          {totalBugs > 0 ? (
+            <div className="flex items-center justify-center gap-4">
+              <div className="relative">
+                <svg width="88" height="88" viewBox="0 0 88 88">
+                  <circle
+                    cx="44"
+                    cy="44"
+                    r={donutRadius}
+                    fill="none"
+                    stroke="#2A2A2A"
+                    strokeWidth={donutStroke}
+                  />
+                  <circle
+                    cx="44"
+                    cy="44"
+                    r={donutRadius}
+                    fill="none"
+                    stroke="#10B981"
+                    strokeWidth={donutStroke}
+                    strokeDasharray={`${closedDash} ${circumference}`}
+                    strokeDashoffset={0}
+                    strokeLinecap="round"
+                    transform="rotate(-90 44 44)"
+                    className="transition-all duration-700"
+                  />
+                  <circle
+                    cx="44"
+                    cy="44"
+                    r={donutRadius}
+                    fill="none"
+                    stroke="#EF4444"
+                    strokeWidth={donutStroke}
+                    strokeDasharray={`${openDash} ${circumference}`}
+                    strokeDashoffset={-closedDash}
+                    strokeLinecap="round"
+                    transform="rotate(-90 44 44)"
+                    className="transition-all duration-700"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-lg font-bold tabular-nums text-[#F5F5F5]">{closedPct}%</span>
+                </div>
+              </div>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#10B981]" />
+                  <span className="text-[#D1D5DB]">Closed</span>
+                  <span className="ml-auto font-medium tabular-nums text-[#D1D5DB]">{closedBugs}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#EF4444]" />
+                  <span className="text-[#D1D5DB]">Open</span>
+                  <span className="ml-auto font-medium tabular-nums text-[#D1D5DB]">{openBugsCount}</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex h-20 items-center justify-center">
+              <span className="text-xs text-[#6B7280]">No bugs reported</span>
+            </div>
+          )}
+        </div>
+
+        {/* Devlog Frequency */}
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+          <p className="text-xs font-medium text-[#9CA3AF]">Devlog Frequency</p>
+          <p className="mb-3 text-[10px] text-[#6B7280]">Entries per week (last 4 weeks)</p>
+          <div className="flex items-end gap-3" style={{ height: 80 }}>
+            {devlogWeeks.map((w) => {
+              const h = w.count > 0 ? (w.count / maxDevlog) * 100 : 0;
+              return (
+                <div key={w.label} className="flex flex-1 flex-col items-center gap-1">
+                  <span className="text-[10px] font-medium tabular-nums text-[#D1D5DB]">
+                    {w.count}
+                  </span>
+                  <div
+                    className="w-full rounded-sm bg-[#F59E0B] transition-all duration-500"
+                    style={{ height: `${h}%`, minHeight: w.count > 0 ? 4 : 2, opacity: w.count > 0 ? 1 : 0.2 }}
+                  />
+                  <span className="text-[10px] text-[#6B7280]">{w.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -460,6 +657,7 @@ export default function ProjectDetailPage() {
   const [bugs, setBugs] = useState<BugType[]>([]);
   const [devlog, setDevlog] = useState<DevlogEntry[]>([]);
   const [playtest, setPlaytest] = useState<PlaytestResponse[]>([]);
+  const [sprints, setSprints] = useState<Sprint[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -479,6 +677,7 @@ export default function ProjectDetailPage() {
     setBugs(getBugs(projectId));
     setDevlog(getDevlog(projectId));
     setPlaytest(getPlaytestResponses(projectId));
+    setSprints(getSprints(projectId));
   }, [projectId, router]);
 
   if (!project) return null;
@@ -882,6 +1081,9 @@ export default function ProjectDetailPage() {
           <span>{doneTasks} done</span>
         </div>
       </div>
+
+      {/* Productivity Analytics */}
+      <ProductivitySection tasks={tasks} bugs={bugs} devlog={devlog} sprints={sprints} />
 
       {/* Content Grid */}
       <div className="grid gap-6 lg:grid-cols-5">
