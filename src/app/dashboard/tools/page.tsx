@@ -13,6 +13,8 @@ import {
   ArrowRight,
   Map,
   Sparkles,
+  Film,
+  Activity,
 } from "lucide-react";
 
 const TOOLS = [
@@ -87,6 +89,22 @@ const TOOLS = [
     description:
       "Preview screen shake, flash, fade, chromatic aberration, vignette, and CRT effects in real time.",
     color: "#A855F7",
+  },
+  {
+    href: "/dashboard/tools/animation",
+    icon: Film,
+    name: "Animation Frames",
+    description:
+      "Draw sprite animation frames, preview with onion skinning, and export as horizontal spritesheets.",
+    color: "#F97316",
+  },
+  {
+    href: "/dashboard/tools/easing",
+    icon: Activity,
+    name: "Easing Visualizer",
+    description:
+      "Preview and compare easing functions with live animations. Copy CSS or JS code for any curve.",
+    color: "#06B6D4",
   },
 ];
 
