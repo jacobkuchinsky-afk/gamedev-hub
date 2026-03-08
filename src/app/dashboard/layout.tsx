@@ -725,6 +725,16 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const toggleSidebarCollapse = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("gameforge_sidebar_collapsed", next ? "1" : "0");
+      } catch {}
+      return next;
+    });
+  }, []);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "k") {
       e.preventDefault();
@@ -745,6 +755,12 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       target.tagName === "SELECT" ||
       target.isContentEditable;
     if (isTyping) return;
+
+    if (e.key === "[") {
+      e.preventDefault();
+      toggleSidebarCollapse();
+      return;
+    }
 
     if (e.key === "?" && !cmdOpen) {
       e.preventDefault();
@@ -792,7 +808,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       router.push("/dashboard/projects/new");
       return;
     }
-  }, [cmdOpen, router, clearPending]);
+  }, [cmdOpen, router, clearPending, toggleSidebarCollapse]);
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
@@ -842,16 +858,6 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const handleLogout = () => {
     logout();
     router.push("/login");
-  };
-
-  const toggleSidebarCollapse = () => {
-    setSidebarCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem("gameforge_sidebar_collapsed", next ? "1" : "0");
-      } catch {}
-      return next;
-    });
   };
 
   if (loading) {

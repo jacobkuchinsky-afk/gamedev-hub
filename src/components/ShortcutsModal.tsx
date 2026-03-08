@@ -23,6 +23,7 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
     shortcuts: [
       { keys: ["Ctrl", "+", "K"], description: "Open command palette" },
       { keys: ["Ctrl", "+", "P"], description: "Print" },
+      { keys: ["["], description: "Toggle Sidebar" },
       { keys: ["?"], description: "Show keyboard shortcuts" },
       { keys: ["N"], description: "New project" },
       { keys: ["G", "D"], description: "Go to Dashboard" },
