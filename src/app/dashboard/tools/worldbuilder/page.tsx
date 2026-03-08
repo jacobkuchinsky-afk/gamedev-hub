@@ -227,6 +227,8 @@ export default function WorldBuilderPage() {
 
   const [placeNames, setPlaceNames] = useState<{ name: string; desc: string }[]>([]);
   const [placeNamesLoading, setPlaceNamesLoading] = useState(false);
+  const [aiTerrain, setAiTerrain] = useState("");
+  const [aiTerrainLoading, setAiTerrainLoading] = useState(false);
   const [aiHistory, setAiHistory] = useState("");
   const [aiHistoryLoading, setAiHistoryLoading] = useState(false);
   const [worldEvents, setWorldEvents] = useState<
@@ -277,6 +279,22 @@ export default function WorldBuilderPage() {
       setPlaceNamesLoading(false);
     }
   }, [setting, tone]);
+
+  const generateTerrain = useCallback(async () => {
+    if (aiTerrainLoading || !name.trim()) return;
+    setAiTerrainLoading(true);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Suggest 4 terrain types for a ${setting} region named '${name.trim()}'. Just list them.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setAiTerrain(content || "Could not generate terrain.");
+    } catch { setAiTerrain("Failed to generate terrain."); }
+    finally { setAiTerrainLoading(false); }
+  }, [aiTerrainLoading, name, setting]);
 
   const appendPlaceToResult = useCallback((placeName: string, placeDesc: string) => {
     const entry = `\n**${placeName}** - ${placeDesc}`;
@@ -1044,6 +1062,18 @@ export default function WorldBuilderPage() {
                   ))}
                 </div>
               </div>
+            )}
+
+            <button
+              onClick={generateTerrain}
+              disabled={aiTerrainLoading || !name.trim()}
+              className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-4 py-2.5 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {aiTerrainLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {aiTerrainLoading ? "Generating..." : "AI Terrain Types"}
+            </button>
+            {aiTerrain && !aiTerrainLoading && (
+              <div className="rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-4 py-3 text-xs leading-relaxed text-[#D1D5DB] whitespace-pre-line">{aiTerrain}</div>
             )}
           </div>
 

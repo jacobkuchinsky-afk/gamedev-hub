@@ -130,6 +130,7 @@ export default function ChangelogPage() {
   const [formAttempted, setFormAttempted] = useState(false);
   const [aiWriting, setAiWriting] = useState(false);
   const [aiCodename, setAiCodename] = useState(false);
+  const [aiTitleLoading, setAiTitleLoading] = useState(false);
 
   function getLatestVersion(): string | null {
     if (entries.length === 0) return null;
@@ -183,6 +184,22 @@ export default function ChangelogPage() {
     } finally {
       setAiCodename(false);
     }
+  };
+
+  const handleAiTitle = async () => {
+    if (aiTitleLoading || !formVersion.trim()) return;
+    setAiTitleLoading(true);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Suggest a title for version ${formVersion.trim()} (${formType}) of a game. Max 4 words.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim().replace(/^["']|["']$/g, "");
+      if (content) setFormTitle(content);
+    } catch { /* silently fail */ }
+    finally { setAiTitleLoading(false); }
   };
 
   const handleAiWriteNotes = async () => {
@@ -1036,6 +1053,15 @@ Be specific and brief. Only include sections that have items.`;
                     title="AI Codename"
                   >
                     {aiCodename ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAiTitle}
+                    disabled={aiTitleLoading || !formVersion.trim()}
+                    className="flex shrink-0 items-center gap-1 rounded-lg border border-[#10B981]/30 bg-[#10B981]/5 px-2.5 py-2 text-xs font-medium text-[#10B981] transition-colors hover:bg-[#10B981]/10 disabled:opacity-50"
+                    title="AI Title"
+                  >
+                    {aiTitleLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                   </button>
                 </div>
               </div>

@@ -132,6 +132,8 @@ export default function BugTrackerPage() {
   const [aiAnalyzingBug, setAiAnalyzingBug] = useState<string | null>(null);
   const [aiFixSuggestions, setAiFixSuggestions] = useState<Record<string, string>>({});
   const [aiFixLoading, setAiFixLoading] = useState<string | null>(null);
+  const [aiWorkarounds, setAiWorkarounds] = useState<Record<string, string>>({});
+  const [aiWorkaroundLoading, setAiWorkaroundLoading] = useState<string | null>(null);
 
   const similarBugs = useMemo(() => {
     const q = newTitle.trim().toLowerCase();
@@ -353,6 +355,23 @@ Be concise and professional. Fill in any missing sections based on the title and
     } finally {
       setAiFixLoading(null);
     }
+  };
+
+  const handleAiWorkaround = async (bug: Bug) => {
+    if (aiWorkaroundLoading === bug.id) return;
+    setAiWorkaroundLoading(bug.id);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Suggest a workaround for bug '${bug.title}': '${bug.description || "no description"}'. 1 sentence.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setAiWorkarounds((prev) => ({ ...prev, [bug.id]: content || "No workaround available." }));
+    } catch {
+      setAiWorkarounds((prev) => ({ ...prev, [bug.id]: "Failed to get workaround." }));
+    } finally { setAiWorkaroundLoading(null); }
   };
 
   const changeBugStatus = (bugId: string, newStatus: Bug["status"]) => {
@@ -765,6 +784,23 @@ Be concise and professional. Fill in any missing sections based on the title and
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">
                   {aiFixSuggestions[bug.id]}
                 </p>
+              </div>
+            )}
+            <button
+              onClick={() => handleAiWorkaround(bug)}
+              disabled={aiWorkaroundLoading === bug.id}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-1.5 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {aiWorkaroundLoading === bug.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              AI Workaround
+            </button>
+            {aiWorkarounds[bug.id] && aiWorkaroundLoading !== bug.id && (
+              <div className="rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-3 space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-[#F59E0B]" />
+                  <span className="text-xs font-semibold text-[#F59E0B]">Temp Workaround</span>
+                </div>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">{aiWorkarounds[bug.id]}</p>
               </div>
             )}
           </div>

@@ -509,6 +509,8 @@ export default function LaunchChecklistPage() {
   const [aiReviews, setAiReviews] = useState<string>("");
   const [aiReviewsLoading, setAiReviewsLoading] = useState(false);
   const [aiReviewsOpen, setAiReviewsOpen] = useState(false);
+  const [aiDayChecklist, setAiDayChecklist] = useState<string>("");
+  const [aiDayChecklistLoading, setAiDayChecklistLoading] = useState(false);
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -888,6 +890,22 @@ export default function LaunchChecklistPage() {
     }
   }, [project, aiReviewsLoading]);
 
+  const generateLaunchDayChecklist = useCallback(async () => {
+    if (aiDayChecklistLoading) return;
+    setAiDayChecklistLoading(true);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: "List 5 things to do on game launch day. Just the list." }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setAiDayChecklist(content || "Could not generate checklist.");
+    } catch { setAiDayChecklist("Failed to generate checklist."); }
+    finally { setAiDayChecklistLoading(false); }
+  }, [aiDayChecklistLoading]);
+
   const copyToClipboard = useCallback((text: string, sectionTitle: string) => {
     navigator.clipboard.writeText(text);
     setCopiedSection(sectionTitle);
@@ -1124,6 +1142,14 @@ export default function LaunchChecklistPage() {
               {aiReviewsLoading ? "Generating..." : "AI Mock Reviews"}
             </button>
             <button
+              onClick={generateLaunchDayChecklist}
+              disabled={aiDayChecklistLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#10B981]/30 bg-[#10B981]/5 px-3 py-2 text-sm text-[#10B981] transition-colors hover:bg-[#10B981]/10 disabled:opacity-50"
+            >
+              {aiDayChecklistLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {aiDayChecklistLoading ? "Generating..." : "Launch Day Checklist"}
+            </button>
+            <button
               onClick={handleReset}
               className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-red-500/30 hover:text-red-400"
             >
@@ -1133,6 +1159,25 @@ export default function LaunchChecklistPage() {
           </div>
         </div>
       </div>
+
+      {aiDayChecklist && (
+        <div className="rounded-xl border border-[#10B981]/30 bg-[#1A1A1A] overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-[#10B981]" />
+              <h3 className="text-sm font-semibold text-[#10B981]">Launch Day Checklist</h3>
+            </div>
+            <button onClick={() => setAiDayChecklist("")} className="rounded-lg p-1 text-[#6B7280] hover:text-[#F5F5F5]"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="px-5 py-4">
+            {aiDayChecklistLoading ? (
+              <div className="flex items-center gap-2 text-sm text-[#9CA3AF]"><Loader2 className="h-4 w-4 animate-spin" /> Generating...</div>
+            ) : (
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">{aiDayChecklist}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* AI Launch Plan Panel */}
       {aiPlanOpen && (

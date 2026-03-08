@@ -187,6 +187,8 @@ export default function DevlogPage() {
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
   const [aiReflections, setAiReflections] = useState<Record<string, string>>({});
   const [aiReflectLoading, setAiReflectLoading] = useState<string | null>(null);
+  const [aiRatings, setAiRatings] = useState<Record<string, string>>({});
+  const [aiRatingLoading, setAiRatingLoading] = useState<string | null>(null);
   const [monthlyRecap, setMonthlyRecap] = useState("");
   const [monthlyRecapLoading, setMonthlyRecapLoading] = useState(false);
 
@@ -265,6 +267,24 @@ export default function DevlogPage() {
     updateDevlogEntry(entryId, { notes: [...existing, newNote] } as Partial<Omit<DevlogEntry, "id" | "projectId">>);
     setNoteInputs((p) => ({ ...p, [entryId]: "" }));
     reload();
+  };
+
+  const handleAiRating = async (entry: DevlogEntry) => {
+    if (aiRatingLoading === entry.id) return;
+    setAiRatingLoading(entry.id);
+    try {
+      const snippet = (entry.content || "").slice(0, 50);
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Rate this devlog entry quality (1-5 stars) and give a brief reason: '${entry.title}' - '${snippet}'. Format: X/5 — reason.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setAiRatings((prev) => ({ ...prev, [entry.id]: content || "No rating available." }));
+    } catch {
+      setAiRatings((prev) => ({ ...prev, [entry.id]: "Failed to rate." }));
+    } finally { setAiRatingLoading(null); }
   };
 
   const handleAiReflect = async (entry: DevlogEntry) => {
@@ -710,7 +730,7 @@ export default function DevlogPage() {
                       {renderMarkdown(entry.content)}
                     </div>
 
-                    {/* AI Reflection */}
+                    {/* AI Reflection & Rating */}
                     <div className="mt-3 flex items-center gap-2">
                       <button
                         onClick={() => handleAiReflect(entry)}
@@ -724,6 +744,14 @@ export default function DevlogPage() {
                         )}
                         AI Reflect
                       </button>
+                      <button
+                        onClick={() => handleAiRating(entry)}
+                        disabled={aiRatingLoading === entry.id}
+                        className="flex items-center gap-1.5 rounded-lg border border-[#10B981]/30 bg-[#10B981]/5 px-3 py-1.5 text-xs font-medium text-[#10B981] transition-colors hover:bg-[#10B981]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {aiRatingLoading === entry.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                        AI Rate
+                      </button>
                     </div>
                     {aiReflections[entry.id] && aiReflectLoading !== entry.id && (
                       <div className="mt-2 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-3">
@@ -732,6 +760,15 @@ export default function DevlogPage() {
                           <span className="text-[10px] font-semibold text-[#F59E0B]">Reflection</span>
                         </div>
                         <p className="text-sm leading-relaxed text-[#D1D5DB]">{aiReflections[entry.id]}</p>
+                      </div>
+                    )}
+                    {aiRatings[entry.id] && aiRatingLoading !== entry.id && (
+                      <div className="mt-2 rounded-lg border border-[#10B981]/20 bg-[#10B981]/5 p-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Sparkles className="h-3 w-3 text-[#10B981]" />
+                          <span className="text-[10px] font-semibold text-[#10B981]">Quality Rating</span>
+                        </div>
+                        <p className="text-sm leading-relaxed text-[#D1D5DB]">{aiRatings[entry.id]}</p>
                       </div>
                     )}
 

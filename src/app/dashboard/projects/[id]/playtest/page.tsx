@@ -217,6 +217,8 @@ export default function PlaytestPage() {
   const [newSessionPlatform, setNewSessionPlatform] = useState("PC");
   const [newSessionBuild, setNewSessionBuild] = useState("");
   const [newSessionNotes, setNewSessionNotes] = useState("");
+  const [aiIntroLoading, setAiIntroLoading] = useState(false);
+  const [aiIntro, setAiIntro] = useState("");
 
   const handleAiSummary = async () => {
     if (responses.length === 0) return;
@@ -556,6 +558,23 @@ export default function PlaytestPage() {
     setPtPlatform("PC");
     setPtSessionId("");
     setPtSubmitted(false);
+  };
+
+  const handleAiPlaytestIntro = async () => {
+    if (aiIntroLoading) return;
+    setAiIntroLoading(true);
+    try {
+      const gameName = project?.name || "our game";
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Write a brief intro message for playtesters of '${gameName}'. 2 sentences.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      if (content) setAiIntro(content);
+    } catch { /* silently fail */ }
+    finally { setAiIntroLoading(false); }
   };
 
   const handleAddSession = (e: React.FormEvent) => {
@@ -1931,6 +1950,18 @@ export default function PlaytestPage() {
                   className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50 resize-none"
                 />
               </div>
+              <button
+                type="button"
+                onClick={handleAiPlaytestIntro}
+                disabled={aiIntroLoading}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 py-2 text-sm text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50"
+              >
+                {aiIntroLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {aiIntroLoading ? "Generating..." : "AI Tester Intro"}
+              </button>
+              {aiIntro && (
+                <div className="rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-4 py-3 text-xs leading-relaxed text-[#D1D5DB]">{aiIntro}</div>
+              )}
               <button
                 type="submit"
                 className="w-full rounded-lg bg-[#F59E0B] py-2.5 text-sm font-semibold text-black transition-colors hover:bg-[#F59E0B]/90"

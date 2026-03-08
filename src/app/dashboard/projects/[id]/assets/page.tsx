@@ -103,6 +103,8 @@ export default function AssetPipelinePage() {
   const [aiSuggestion, setAiSuggestion] = useState("");
   const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
   const [aiDescLoading, setAiDescLoading] = useState(false);
+  const [aiFileNameLoading, setAiFileNameLoading] = useState(false);
+  const [aiFileName, setAiFileName] = useState("");
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [bumpNotes, setBumpNotes] = useState("");
 
@@ -195,6 +197,22 @@ export default function AssetPipelinePage() {
     setShowAddForm(false);
     setAiSuggestion("");
     reload();
+  };
+
+  const handleAiFileName = async () => {
+    if (!newName.trim() || aiFileNameLoading) return;
+    setAiFileNameLoading(true);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Suggest a file name for a game asset: name='${newName.trim()}', type='${newType}'. Use snake_case. Just the filename.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim().replace(/^["']|["']$/g, "");
+      if (content) { setAiFileName(content); setNewFileRef(content); }
+    } catch { /* silently fail */ }
+    finally { setAiFileNameLoading(false); }
   };
 
   const handleAiSuggest = async () => {
@@ -960,7 +978,13 @@ export default function AssetPipelinePage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-[#6B7280]">File Reference</label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-xs text-[#6B7280]">File Reference</label>
+                  <button type="button" onClick={handleAiFileName} disabled={!newName.trim() || aiFileNameLoading} className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed">
+                    {aiFileNameLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    AI Name
+                  </button>
+                </div>
                 <input
                   type="text"
                   value={newFileRef}

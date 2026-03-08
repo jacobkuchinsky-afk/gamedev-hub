@@ -248,6 +248,7 @@ export default function TaskBoardPage() {
   const [retroNotes, setRetroNotes] = useState<Record<string, { wentWell: string; didntGoWell: string; improve: string }>>({});
   const [aiRetroLoading, setAiRetroLoading] = useState(false);
   const [aiSprintNameLoading, setAiSprintNameLoading] = useState(false);
+  const [aiSprintGoalLoading, setAiSprintGoalLoading] = useState(false);
 
   const [taskExportOpen, setTaskExportOpen] = useState(false);
   const taskExportRef = useRef<HTMLDivElement>(null);
@@ -603,6 +604,22 @@ export default function TaskBoardPage() {
       if (content) setCsName(content);
     } catch { /* silently fail */ }
     finally { setAiSprintNameLoading(false); }
+  };
+
+  const handleAiSprintGoal = async () => {
+    if (!csName.trim() || aiSprintGoalLoading) return;
+    setAiSprintGoalLoading(true);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Suggest a goal for sprint '${csName.trim()}'. 1 sentence.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim().replace(/^["']|["']$/g, "");
+      if (content) setCsGoal(content);
+    } catch { /* silently fail */ }
+    finally { setAiSprintGoalLoading(false); }
   };
 
   const handleCreateSprint = (e: React.FormEvent) => {
@@ -2067,9 +2084,13 @@ export default function TaskBoardPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-[#6B7280]">
-                  Sprint Goal
-                </label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-xs text-[#6B7280]">Sprint Goal</label>
+                  <button type="button" onClick={handleAiSprintGoal} disabled={!csName.trim() || aiSprintGoalLoading} className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed">
+                    {aiSprintGoalLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    AI Suggest
+                  </button>
+                </div>
                 <input
                   type="text"
                   value={csGoal}

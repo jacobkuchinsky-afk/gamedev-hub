@@ -1692,6 +1692,8 @@ export default function ProjectDetailPage() {
   const [msAiNameLoading, setMsAiNameLoading] = useState(false);
 
   const [aiMilestoneLoading, setAiMilestoneLoading] = useState(false);
+  const [aiCelebrations, setAiCelebrations] = useState<Record<string, string>>({});
+  const [aiCelebrationLoading, setAiCelebrationLoading] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [dupDataOpen, setDupDataOpen] = useState(false);
 
@@ -3536,11 +3538,24 @@ export default function ProjectDetailPage() {
 
                         <select
                           value={ms.status}
-                          onChange={(e) => {
-                            updateMilestone(ms.id, {
-                              status: e.target.value as Milestone["status"],
-                            });
+                          onChange={async (e) => {
+                            const newStatus = e.target.value as Milestone["status"];
+                            updateMilestone(ms.id, { status: newStatus });
                             setMilestones(getMilestones(projectId));
+                            if (newStatus === "completed" && !aiCelebrations[ms.id]) {
+                              setAiCelebrationLoading(ms.id);
+                              try {
+                                const resp = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+                                  method: "POST",
+                                  headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+                                  body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Write a fun celebration message for completing the '${ms.name}' milestone. 1 sentence. Be encouraging.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+                                });
+                                const d = await resp.json();
+                                const c = (d.choices?.[0]?.message?.content || d.choices?.[0]?.message?.reasoning || "").trim();
+                                if (c) setAiCelebrations((prev) => ({ ...prev, [ms.id]: c }));
+                              } catch { /* silently fail */ }
+                              finally { setAiCelebrationLoading(null); }
+                            }
                           }}
                           className="rounded-md border border-[#2A2A2A] bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] text-[#9CA3AF] opacity-0 outline-none transition-opacity focus:border-[#F59E0B]/50 group-hover:opacity-100"
                         >
@@ -3559,6 +3574,14 @@ export default function ProjectDetailPage() {
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
+                      {aiCelebrationLoading === ms.id && (
+                        <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-[#F59E0B]"><Loader2 className="h-3 w-3 animate-spin" /> Generating celebration...</div>
+                      )}
+                      {aiCelebrations[ms.id] && aiCelebrationLoading !== ms.id && (
+                        <div className="mt-1.5 rounded-md border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-2.5 py-1.5 text-xs text-[#F59E0B]">
+                          <Sparkles className="mr-1 inline h-3 w-3" />{aiCelebrations[ms.id]}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

@@ -58,6 +58,8 @@ export default function ReferenceBoardPage() {
   const [copied, setCopied] = useState(false);
   const [similarGames, setSimilarGames] = useState<{ title: string; year: string; study: string; relation: string }[]>([]);
   const [similarLoading, setSimilarLoading] = useState(false);
+  const [aiStudyGuides, setAiStudyGuides] = useState<Record<string, string>>({});
+  const [aiStudyLoading, setAiStudyLoading] = useState<string | null>(null);
   const [aiDescribeLoading, setAiDescribeLoading] = useState(false);
 
   const fetchAiSuggestions = async () => {
@@ -149,6 +151,23 @@ export default function ReferenceBoardPage() {
     }
     setCategorizingProgress("Done!");
     setTimeout(() => setCategorizingProgress(null), 1500);
+  };
+
+  const handleAiStudyGuide = async (ref: Reference) => {
+    if (aiStudyLoading === ref.id) return;
+    setAiStudyLoading(ref.id);
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `What should I study from '${ref.title}' (${ref.category}) for my game? 1 sentence.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setAiStudyGuides((prev) => ({ ...prev, [ref.id]: content || "No suggestion available." }));
+    } catch {
+      setAiStudyGuides((prev) => ({ ...prev, [ref.id]: "Failed to get suggestion." }));
+    } finally { setAiStudyLoading(null); }
   };
 
   const fetchSimilarGames = async () => {
@@ -760,6 +779,19 @@ export default function ReferenceBoardPage() {
                     <span className="truncate max-w-[180px]">{domain}</span>
                     <ExternalLink className="h-3 w-3 shrink-0" />
                   </a>
+                  <button
+                    onClick={() => handleAiStudyGuide(ref)}
+                    disabled={aiStudyLoading === ref.id}
+                    className="mt-2 flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {aiStudyLoading === ref.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    Study Guide
+                  </button>
+                  {aiStudyGuides[ref.id] && aiStudyLoading !== ref.id && (
+                    <div className="mt-1 rounded-md border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-2.5 py-1.5 text-[11px] leading-relaxed text-[#D1D5DB]">
+                      <Sparkles className="mr-1 inline h-3 w-3 text-[#F59E0B]" />{aiStudyGuides[ref.id]}
+                    </div>
+                  )}
                 </div>
               </div>
             );
