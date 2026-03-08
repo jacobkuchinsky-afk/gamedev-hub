@@ -144,7 +144,7 @@ html {
 
   aside[role="navigation"],
   header[aria-label="Top bar"],
-  .print\\:hidden {
+  [data-print-hide] {
     display: none !important;
   }
 
