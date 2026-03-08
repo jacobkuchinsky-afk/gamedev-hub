@@ -14,15 +14,17 @@ import {
   Trash2,
   Download,
   ClipboardCopy,
+  FlipHorizontal,
 } from "lucide-react";
 
 type Tool = "pencil" | "eraser" | "fill" | "line" | "rectangle" | "eyedropper";
 type GridSize = 8 | 16 | 32 | 64;
-type PaletteName = "pico8" | "gameboy" | "nes" | "custom";
+type PaletteName = "pico8" | "gameboy" | "nes" | "grayscale" | "monochrome" | "custom";
 
 const MAX_UNDO = 20;
 const GRID_SIZES: GridSize[] = [8, 16, 32, 64];
 const DEFAULT_ZOOM: Record<GridSize, number> = { 8: 32, 16: 20, 32: 16, 64: 8 };
+const MINIMAP_TARGET = 64;
 
 const TOOL_DEFS: { id: Tool; icon: typeof Pencil; label: string; shortcut: string }[] = [
   { id: "pencil", icon: Pencil, label: "Pencil", shortcut: "P" },
@@ -60,9 +62,15 @@ const PALETTES: Record<Exclude<PaletteName, "custom">, { name: string; colors: s
       "#FCE0A8","#F8D878","#D8F878","#B8F8B8","#B8F8D8","#00FCFC","#B8B8B8",
     ],
   },
+  grayscale: {
+    name: "Grayscale",
+    colors: ["#000000","#242424","#484848","#6D6D6D","#919191","#B6B6B6","#DADADA","#FFFFFF"],
+  },
+  monochrome: {
+    name: "Mono",
+    colors: ["#000000","#FFFFFF"],
+  },
 };
-
-// ─── Helpers ─────────────────────────────────────────────
 
 function createEmptyGrid(size: number): (string | null)[][] {
   return Array.from({ length: size }, () => Array(size).fill(null));
@@ -140,8 +148,6 @@ function getRectPixels(x0: number, y0: number, x1: number, y1: number): [number,
   return pixels;
 }
 
-// ─── Component ───────────────────────────────────────────
-
 export default function SpriteEditorPage() {
   const [canvasSize, setCanvasSize] = useState<GridSize>(32);
   const [pixelData, setPixelData] = useState<(string | null)[][]>(() => createEmptyGrid(32));
@@ -157,8 +163,10 @@ export default function SpriteEditorPage() {
   const [redoStack, setRedoStack] = useState<(string | null)[][][]>([]);
   const [notification, setNotification] = useState<string | null>(null);
   const [hexInput, setHexInput] = useState("#F59E0B");
+  const [mirrorMode, setMirrorMode] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const minimapRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
   const lastPos = useRef<{ x: number; y: number } | null>(null);
   const drawStart = useRef({ x: 0, y: 0 });
@@ -174,11 +182,11 @@ export default function SpriteEditorPage() {
   redoStackRef.current = redoStack;
 
   const displaySize = canvasSize * zoom;
+  const minimapScale = Math.max(1, Math.floor(MINIMAP_TARGET / canvasSize));
+  const minimapPx = canvasSize * minimapScale;
 
   const currentPaletteColors =
     activePalette === "custom" ? customPalette : PALETTES[activePalette].colors;
-
-  // ─── Utilities ──────────────────────────────
 
   const notify = useCallback((msg: string) => {
     setNotification(msg);
@@ -189,7 +197,7 @@ export default function SpriteEditorPage() {
     setRecentColors((prev) => {
       const upper = color.toUpperCase();
       const filtered = prev.filter((c) => c.toUpperCase() !== upper);
-      return [color, ...filtered].slice(0, 10);
+      return [color, ...filtered].slice(0, 8);
     });
   }, []);
 
@@ -238,8 +246,6 @@ export default function SpriteEditorPage() {
     [],
   );
 
-  // ─── Pointer handlers (assigned to refs for stable document listeners) ──
-
   const handlePointerDown = useCallback(
     (clientX: number, clientY: number) => {
       const coords = getPixelCoords(clientX, clientY);
@@ -251,9 +257,14 @@ export default function SpriteEditorPage() {
         pushUndo();
         lastPos.current = { x, y };
         const color = currentTool === "pencil" ? currentColor : null;
+        const size = canvasSizeRef.current;
         setPixelData((prev) => {
           const next = cloneGrid(prev);
           next[y][x] = color;
+          if (mirrorMode) {
+            const mx = size - 1 - x;
+            if (mx >= 0 && mx < size && mx !== x) next[y][mx] = color;
+          }
           return next;
         });
         if (currentTool === "pencil") addRecentColor(currentColor);
@@ -274,7 +285,7 @@ export default function SpriteEditorPage() {
         }
       }
     },
-    [currentTool, currentColor, getPixelCoords, pushUndo, addRecentColor],
+    [currentTool, currentColor, mirrorMode, getPixelCoords, pushUndo, addRecentColor],
   );
 
   const handlePointerMove = useCallback(
@@ -294,7 +305,13 @@ export default function SpriteEditorPage() {
         setPixelData((prev) => {
           const next = cloneGrid(prev);
           for (const [px, py] of pixels) {
-            if (px >= 0 && px < size && py >= 0 && py < size) next[py][px] = color;
+            if (px >= 0 && px < size && py >= 0 && py < size) {
+              next[py][px] = color;
+              if (mirrorMode) {
+                const mx = size - 1 - px;
+                if (mx >= 0 && mx < size) next[py][mx] = color;
+              }
+            }
           }
           return next;
         });
@@ -303,7 +320,13 @@ export default function SpriteEditorPage() {
         const next = cloneGrid(snapshotRef.current);
         const size = canvasSizeRef.current;
         for (const [px, py] of pixels) {
-          if (px >= 0 && px < size && py >= 0 && py < size) next[py][px] = currentColor;
+          if (px >= 0 && px < size && py >= 0 && py < size) {
+            next[py][px] = currentColor;
+            if (mirrorMode) {
+              const mx = size - 1 - px;
+              if (mx >= 0 && mx < size) next[py][mx] = currentColor;
+            }
+          }
         }
         setPixelData(next);
       } else if (currentTool === "rectangle" && snapshotRef.current) {
@@ -311,12 +334,18 @@ export default function SpriteEditorPage() {
         const next = cloneGrid(snapshotRef.current);
         const size = canvasSizeRef.current;
         for (const [px, py] of pixels) {
-          if (px >= 0 && px < size && py >= 0 && py < size) next[py][px] = currentColor;
+          if (px >= 0 && px < size && py >= 0 && py < size) {
+            next[py][px] = currentColor;
+            if (mirrorMode) {
+              const mx = size - 1 - px;
+              if (mx >= 0 && mx < size) next[py][mx] = currentColor;
+            }
+          }
         }
         setPixelData(next);
       }
     },
-    [currentTool, currentColor, getPixelCoords],
+    [currentTool, currentColor, mirrorMode, getPixelCoords],
   );
 
   const handlePointerUp = useCallback(() => {
@@ -335,9 +364,7 @@ export default function SpriteEditorPage() {
   const pointerUpRef = useRef(handlePointerUp);
   pointerUpRef.current = handlePointerUp;
 
-  // ─── Effects ────────────────────────────────
-
-  // Canvas rendering
+  // Canvas + minimap rendering
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -350,7 +377,6 @@ export default function SpriteEditorPage() {
 
     ctx.clearRect(0, 0, displaySize, displaySize);
 
-    // Transparency checkerboard
     for (let y = 0; y < canvasSize; y++) {
       for (let x = 0; x < canvasSize; x++) {
         ctx.fillStyle = (x + y) % 2 === 0 ? "#1E1E1E" : "#161616";
@@ -358,7 +384,6 @@ export default function SpriteEditorPage() {
       }
     }
 
-    // Pixel data
     for (let y = 0; y < canvasSize; y++) {
       for (let x = 0; x < canvasSize; x++) {
         const color = pixelData[y]?.[x];
@@ -369,7 +394,6 @@ export default function SpriteEditorPage() {
       }
     }
 
-    // Grid overlay
     if (showGrid && zoom >= 4) {
       ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
       ctx.lineWidth = 1;
@@ -384,9 +408,46 @@ export default function SpriteEditorPage() {
         ctx.stroke();
       }
     }
-  }, [pixelData, canvasSize, zoom, showGrid, displaySize]);
 
-  // Document-level mouse/touch listeners
+    // Mirror center line
+    if (mirrorMode && zoom >= 4) {
+      const cx = Math.floor(canvasSize / 2) * zoom;
+      ctx.strokeStyle = "rgba(245, 158, 11, 0.35)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(cx, 0);
+      ctx.lineTo(cx, displaySize);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Minimap
+    const minimap = minimapRef.current;
+    if (minimap) {
+      const mCtx = minimap.getContext("2d")!;
+      if (minimap.width !== minimapPx || minimap.height !== minimapPx) {
+        minimap.width = minimapPx;
+        minimap.height = minimapPx;
+      }
+      for (let y = 0; y < canvasSize; y++) {
+        for (let x = 0; x < canvasSize; x++) {
+          mCtx.fillStyle = (x + y) % 2 === 0 ? "#1E1E1E" : "#161616";
+          mCtx.fillRect(x * minimapScale, y * minimapScale, minimapScale, minimapScale);
+        }
+      }
+      for (let y = 0; y < canvasSize; y++) {
+        for (let x = 0; x < canvasSize; x++) {
+          const color = pixelData[y]?.[x];
+          if (color) {
+            mCtx.fillStyle = color;
+            mCtx.fillRect(x * minimapScale, y * minimapScale, minimapScale, minimapScale);
+          }
+        }
+      }
+    }
+  }, [pixelData, canvasSize, zoom, showGrid, displaySize, mirrorMode, minimapScale, minimapPx]);
+
   useEffect(() => {
     const onMove = (e: MouseEvent) => pointerMoveRef.current(e.clientX, e.clientY);
     const onUp = () => pointerUpRef.current();
@@ -409,7 +470,6 @@ export default function SpriteEditorPage() {
     };
   }, []);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
@@ -433,18 +493,16 @@ export default function SpriteEditorPage() {
         case "r": setCurrentTool("rectangle"); break;
         case "i": setCurrentTool("eyedropper"); break;
         case "g": setShowGrid((v) => !v); break;
+        case "m": setMirrorMode((v) => !v); break;
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Sync hex input when color changes externally
   useEffect(() => {
     setHexInput(currentColor);
   }, [currentColor]);
-
-  // ─── Actions ────────────────────────────────
 
   const clearCanvas = () => {
     pushUndo();
@@ -518,8 +576,6 @@ export default function SpriteEditorPage() {
     addRecentColor(color);
   };
 
-  // ─── Render ─────────────────────────────────
-
   return (
     <div className="-m-6 flex flex-col overflow-hidden" style={{ height: "calc(100vh - 4rem)" }}>
       {/* Header */}
@@ -528,6 +584,11 @@ export default function SpriteEditorPage() {
         <span className="rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] font-medium text-[#9CA3AF]">
           {canvasSize}&times;{canvasSize}
         </span>
+        {mirrorMode && (
+          <span className="rounded bg-[#F59E0B]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B]">
+            Mirror
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-2 text-[11px] text-[#6B7280]">
           {TOOL_DEFS.map((t) => (
             <span key={t.id} className="hidden md:inline">
@@ -558,6 +619,20 @@ export default function SpriteEditorPage() {
               <t.icon size={18} />
             </button>
           ))}
+
+          <div className="mx-2 my-1 w-6 border-t border-[#2A2A2A]" />
+
+          <button
+            onClick={() => setMirrorMode((v) => !v)}
+            title="Mirror (M)"
+            className={`flex h-9 w-9 items-center justify-center rounded-md transition-colors ${
+              mirrorMode
+                ? "bg-[#F59E0B]/15 text-[#F59E0B]"
+                : "text-[#6B7280] hover:bg-[#1F1F1F] hover:text-[#D1D5DB]"
+            }`}
+          >
+            <FlipHorizontal size={18} />
+          </button>
 
           <div className="mx-2 my-1 w-6 border-t border-[#2A2A2A]" />
 
@@ -606,7 +681,18 @@ export default function SpriteEditorPage() {
             />
           </div>
 
-          {/* Notification toast */}
+          {/* Minimap */}
+          <div className="absolute bottom-4 right-4 rounded-lg border border-[#2A2A2A] bg-[#141414] p-2">
+            <p className="mb-1 text-center text-[9px] font-bold uppercase tracking-widest text-[#6B7280]">
+              1:1 Preview
+            </p>
+            <canvas
+              ref={minimapRef}
+              className="rounded border border-[#2A2A2A]"
+              style={{ imageRendering: "pixelated", width: minimapPx, height: minimapPx }}
+            />
+          </div>
+
           {notification && (
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black shadow-lg">
               {notification}
@@ -690,12 +776,14 @@ export default function SpriteEditorPage() {
                   <option value="pico8">PICO-8</option>
                   <option value="gameboy">Game Boy</option>
                   <option value="nes">NES</option>
+                  <option value="grayscale">Grayscale</option>
+                  <option value="monochrome">Mono</option>
                   <option value="custom">Custom</option>
                 </select>
               </div>
               <div
                 className={`grid gap-0.5 ${
-                  activePalette === "gameboy" ? "grid-cols-4" : "grid-cols-8"
+                  currentPaletteColors.length <= 4 ? "grid-cols-4" : "grid-cols-8"
                 }`}
               >
                 {currentPaletteColors.map((c, i) => (
@@ -776,6 +864,20 @@ export default function SpriteEditorPage() {
                   </kbd>
                 </label>
 
+                <label className="flex cursor-pointer items-center gap-2 text-[11px] text-[#D1D5DB]">
+                  <input
+                    type="checkbox"
+                    checked={mirrorMode}
+                    onChange={(e) => setMirrorMode(e.target.checked)}
+                    className="accent-[#F59E0B]"
+                  />
+                  <FlipHorizontal size={13} className="text-[#6B7280]" />
+                  Mirror draw
+                  <kbd className="ml-auto rounded border border-[#2A2A2A] bg-[#1A1A1A] px-1 text-[10px] text-[#6B7280]">
+                    M
+                  </kbd>
+                </label>
+
                 <button
                   onClick={clearCanvas}
                   className="flex w-full items-center justify-center gap-1.5 rounded border border-[#2A2A2A] bg-[#1A1A1A] py-1.5 text-xs text-[#9CA3AF] transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
@@ -825,6 +927,12 @@ export default function SpriteEditorPage() {
         <span>{zoom}x zoom</span>
         <span className="text-[#2A2A2A]">|</span>
         <span className="capitalize">{currentTool}</span>
+        {mirrorMode && (
+          <>
+            <span className="text-[#2A2A2A]">|</span>
+            <span className="text-[#F59E0B]">Mirror</span>
+          </>
+        )}
         <span className="ml-auto text-[#4A4A4A]">
           {undoStack.length}/{MAX_UNDO} undo
         </span>

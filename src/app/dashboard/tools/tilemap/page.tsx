@@ -15,11 +15,13 @@ import {
   Layers,
   Eye,
   EyeOff,
+  Undo2,
+  Redo2,
+  LayoutGrid,
 } from "lucide-react";
 
-const GRID_W = 20;
-const GRID_H = 15;
 const BASE_TILE = 32;
+const MAX_UNDO = 30;
 
 interface TileType {
   id: number;
@@ -39,22 +41,45 @@ const TILE_TYPES: TileType[] = [
   { id: 7, name: "Path", color: "#8D6E63", key: "7" },
   { id: 8, name: "Wall", color: "#37474F", key: "8" },
   { id: 9, name: "Tree", color: "#2E7D32", key: "9" },
+  { id: 10, name: "Flowers", color: "#EC407A", key: "" },
+  { id: 11, name: "Bridge", color: "#BCAAA4", key: "" },
+  { id: 12, name: "Door", color: "#7E57C2", key: "" },
 ];
+
+const MAP_SIZES = [
+  { w: 10, h: 10, label: "10 x 10" },
+  { w: 20, h: 15, label: "20 x 15" },
+  { w: 30, h: 20, label: "30 x 20" },
+  { w: 40, h: 30, label: "40 x 30" },
+] as const;
 
 const LAYERS = ["Ground", "Objects", "Collision"] as const;
 type LayerName = (typeof LAYERS)[number];
+type ToolType = "paint" | "erase" | "fill" | "stamp";
 
-function createEmptyGrid(): number[][] {
-  return Array.from({ length: GRID_H }, () => Array(GRID_W).fill(0));
+function createEmptyGrid(w: number, h: number): number[][] {
+  return Array.from({ length: h }, () => Array(w).fill(0));
+}
+
+function cloneLayers(layers: Record<LayerName, number[][]>): Record<LayerName, number[][]> {
+  return {
+    Ground: layers.Ground.map((r) => [...r]),
+    Objects: layers.Objects.map((r) => [...r]),
+    Collision: layers.Collision.map((r) => [...r]),
+  };
 }
 
 export default function TilemapPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [layers, setLayers] = useState<Record<LayerName, number[][]>>({
-    Ground: createEmptyGrid(),
-    Objects: createEmptyGrid(),
-    Collision: createEmptyGrid(),
-  });
+  const minimapRef = useRef<HTMLCanvasElement>(null);
+
+  const [gridW, setGridW] = useState(20);
+  const [gridH, setGridH] = useState(15);
+  const [layers, setLayers] = useState<Record<LayerName, number[][]>>(() => ({
+    Ground: createEmptyGrid(20, 15),
+    Objects: createEmptyGrid(20, 15),
+    Collision: createEmptyGrid(20, 15),
+  }));
   const [activeLayer, setActiveLayer] = useState<LayerName>("Ground");
   const [layerVisibility, setLayerVisibility] = useState<Record<LayerName, boolean>>({
     Ground: true,
@@ -62,14 +87,57 @@ export default function TilemapPage() {
     Collision: true,
   });
   const [selectedTile, setSelectedTile] = useState(1);
-  const [tool, setTool] = useState<"paint" | "erase" | "fill">("paint");
+  const [tool, setTool] = useState<ToolType>("paint");
+  const [stampSize, setStampSize] = useState<2 | 3>(2);
   const [showGrid, setShowGrid] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [isPainting, setIsPainting] = useState(false);
 
+  const [undoStack, setUndoStack] = useState<Record<LayerName, number[][]>[]>([]);
+  const [redoStack, setRedoStack] = useState<Record<LayerName, number[][]>[]>([]);
+
+  const layersRef = useRef(layers);
+  layersRef.current = layers;
+  const undoStackRef = useRef(undoStack);
+  undoStackRef.current = undoStack;
+  const redoStackRef = useRef(redoStack);
+  redoStackRef.current = redoStack;
+
   const tileSize = BASE_TILE * zoom;
-  const canvasW = GRID_W * tileSize;
-  const canvasH = GRID_H * tileSize;
+  const canvasW = gridW * tileSize;
+  const canvasH = gridH * tileSize;
+  const minimapScale = Math.min(8, Math.max(2, Math.floor(140 / Math.max(gridW, gridH))));
+  const minimapW = gridW * minimapScale;
+  const minimapH = gridH * minimapScale;
+
+  const pushUndo = useCallback(() => {
+    const snap = cloneLayers(layersRef.current);
+    setUndoStack((prev) => [...prev.slice(-(MAX_UNDO - 1)), snap]);
+    setRedoStack([]);
+  }, []);
+
+  const undo = useCallback(() => {
+    const stack = undoStackRef.current;
+    if (stack.length === 0) return;
+    const restored = stack[stack.length - 1];
+    setRedoStack((prev) => [...prev, cloneLayers(layersRef.current)]);
+    setLayers(cloneLayers(restored));
+    setUndoStack(stack.slice(0, -1));
+  }, []);
+
+  const redo = useCallback(() => {
+    const stack = redoStackRef.current;
+    if (stack.length === 0) return;
+    const restored = stack[stack.length - 1];
+    setUndoStack((prev) => [...prev, cloneLayers(layersRef.current)]);
+    setLayers(cloneLayers(restored));
+    setRedoStack(stack.slice(0, -1));
+  }, []);
+
+  const undoRef = useRef(undo);
+  undoRef.current = undo;
+  const redoRef = useRef(redo);
+  redoRef.current = redo;
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -89,10 +157,10 @@ export default function TilemapPage() {
       const grid = layers[layerName];
       const isCollision = layerName === "Collision";
 
-      for (let y = 0; y < GRID_H; y++) {
-        for (let x = 0; x < GRID_W; x++) {
-          const tileId = grid[y][x];
-          if (tileId === 0) continue;
+      for (let y = 0; y < gridH; y++) {
+        for (let x = 0; x < gridW; x++) {
+          const tileId = grid[y]?.[x];
+          if (tileId === 0 || tileId === undefined) continue;
           const tile = TILE_TYPES[tileId];
           if (!tile) continue;
 
@@ -119,20 +187,64 @@ export default function TilemapPage() {
     if (showGrid) {
       ctx.strokeStyle = "rgba(255,255,255,0.08)";
       ctx.lineWidth = 1;
-      for (let x = 0; x <= GRID_W; x++) {
+      for (let x = 0; x <= gridW; x++) {
         ctx.beginPath();
         ctx.moveTo(x * tileSize, 0);
         ctx.lineTo(x * tileSize, canvasH);
         ctx.stroke();
       }
-      for (let y = 0; y <= GRID_H; y++) {
+      for (let y = 0; y <= gridH; y++) {
         ctx.beginPath();
         ctx.moveTo(0, y * tileSize);
         ctx.lineTo(canvasW, y * tileSize);
         ctx.stroke();
       }
     }
-  }, [layers, layerVisibility, showGrid, zoom, canvasW, canvasH, tileSize]);
+
+    // Minimap
+    const minimap = minimapRef.current;
+    if (minimap) {
+      const mCtx = minimap.getContext("2d");
+      if (mCtx) {
+        minimap.width = minimapW;
+        minimap.height = minimapH;
+        mCtx.fillStyle = "#111111";
+        mCtx.fillRect(0, 0, minimapW, minimapH);
+
+        for (const ln of drawOrder) {
+          if (!layerVisibility[ln]) continue;
+          const grid = layers[ln];
+          for (let y = 0; y < gridH; y++) {
+            for (let x = 0; x < gridW; x++) {
+              const tid = grid[y]?.[x];
+              if (tid === 0 || tid === undefined) continue;
+              const tile = TILE_TYPES[tid];
+              if (!tile) continue;
+              mCtx.fillStyle = ln === "Collision" ? "rgba(255,0,0,0.4)" : tile.color;
+              mCtx.fillRect(x * minimapScale, y * minimapScale, minimapScale, minimapScale);
+            }
+          }
+        }
+
+        if (showGrid && minimapScale >= 3) {
+          mCtx.strokeStyle = "rgba(255,255,255,0.05)";
+          mCtx.lineWidth = 0.5;
+          for (let x = 0; x <= gridW; x++) {
+            mCtx.beginPath();
+            mCtx.moveTo(x * minimapScale, 0);
+            mCtx.lineTo(x * minimapScale, minimapH);
+            mCtx.stroke();
+          }
+          for (let y = 0; y <= gridH; y++) {
+            mCtx.beginPath();
+            mCtx.moveTo(0, y * minimapScale);
+            mCtx.lineTo(minimapW, y * minimapScale);
+            mCtx.stroke();
+          }
+        }
+      }
+    }
+  }, [layers, layerVisibility, showGrid, zoom, canvasW, canvasH, tileSize, gridW, gridH, minimapScale, minimapW, minimapH]);
 
   useEffect(() => {
     draw();
@@ -144,7 +256,7 @@ export default function TilemapPage() {
     const rect = canvas.getBoundingClientRect();
     const x = Math.floor((e.clientX - rect.left) / tileSize);
     const y = Math.floor((e.clientY - rect.top) / tileSize);
-    if (x < 0 || x >= GRID_W || y < 0 || y >= GRID_H) return null;
+    if (x < 0 || x >= gridW || y < 0 || y >= gridH) return null;
     return [x, y];
   }
 
@@ -158,7 +270,27 @@ export default function TilemapPage() {
     });
   }
 
-  function floodFill(startX: number, startY: number) {
+  function paintStamp(startX: number, startY: number) {
+    setLayers((prev) => {
+      const grid = prev[activeLayer].map((row) => [...row]);
+      const tileId = selectedTile;
+      let changed = false;
+      for (let dy = 0; dy < stampSize; dy++) {
+        for (let dx = 0; dx < stampSize; dx++) {
+          const nx = startX + dx;
+          const ny = startY + dy;
+          if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH && grid[ny][nx] !== tileId) {
+            grid[ny][nx] = tileId;
+            changed = true;
+          }
+        }
+      }
+      if (!changed) return prev;
+      return { ...prev, [activeLayer]: grid };
+    });
+  }
+
+  function floodFillAction(startX: number, startY: number) {
     const grid = layers[activeLayer].map((row) => [...row]);
     const target = grid[startY][startX];
     const replacement = tool === "erase" ? 0 : selectedTile;
@@ -167,7 +299,7 @@ export default function TilemapPage() {
     const stack: [number, number][] = [[startX, startY]];
     while (stack.length > 0) {
       const [cx, cy] = stack.pop()!;
-      if (cx < 0 || cx >= GRID_W || cy < 0 || cy >= GRID_H) continue;
+      if (cx < 0 || cx >= gridW || cy < 0 || cy >= gridH) continue;
       if (grid[cy][cx] !== target) continue;
       grid[cy][cx] = replacement;
       stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
@@ -178,8 +310,12 @@ export default function TilemapPage() {
   function handleCanvasDown(e: React.MouseEvent<HTMLCanvasElement>) {
     const coords = getTileCoords(e);
     if (!coords) return;
+    pushUndo();
     if (tool === "fill") {
-      floodFill(coords[0], coords[1]);
+      floodFillAction(coords[0], coords[1]);
+    } else if (tool === "stamp") {
+      setIsPainting(true);
+      paintStamp(coords[0], coords[1]);
     } else {
       setIsPainting(true);
       paintTile(coords[0], coords[1]);
@@ -190,7 +326,11 @@ export default function TilemapPage() {
     if (!isPainting) return;
     const coords = getTileCoords(e);
     if (!coords) return;
-    paintTile(coords[0], coords[1]);
+    if (tool === "stamp") {
+      paintStamp(coords[0], coords[1]);
+    } else {
+      paintTile(coords[0], coords[1]);
+    }
   }
 
   function handleCanvasUp() {
@@ -198,24 +338,72 @@ export default function TilemapPage() {
   }
 
   function clearLayer() {
-    setLayers((prev) => ({ ...prev, [activeLayer]: createEmptyGrid() }));
+    pushUndo();
+    setLayers((prev) => ({ ...prev, [activeLayer]: createEmptyGrid(gridW, gridH) }));
   }
 
   function clearAll() {
+    pushUndo();
     setLayers({
-      Ground: createEmptyGrid(),
-      Objects: createEmptyGrid(),
-      Collision: createEmptyGrid(),
+      Ground: createEmptyGrid(gridW, gridH),
+      Objects: createEmptyGrid(gridW, gridH),
+      Collision: createEmptyGrid(gridW, gridH),
     });
   }
 
+  function handleMapSizeChange(w: number, h: number) {
+    const newLayers: Record<LayerName, number[][]> = {
+      Ground: createEmptyGrid(w, h),
+      Objects: createEmptyGrid(w, h),
+      Collision: createEmptyGrid(w, h),
+    };
+    for (const layerName of LAYERS) {
+      const oldGrid = layers[layerName];
+      const newGrid = newLayers[layerName];
+      for (let y = 0; y < Math.min(gridH, h); y++) {
+        for (let x = 0; x < Math.min(gridW, w); x++) {
+          newGrid[y][x] = oldGrid[y]?.[x] ?? 0;
+        }
+      }
+    }
+    setLayers(newLayers);
+    setGridW(w);
+    setGridH(h);
+    setUndoStack([]);
+    setRedoStack([]);
+  }
+
   function exportJSON() {
-    const data = { width: GRID_W, height: GRID_H, layers };
+    const usedTileIds = new Set<number>();
+    for (const layerName of LAYERS) {
+      const grid = layers[layerName];
+      for (const row of grid) {
+        for (const tileId of row) {
+          if (tileId !== 0) usedTileIds.add(tileId);
+        }
+      }
+    }
+    const tileTypesUsed = TILE_TYPES.filter((t) => usedTileIds.has(t.id)).map((t) => ({
+      id: t.id,
+      name: t.name,
+      color: t.color,
+    }));
+
+    const data = {
+      version: 1,
+      width: gridW,
+      height: gridH,
+      tileSize: BASE_TILE,
+      layers,
+      tileTypesUsed,
+      layerOrder: [...LAYERS],
+      exportedAt: new Date().toISOString(),
+    };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "tilemap.json";
+    a.download = `tilemap-${gridW}x${gridH}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -232,7 +420,13 @@ export default function TilemapPage() {
         try {
           const data = JSON.parse(ev.target?.result as string);
           if (data.layers) {
+            const w = data.width || 20;
+            const h = data.height || 15;
+            setGridW(w);
+            setGridH(h);
             setLayers(data.layers);
+            setUndoStack([]);
+            setRedoStack([]);
           }
         } catch {
           alert("Invalid JSON file");
@@ -246,6 +440,18 @@ export default function TilemapPage() {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        undoRef.current();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "y") {
+        e.preventDefault();
+        redoRef.current();
+        return;
+      }
+
       const key = e.key.toLowerCase();
       if (key >= "1" && key <= "9") {
         setSelectedTile(parseInt(key));
@@ -256,6 +462,8 @@ export default function TilemapPage() {
         setTool("fill");
       } else if (key === "g") {
         setShowGrid((prev) => !prev);
+      } else if (key === "s" && !e.ctrlKey && !e.metaKey) {
+        setTool("stamp");
       }
     }
     window.addEventListener("keydown", handleKeyDown);
@@ -268,6 +476,8 @@ export default function TilemapPage() {
         ? "bg-[#F59E0B]/15 text-[#F59E0B] border border-[#F59E0B]/40"
         : "text-[#9CA3AF] hover:text-[#F5F5F5] hover:bg-[#2A2A2A] border border-transparent"
     }`;
+
+  const mapSizeKey = `${gridW}x${gridH}`;
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-4">
@@ -285,8 +495,29 @@ export default function TilemapPage() {
       </div>
 
       <div className="flex gap-4">
-        {/* Left Sidebar — Palette & Tools */}
+        {/* Left Sidebar */}
         <div className="w-56 shrink-0 space-y-3">
+          {/* Map Size */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-3">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              Map Size
+            </h3>
+            <select
+              value={mapSizeKey}
+              onChange={(e) => {
+                const found = MAP_SIZES.find((s) => `${s.w}x${s.h}` === e.target.value);
+                if (found) handleMapSizeChange(found.w, found.h);
+              }}
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] px-2 py-1.5 text-xs text-[#D1D5DB] outline-none focus:border-[#F59E0B]/40"
+            >
+              {MAP_SIZES.map((s) => (
+                <option key={`${s.w}x${s.h}`} value={`${s.w}x${s.h}`}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Tile Palette */}
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-3">
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">
@@ -299,10 +530,10 @@ export default function TilemapPage() {
                   onClick={() => {
                     setSelectedTile(tile.id);
                     if (tile.id === 0) setTool("erase");
-                    else setTool("paint");
+                    else if (tool === "erase") setTool("paint");
                   }}
                   className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors ${
-                    selectedTile === tile.id && tool !== "fill"
+                    selectedTile === tile.id && tool !== "fill" && tool !== "stamp"
                       ? "bg-[#F59E0B]/15 text-[#F59E0B] ring-1 ring-[#F59E0B]/40"
                       : "text-[#9CA3AF] hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
                   }`}
@@ -319,6 +550,9 @@ export default function TilemapPage() {
                     }}
                   />
                   <span className="truncate">{tile.name}</span>
+                  {tile.key && (
+                    <kbd className="ml-auto text-[9px] opacity-40">{tile.key}</kbd>
+                  )}
                 </button>
               ))}
             </div>
@@ -338,6 +572,33 @@ export default function TilemapPage() {
             <button onClick={() => setTool("fill")} className={toolBtnClass(tool === "fill")}>
               <PaintBucket className="h-4 w-4" /> Fill <kbd className="ml-auto text-[10px] opacity-50">F</kbd>
             </button>
+            <button onClick={() => setTool("stamp")} className={toolBtnClass(tool === "stamp")}>
+              <LayoutGrid className="h-4 w-4" /> Stamp <kbd className="ml-auto text-[10px] opacity-50">S</kbd>
+            </button>
+            {tool === "stamp" && (
+              <div className="flex gap-1 pt-1">
+                <button
+                  onClick={() => setStampSize(2)}
+                  className={`flex-1 rounded-lg py-1 text-xs font-medium transition-colors ${
+                    stampSize === 2
+                      ? "bg-[#F59E0B]/15 text-[#F59E0B] ring-1 ring-[#F59E0B]/40"
+                      : "text-[#9CA3AF] hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                  }`}
+                >
+                  2x2
+                </button>
+                <button
+                  onClick={() => setStampSize(3)}
+                  className={`flex-1 rounded-lg py-1 text-xs font-medium transition-colors ${
+                    stampSize === 3
+                      ? "bg-[#F59E0B]/15 text-[#F59E0B] ring-1 ring-[#F59E0B]/40"
+                      : "text-[#9CA3AF] hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                  }`}
+                >
+                  3x3
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Layers */}
@@ -375,6 +636,26 @@ export default function TilemapPage() {
 
           {/* Actions */}
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-3 space-y-1">
+            <div className="flex gap-1">
+              <button
+                onClick={undo}
+                disabled={undoStack.length === 0}
+                className="flex-1 flex items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs text-[#9CA3AF] hover:bg-[#2A2A2A] hover:text-[#F5F5F5] transition-colors disabled:opacity-30"
+                title="Undo (Ctrl+Z)"
+              >
+                <Undo2 className="h-3.5 w-3.5" />
+                <span className="tabular-nums">{undoStack.length}</span>
+              </button>
+              <button
+                onClick={redo}
+                disabled={redoStack.length === 0}
+                className="flex-1 flex items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs text-[#9CA3AF] hover:bg-[#2A2A2A] hover:text-[#F5F5F5] transition-colors disabled:opacity-30"
+                title="Redo (Ctrl+Y)"
+              >
+                <Redo2 className="h-3.5 w-3.5" />
+                <span className="tabular-nums">{redoStack.length}</span>
+              </button>
+            </div>
             <button
               onClick={() => setShowGrid((p) => !p)}
               className={toolBtnClass(showGrid)}
@@ -425,6 +706,18 @@ export default function TilemapPage() {
               <Upload className="h-3.5 w-3.5" /> Import JSON
             </button>
           </div>
+
+          {/* Minimap */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-3">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              Minimap
+            </h3>
+            <canvas
+              ref={minimapRef}
+              className="w-full rounded border border-[#2A2A2A]"
+              style={{ imageRendering: "pixelated", width: minimapW, height: minimapH }}
+            />
+          </div>
         </div>
 
         {/* Canvas Area */}
@@ -443,10 +736,14 @@ export default function TilemapPage() {
             />
           </div>
           <div className="mt-3 flex items-center gap-4 text-xs text-[#666]">
-            <span>{GRID_W}x{GRID_H} tiles</span>
+            <span>{gridW}x{gridH} tiles</span>
             <span>{BASE_TILE}px base</span>
             <span>Layer: {activeLayer}</span>
             <span>Tile: {TILE_TYPES[selectedTile]?.name ?? "None"}</span>
+            {tool === "stamp" && <span>Stamp: {stampSize}x{stampSize}</span>}
+            <span className="ml-auto tabular-nums text-[#4A4A4A]">
+              {undoStack.length}/{MAX_UNDO} undo
+            </span>
           </div>
         </div>
       </div>
@@ -457,7 +754,10 @@ export default function TilemapPage() {
           <span><kbd className="rounded bg-[#2A2A2A] px-1.5 py-0.5 font-mono text-[#9CA3AF]">1-9</kbd> Select tile</span>
           <span><kbd className="rounded bg-[#2A2A2A] px-1.5 py-0.5 font-mono text-[#9CA3AF]">E</kbd> Eraser</span>
           <span><kbd className="rounded bg-[#2A2A2A] px-1.5 py-0.5 font-mono text-[#9CA3AF]">F</kbd> Fill</span>
+          <span><kbd className="rounded bg-[#2A2A2A] px-1.5 py-0.5 font-mono text-[#9CA3AF]">S</kbd> Stamp</span>
           <span><kbd className="rounded bg-[#2A2A2A] px-1.5 py-0.5 font-mono text-[#9CA3AF]">G</kbd> Toggle grid</span>
+          <span><kbd className="rounded bg-[#2A2A2A] px-1.5 py-0.5 font-mono text-[#9CA3AF]">Ctrl+Z</kbd> Undo</span>
+          <span><kbd className="rounded bg-[#2A2A2A] px-1.5 py-0.5 font-mono text-[#9CA3AF]">Ctrl+Y</kbd> Redo</span>
         </div>
       </div>
     </div>
