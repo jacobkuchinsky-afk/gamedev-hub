@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   BookOpen,
   Plus,
   Search,
   X,
-  ChevronDown,
   Calendar,
   Filter,
+  Flame,
+  Type,
 } from "lucide-react";
 import {
   getDevlog,
@@ -41,6 +42,99 @@ const MOOD_COLORS: Record<DevlogEntry["mood"], string> = {
   grinding: "#8B5CF6",
 };
 
+function wordCount(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function renderMarkdown(text: string): React.ReactNode[] {
+  const lines = text.split("\n");
+  const elements: React.ReactNode[] = [];
+
+  lines.forEach((line, lineIdx) => {
+    if (lineIdx > 0) elements.push(<br key={`br-${lineIdx}`} />);
+
+    const isBullet = /^[\-\*]\s/.test(line);
+    const isNumbered = /^\d+\.\s/.test(line);
+    const content = isBullet
+      ? line.replace(/^[\-\*]\s/, "")
+      : isNumbered
+      ? line.replace(/^\d+\.\s/, "")
+      : line;
+
+    const parts: React.ReactNode[] = [];
+    let remaining = content;
+    let keyIdx = 0;
+
+    while (remaining.length > 0) {
+      const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
+      const italicMatch = remaining.match(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/);
+      const codeMatch = remaining.match(/`(.+?)`/);
+
+      const matches = [
+        boldMatch && { type: "bold", match: boldMatch },
+        italicMatch && { type: "italic", match: italicMatch },
+        codeMatch && { type: "code", match: codeMatch },
+      ]
+        .filter(Boolean)
+        .sort(
+          (a, b) => (a!.match!.index ?? Infinity) - (b!.match!.index ?? Infinity)
+        );
+
+      if (matches.length === 0) {
+        parts.push(remaining);
+        break;
+      }
+
+      const first = matches[0]!;
+      const idx = first.match!.index!;
+      if (idx > 0) parts.push(remaining.slice(0, idx));
+
+      const inner = first.match![1];
+      if (first.type === "bold") {
+        parts.push(
+          <strong key={`${lineIdx}-${keyIdx++}`} className="font-semibold text-[#F5F5F5]">
+            {inner}
+          </strong>
+        );
+      } else if (first.type === "italic") {
+        parts.push(
+          <em key={`${lineIdx}-${keyIdx++}`} className="italic text-[#D1D5DB]">
+            {inner}
+          </em>
+        );
+      } else if (first.type === "code") {
+        parts.push(
+          <code
+            key={`${lineIdx}-${keyIdx++}`}
+            className="rounded bg-[#2A2A2A] px-1.5 py-0.5 text-xs font-mono text-[#F59E0B]"
+          >
+            {inner}
+          </code>
+        );
+      }
+
+      remaining = remaining.slice(idx + first.match![0].length);
+    }
+
+    if (isBullet || isNumbered) {
+      elements.push(
+        <span key={`li-${lineIdx}`} className="flex gap-2 ml-2">
+          <span className="text-[#6B7280] shrink-0">
+            {isBullet ? "\u2022" : line.match(/^\d+/)![0] + "."}
+          </span>
+          <span>{parts}</span>
+        </span>
+      );
+    } else {
+      elements.push(
+        <span key={`p-${lineIdx}`}>{parts}</span>
+      );
+    }
+  });
+
+  return elements;
+}
+
 export default function DevlogPage() {
   const { toast } = useToast();
   const [entries, setEntries] = useState<DevlogEntry[]>([]);
@@ -58,13 +152,16 @@ export default function DevlogPage() {
   const [formContent, setFormContent] = useState("");
   const [formMood, setFormMood] = useState<DevlogEntry["mood"]>("productive");
 
-  useEffect(() => {
-    console.log("[DevlogPage] rendered");
+  const reload = useCallback(() => {
     setEntries(getDevlog());
+  }, []);
+
+  useEffect(() => {
+    reload();
     const p = getProjects();
     setProjects(p);
     if (p.length > 0) setFormProject(p[0].id);
-  }, []);
+  }, [reload]);
 
   const projectMap = useMemo(() => {
     const map: Record<string, Project> = {};
@@ -72,9 +169,41 @@ export default function DevlogPage() {
     return map;
   }, [projects]);
 
+  const moodSummary = useMemo(() => {
+    const counts: Record<string, number> = {};
+    entries.forEach((e) => {
+      counts[e.mood] = (counts[e.mood] || 0) + 1;
+    });
+    return counts;
+  }, [entries]);
+
+  const streak = useMemo(() => {
+    if (entries.length === 0) return 0;
+    const uniqueDates = [...new Set(entries.map((e) => e.date))].sort(
+      (a, b) => b.localeCompare(a)
+    );
+
+    const today = new Date().toISOString().split("T")[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+
+    if (uniqueDates[0] !== today && uniqueDates[0] !== yesterday) return 0;
+
+    let count = 1;
+    for (let i = 1; i < uniqueDates.length; i++) {
+      const prev = new Date(uniqueDates[i - 1] + "T00:00:00");
+      const curr = new Date(uniqueDates[i] + "T00:00:00");
+      const diffDays = (prev.getTime() - curr.getTime()) / 86400000;
+      if (diffDays === 1) {
+        count++;
+      } else {
+        break;
+      }
+    }
+    return count;
+  }, [entries]);
+
   const filtered = useMemo(() => {
     let result = [...entries];
-
     if (search) {
       const q = search.toLowerCase();
       result = result.filter(
@@ -83,36 +212,24 @@ export default function DevlogPage() {
           e.content.toLowerCase().includes(q)
       );
     }
-    if (filterProject) {
-      result = result.filter((e) => e.projectId === filterProject);
-    }
-    if (filterMood) {
-      result = result.filter((e) => e.mood === filterMood);
-    }
-    if (dateFrom) {
-      result = result.filter((e) => e.date >= dateFrom);
-    }
-    if (dateTo) {
-      result = result.filter((e) => e.date <= dateTo);
-    }
-
+    if (filterProject) result = result.filter((e) => e.projectId === filterProject);
+    if (filterMood) result = result.filter((e) => e.mood === filterMood);
+    if (dateFrom) result = result.filter((e) => e.date >= dateFrom);
+    if (dateTo) result = result.filter((e) => e.date <= dateTo);
     result.sort((a, b) => b.date.localeCompare(a.date));
     return result;
   }, [entries, search, filterProject, filterMood, dateFrom, dateTo]);
 
   const handleSubmit = () => {
     if (!formProject || !formTitle.trim() || !formContent.trim()) return;
-
-    const entry = addDevlogEntry({
+    addDevlogEntry({
       projectId: formProject,
       title: formTitle.trim(),
       content: formContent.trim(),
       mood: formMood,
       date: new Date().toISOString().split("T")[0],
     });
-    console.log("[DevlogPage] created entry:", entry.id);
-
-    setEntries(getDevlog());
+    reload();
     toast({ title: "Entry saved!", description: formTitle.trim(), type: "success" });
     setFormTitle("");
     setFormContent("");
@@ -120,7 +237,9 @@ export default function DevlogPage() {
     setShowModal(false);
   };
 
-  const activeFilterCount = [filterProject, filterMood, dateFrom, dateTo].filter(Boolean).length;
+  const activeFilterCount = [filterProject, filterMood, dateFrom, dateTo].filter(
+    Boolean
+  ).length;
 
   const clearFilters = () => {
     setFilterProject("");
@@ -139,6 +258,8 @@ export default function DevlogPage() {
     });
   };
 
+  const MAX_CHARS = 5000;
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       {/* Header */}
@@ -146,7 +267,7 @@ export default function DevlogPage() {
         <div>
           <h1 className="text-2xl font-bold">Devlog</h1>
           <p className="mt-1 text-sm text-[#9CA3AF]">
-            Your daily standup — everything you&apos;ve been working on
+            Your daily standup &mdash; everything you&apos;ve been working on
           </p>
         </div>
         <button
@@ -157,6 +278,53 @@ export default function DevlogPage() {
           Write Entry
         </button>
       </div>
+
+      {/* Stats Row */}
+      {entries.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          {/* Streak */}
+          <div className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-2.5">
+            <Flame
+              className="h-4 w-4"
+              style={{ color: streak > 0 ? "#F59E0B" : "#6B7280" }}
+            />
+            <span className="text-sm font-semibold text-[#F5F5F5]">
+              {streak}
+            </span>
+            <span className="text-xs text-[#6B7280]">
+              day{streak !== 1 ? "s" : ""} streak
+            </span>
+          </div>
+
+          {/* Mood Summary */}
+          {MOOD_OPTIONS.filter((m) => moodSummary[m]).map((mood) => (
+            <div
+              key={mood}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5"
+            >
+              <span className="text-sm">{getMoodEmoji(mood)}</span>
+              <span className="text-xs text-[#9CA3AF]">{MOOD_LABELS[mood]}</span>
+              <span
+                className="ml-1 rounded-full px-1.5 py-0.5 text-xs font-bold"
+                style={{
+                  backgroundColor: `${MOOD_COLORS[mood]}15`,
+                  color: MOOD_COLORS[mood],
+                }}
+              >
+                {moodSummary[mood]}
+              </span>
+            </div>
+          ))}
+
+          {/* Total Entries */}
+          <div className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-2.5">
+            <Type className="h-4 w-4 text-[#6B7280]" />
+            <span className="text-xs text-[#6B7280]">
+              {entries.reduce((sum, e) => sum + wordCount(e.content), 0).toLocaleString()} words total
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Search + Filter bar */}
       <div className="space-y-3">
@@ -270,12 +438,28 @@ export default function DevlogPage() {
       <div className="space-y-1">
         {filtered.length === 0 && (
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-16 text-center">
-            <BookOpen className="mx-auto h-10 w-10 text-[#6B7280]" />
-            <p className="mt-3 text-sm text-[#6B7280]">
-              {entries.length === 0
-                ? "No devlog entries yet. Write your first one!"
-                : "No entries match your filters."}
-            </p>
+            <BookOpen className="mx-auto h-12 w-12 text-[#F59E0B]/30" />
+            {entries.length === 0 ? (
+              <>
+                <p className="mt-4 text-base font-semibold text-[#F5F5F5]">
+                  Start your devlog journey
+                </p>
+                <p className="mt-1 text-sm text-[#6B7280]">
+                  Every day counts. Document your progress, wins, and blockers.
+                </p>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-[#D97706]"
+                >
+                  <Plus className="h-4 w-4" />
+                  Write your first entry
+                </button>
+              </>
+            ) : (
+              <p className="mt-3 text-sm text-[#6B7280]">
+                No entries match your filters.
+              </p>
+            )}
           </div>
         )}
 
@@ -283,6 +467,7 @@ export default function DevlogPage() {
           const project = projectMap[entry.projectId];
           const showDateHeader =
             idx === 0 || filtered[idx - 1].date !== entry.date;
+          const wc = wordCount(entry.content);
 
           return (
             <div key={entry.id}>
@@ -296,7 +481,6 @@ export default function DevlogPage() {
                 </div>
               )}
               <div className="group relative flex gap-4">
-                {/* Timeline line */}
                 <div className="flex flex-col items-center">
                   <div
                     className="h-3 w-3 rounded-full border-2 border-[#0F0F0F]"
@@ -307,7 +491,6 @@ export default function DevlogPage() {
                   )}
                 </div>
 
-                {/* Card */}
                 <div className="mb-4 flex-1 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 transition-colors hover:border-[#2A2A2A]/80">
                   <div className="flex flex-wrap items-center gap-2">
                     {project && (
@@ -330,13 +513,16 @@ export default function DevlogPage() {
                     >
                       {getMoodEmoji(entry.mood)} {MOOD_LABELS[entry.mood]}
                     </span>
+                    <span className="ml-auto text-xs text-[#6B7280]">
+                      {wc} word{wc !== 1 ? "s" : ""}
+                    </span>
                   </div>
                   <h3 className="mt-2 text-base font-semibold text-[#F5F5F5]">
                     {entry.title}
                   </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-[#D1D5DB]">
-                    {entry.content}
-                  </p>
+                  <div className="mt-2 text-sm leading-relaxed text-[#D1D5DB]">
+                    {renderMarkdown(entry.content)}
+                  </div>
                 </div>
               </div>
             </div>
@@ -351,7 +537,7 @@ export default function DevlogPage() {
             className="absolute inset-0 bg-black/60"
             onClick={() => setShowModal(false)}
           />
-          <div className="relative w-full max-w-lg rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-6 shadow-2xl">
+          <div className="relative w-full max-w-2xl rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-6 shadow-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">Write Devlog Entry</h2>
               <button
@@ -363,46 +549,60 @@ export default function DevlogPage() {
             </div>
 
             <div className="mt-5 space-y-4">
-              <div>
-                <label className="mb-1 block text-sm text-[#9CA3AF]">
-                  Project
-                </label>
-                <select
-                  value={formProject}
-                  onChange={(e) => setFormProject(e.target.value)}
-                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-sm text-[#9CA3AF]">
+                    Project
+                  </label>
+                  <select
+                    value={formProject}
+                    onChange={(e) => setFormProject(e.target.value)}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+                  >
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-[#9CA3AF]">
+                    Title
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="What did you work on?"
+                    value={formTitle}
+                    onChange={(e) => setFormTitle(e.target.value)}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="mb-1 block text-sm text-[#9CA3AF]">
-                  Title
-                </label>
-                <input
-                  type="text"
-                  placeholder="What did you work on?"
-                  value={formTitle}
-                  onChange={(e) => setFormTitle(e.target.value)}
-                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-[#9CA3AF]">
-                  Content
-                </label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-sm text-[#9CA3AF]">Content</label>
+                  <span
+                    className={`text-xs ${
+                      formContent.length > MAX_CHARS * 0.9
+                        ? "text-[#EF4444]"
+                        : "text-[#6B7280]"
+                    }`}
+                  >
+                    {formContent.length.toLocaleString()} / {MAX_CHARS.toLocaleString()} chars
+                    &middot; {wordCount(formContent)} words
+                  </span>
+                </div>
                 <textarea
-                  placeholder="Write about your progress, blockers, decisions..."
+                  placeholder="Write about your progress, blockers, decisions... Supports **bold**, *italic*, `code`, and - bullet lists."
                   value={formContent}
-                  onChange={(e) => setFormContent(e.target.value)}
-                  rows={5}
-                  className="w-full resize-none rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+                  onChange={(e) => {
+                    if (e.target.value.length <= MAX_CHARS)
+                      setFormContent(e.target.value);
+                  }}
+                  rows={10}
+                  className="w-full resize-none rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-3 text-sm leading-relaxed text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50 font-mono"
                 />
               </div>
 

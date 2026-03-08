@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -10,6 +10,10 @@ import {
   AlertTriangle,
   ChevronDown,
   Monitor,
+  Search,
+  Bug as BugIcon,
+  CheckCircle2,
+  Zap,
 } from "lucide-react";
 import {
   getProject,
@@ -35,6 +39,7 @@ const STATUSES: Bug["status"][] = [
   "testing",
   "closed",
 ];
+const PLATFORMS = ["All", "Windows", "macOS", "Linux", "Web", "Mobile"];
 
 const BUG_STATUS_STYLES: Record<Bug["status"], string> = {
   open: "bg-[#EF4444]/10 text-[#EF4444]",
@@ -44,6 +49,22 @@ const BUG_STATUS_STYLES: Record<Bug["status"], string> = {
   closed: "bg-[#10B981]/10 text-[#10B981]",
 };
 
+function timeAgo(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
+}
+
 export default function BugTrackerPage() {
   const params = useParams();
   const projectId = params.id as string;
@@ -52,12 +73,15 @@ export default function BugTrackerPage() {
   const [bugs, setBugsState] = useState<Bug[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [expandedBug, setExpandedBug] = useState<string | null>(null);
-  const [filterSeverity, setFilterSeverity] = useState<
-    Bug["severity"] | "all"
-  >("all");
-  const [filterStatus, setFilterStatus] = useState<Bug["status"] | "all">(
-    "all"
-  );
+  const [filterSeverity, setFilterSeverity] = useState<Bug["severity"] | "all">("all");
+  const [filterStatus, setFilterStatus] = useState<Bug["status"] | "all">("all");
+  const [filterPlatform, setFilterPlatform] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const [quickTitle, setQuickTitle] = useState("");
+  const [quickSeverity, setQuickSeverity] = useState<Bug["severity"]>("major");
+  const [quickPlatform, setQuickPlatform] = useState("All");
+  const [showQuickForm, setShowQuickForm] = useState(false);
 
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
@@ -70,7 +94,6 @@ export default function BugTrackerPage() {
   }, [projectId]);
 
   useEffect(() => {
-    console.log("[BugTrackerPage] rendered, id:", projectId);
     const p = getProject(projectId);
     if (p) setProject(p);
     reload();
@@ -88,7 +111,6 @@ export default function BugTrackerPage() {
       platform: newPlatform,
       reproSteps: newReproSteps.trim(),
     });
-    console.log("[BugTrackerPage] bug added");
     setNewTitle("");
     setNewDesc("");
     setNewSeverity("major");
@@ -98,21 +120,163 @@ export default function BugTrackerPage() {
     reload();
   };
 
-  const changeBugStatus = (bugId: string, newStatus: Bug["status"]) => {
-    updateBug(bugId, { status: newStatus });
-    console.log("[BugTrackerPage] bug status changed to", newStatus);
+  const handleQuickFile = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickTitle.trim()) return;
+    addBug({
+      projectId,
+      title: quickTitle.trim(),
+      description: "",
+      severity: quickSeverity,
+      status: "open",
+      platform: quickPlatform,
+      reproSteps: "",
+    });
+    setQuickTitle("");
+    setQuickSeverity("major");
+    setQuickPlatform("All");
+    setShowQuickForm(false);
     reload();
   };
 
-  const filtered = bugs
-    .filter((b) => filterSeverity === "all" || b.severity === filterSeverity)
-    .filter((b) => filterStatus === "all" || b.status === filterStatus)
-    .sort(
-      (a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
+  const changeBugStatus = (bugId: string, newStatus: Bug["status"]) => {
+    updateBug(bugId, { status: newStatus });
+    reload();
+  };
+
+  const openBugs = useMemo(() => bugs.filter((b) => b.status !== "closed"), [bugs]);
+  const closedBugs = useMemo(() => bugs.filter((b) => b.status === "closed"), [bugs]);
+
+  const filtered = useMemo(() => {
+    return bugs
+      .filter((b) => b.status !== "closed")
+      .filter((b) => filterSeverity === "all" || b.severity === filterSeverity)
+      .filter((b) => filterStatus === "all" || b.status === filterStatus)
+      .filter((b) => filterPlatform === "all" || b.platform === filterPlatform)
+      .filter((b) => {
+        if (!searchQuery) return true;
+        const q = searchQuery.toLowerCase();
+        return (
+          b.title.toLowerCase().includes(q) ||
+          b.description.toLowerCase().includes(q)
+        );
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+  }, [bugs, filterSeverity, filterStatus, filterPlatform, searchQuery]);
+
+  const filteredResolved = useMemo(() => {
+    return closedBugs
+      .filter((b) => {
+        if (!searchQuery) return true;
+        const q = searchQuery.toLowerCase();
+        return (
+          b.title.toLowerCase().includes(q) ||
+          b.description.toLowerCase().includes(q)
+        );
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+  }, [closedBugs, searchQuery]);
+
+  const uniquePlatforms = useMemo(() => {
+    const set = new Set(bugs.map((b) => b.platform));
+    return Array.from(set);
+  }, [bugs]);
 
   if (!project) return null;
+
+  const renderBugRow = (bug: Bug, isResolved: boolean) => (
+    <div key={bug.id}>
+      <div
+        onClick={() => setExpandedBug(expandedBug === bug.id ? null : bug.id)}
+        className={`flex cursor-pointer items-center gap-4 px-5 py-4 transition-colors hover:bg-[#1F1F1F] ${
+          isResolved ? "opacity-60" : ""
+        }`}
+      >
+        <AlertTriangle
+          className="h-4 w-4 shrink-0"
+          style={{ color: getSeverityColor(bug.severity) }}
+        />
+        <div className="min-w-0 flex-1">
+          <p
+            className={`text-sm font-medium ${
+              isResolved ? "line-through text-[#6B7280]" : ""
+            }`}
+          >
+            {bug.title}
+          </p>
+          <div className="mt-1 flex items-center gap-2 text-xs text-[#6B7280]">
+            <Monitor className="h-3 w-3" />
+            {bug.platform}
+            <span>&middot;</span>
+            <span>{timeAgo(bug.created_at)}</span>
+          </div>
+        </div>
+        <span
+          className="shrink-0 rounded-md px-2 py-0.5 text-xs font-medium"
+          style={{
+            backgroundColor: `${getSeverityColor(bug.severity)}15`,
+            color: getSeverityColor(bug.severity),
+          }}
+        >
+          {bug.severity}
+        </span>
+        <span
+          className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${BUG_STATUS_STYLES[bug.status]}`}
+        >
+          {bug.status}
+        </span>
+      </div>
+
+      {expandedBug === bug.id && (
+        <div className="border-t border-[#2A2A2A] bg-[#151515] px-5 py-4 space-y-4">
+          {bug.description && (
+            <div>
+              <p className="text-xs font-medium text-[#6B7280] mb-1">
+                Description
+              </p>
+              <p className="text-sm text-[#D1D5DB]">{bug.description}</p>
+            </div>
+          )}
+          {bug.reproSteps && (
+            <div>
+              <p className="text-xs font-medium text-[#6B7280] mb-1">
+                Repro Steps
+              </p>
+              <div className="rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] p-3">
+                {bug.reproSteps.split("\n").map((step, i) => (
+                  <p key={i} className="text-sm text-[#D1D5DB] leading-relaxed">
+                    {step}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+          <div>
+            <p className="text-xs font-medium text-[#6B7280] mb-2">
+              Change Status
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {STATUSES.filter((s) => s !== bug.status).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => changeBugStatus(bug.id, s)}
+                  className={`rounded-lg border border-[#2A2A2A] px-3 py-1 text-xs font-medium transition-colors hover:border-[#F59E0B]/30 ${BUG_STATUS_STYLES[s]}`}
+                >
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -126,44 +290,26 @@ export default function BugTrackerPage() {
           {project.name}
         </Link>
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-2xl font-bold">Bug Tracker</h1>
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <select
-                value={filterSeverity}
-                onChange={(e) =>
-                  setFilterSeverity(
-                    e.target.value as Bug["severity"] | "all"
-                  )
-                }
-                className="appearance-none rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2 pl-3 pr-8 text-sm text-[#9CA3AF] outline-none focus:border-[#F59E0B]/50"
-              >
-                <option value="all">All Severities</option>
-                {SEVERITIES.map((s) => (
-                  <option key={s} value={s}>
-                    {s.charAt(0).toUpperCase() + s.slice(1)}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+            <h1 className="text-2xl font-bold">Bug Tracker</h1>
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1.5 rounded-full bg-[#EF4444]/10 px-3 py-1 text-xs font-semibold text-[#EF4444]">
+                <BugIcon className="h-3 w-3" />
+                {openBugs.length} open
+              </span>
+              <span className="rounded-full bg-[#2A2A2A] px-3 py-1 text-xs font-medium text-[#6B7280]">
+                {bugs.length} total
+              </span>
             </div>
-            <div className="relative">
-              <select
-                value={filterStatus}
-                onChange={(e) =>
-                  setFilterStatus(e.target.value as Bug["status"] | "all")
-                }
-                className="appearance-none rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2 pl-3 pr-8 text-sm text-[#9CA3AF] outline-none focus:border-[#F59E0B]/50"
-              >
-                <option value="all">All Statuses</option>
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s.charAt(0).toUpperCase() + s.slice(1)}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
-            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowQuickForm(!showQuickForm)}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 px-3 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10"
+            >
+              <Zap className="h-3.5 w-3.5" />
+              Quick File
+            </button>
             <button
               onClick={() => setShowAddForm(true)}
               className="flex items-center gap-2 rounded-lg bg-[#EF4444] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#EF4444]/90"
@@ -172,6 +318,120 @@ export default function BugTrackerPage() {
               Report Bug
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Quick File Bug */}
+      {showQuickForm && (
+        <form
+          onSubmit={handleQuickFile}
+          className="flex flex-wrap items-end gap-2 rounded-xl border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-4"
+        >
+          <div className="flex-1 min-w-[200px]">
+            <input
+              type="text"
+              placeholder="Bug title — quick description"
+              value={quickTitle}
+              onChange={(e) => setQuickTitle(e.target.value)}
+              autoFocus
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+            />
+          </div>
+          <select
+            value={quickSeverity}
+            onChange={(e) => setQuickSeverity(e.target.value as Bug["severity"])}
+            className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+          >
+            {SEVERITIES.map((s) => (
+              <option key={s} value={s}>
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+              </option>
+            ))}
+          </select>
+          <select
+            value={quickPlatform}
+            onChange={(e) => setQuickPlatform(e.target.value)}
+            className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+          >
+            {PLATFORMS.map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            disabled={!quickTitle.trim()}
+            className="rounded-lg bg-[#EF4444] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#EF4444]/90 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            File
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowQuickForm(false)}
+            className="rounded-lg p-2 text-[#6B7280] hover:text-[#F5F5F5]"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </form>
+      )}
+
+      {/* Search + Filter Bar */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+          <input
+            type="text"
+            placeholder="Search bugs by title or description..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2 pl-10 pr-4 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+          />
+        </div>
+        <div className="relative">
+          <select
+            value={filterSeverity}
+            onChange={(e) =>
+              setFilterSeverity(e.target.value as Bug["severity"] | "all")
+            }
+            className="appearance-none rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2 pl-3 pr-8 text-sm text-[#9CA3AF] outline-none focus:border-[#F59E0B]/50"
+          >
+            <option value="all">All Severities</option>
+            {SEVERITIES.map((s) => (
+              <option key={s} value={s}>
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+        </div>
+        <div className="relative">
+          <select
+            value={filterStatus}
+            onChange={(e) =>
+              setFilterStatus(e.target.value as Bug["status"] | "all")
+            }
+            className="appearance-none rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2 pl-3 pr-8 text-sm text-[#9CA3AF] outline-none focus:border-[#F59E0B]/50"
+          >
+            <option value="all">All Statuses</option>
+            {STATUSES.filter((s) => s !== "closed").map((s) => (
+              <option key={s} value={s}>
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+        </div>
+        <div className="relative">
+          <select
+            value={filterPlatform}
+            onChange={(e) => setFilterPlatform(e.target.value)}
+            className="appearance-none rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2 pl-3 pr-8 text-sm text-[#9CA3AF] outline-none focus:border-[#F59E0B]/50"
+          >
+            <option value="all">All Platforms</option>
+            {uniquePlatforms.map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
         </div>
       </div>
 
@@ -233,12 +493,9 @@ export default function BugTrackerPage() {
                     onChange={(e) => setNewPlatform(e.target.value)}
                     className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
                   >
-                    <option value="All">All</option>
-                    <option value="Windows">Windows</option>
-                    <option value="macOS">macOS</option>
-                    <option value="Linux">Linux</option>
-                    <option value="Web">Web</option>
-                    <option value="Mobile">Mobile</option>
+                    {PLATFORMS.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -265,7 +522,7 @@ export default function BugTrackerPage() {
         </div>
       )}
 
-      {/* Bug List */}
+      {/* Active Bug List */}
       <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
@@ -273,6 +530,8 @@ export default function BugTrackerPage() {
             <p className="mt-3 text-sm text-[#9CA3AF]">
               {bugs.length === 0
                 ? "No bugs reported yet"
+                : openBugs.length === 0
+                ? "All bugs resolved — nice work!"
                 : "No bugs match your filters"}
             </p>
             {bugs.length === 0 && (
@@ -287,96 +546,28 @@ export default function BugTrackerPage() {
           </div>
         ) : (
           <div className="divide-y divide-[#2A2A2A]">
-            {filtered.map((bug) => (
-              <div key={bug.id}>
-                <div
-                  onClick={() =>
-                    setExpandedBug(expandedBug === bug.id ? null : bug.id)
-                  }
-                  className="flex cursor-pointer items-center gap-4 px-5 py-4 transition-colors hover:bg-[#1F1F1F]"
-                >
-                  <AlertTriangle
-                    className="h-4 w-4 shrink-0"
-                    style={{ color: getSeverityColor(bug.severity) }}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">{bug.title}</p>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-[#6B7280]">
-                      <Monitor className="h-3 w-3" />
-                      {bug.platform}
-                      <span>&middot;</span>
-                      {new Date(bug.created_at).toLocaleDateString()}
-                    </div>
-                  </div>
-                  <span
-                    className="shrink-0 rounded-md px-2 py-0.5 text-xs font-medium"
-                    style={{
-                      backgroundColor: `${getSeverityColor(bug.severity)}15`,
-                      color: getSeverityColor(bug.severity),
-                    }}
-                  >
-                    {bug.severity}
-                  </span>
-                  <span
-                    className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${BUG_STATUS_STYLES[bug.status]}`}
-                  >
-                    {bug.status}
-                  </span>
-                </div>
-
-                {/* Expanded Detail */}
-                {expandedBug === bug.id && (
-                  <div className="border-t border-[#2A2A2A] bg-[#151515] px-5 py-4 space-y-4">
-                    {bug.description && (
-                      <div>
-                        <p className="text-xs font-medium text-[#6B7280] mb-1">
-                          Description
-                        </p>
-                        <p className="text-sm text-[#D1D5DB]">
-                          {bug.description}
-                        </p>
-                      </div>
-                    )}
-                    {bug.reproSteps && (
-                      <div>
-                        <p className="text-xs font-medium text-[#6B7280] mb-1">
-                          Repro Steps
-                        </p>
-                        <div className="rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] p-3">
-                          {bug.reproSteps.split("\n").map((step, i) => (
-                            <p
-                              key={i}
-                              className="text-sm text-[#D1D5DB] leading-relaxed"
-                            >
-                              {step}
-                            </p>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-xs font-medium text-[#6B7280] mb-2">
-                        Change Status
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {STATUSES.filter((s) => s !== bug.status).map((s) => (
-                          <button
-                            key={s}
-                            onClick={() => changeBugStatus(bug.id, s)}
-                            className={`rounded-lg border border-[#2A2A2A] px-3 py-1 text-xs font-medium transition-colors hover:border-[#F59E0B]/30 ${BUG_STATUS_STYLES[s]}`}
-                          >
-                            {s.charAt(0).toUpperCase() + s.slice(1)}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
+            {filtered.map((bug) => renderBugRow(bug, false))}
           </div>
         )}
       </div>
+
+      {/* Resolved Section */}
+      {filteredResolved.length > 0 && (
+        <div>
+          <div className="mb-3 flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-[#10B981]" />
+            <h2 className="text-sm font-semibold text-[#6B7280]">
+              Resolved ({filteredResolved.length})
+            </h2>
+            <div className="h-px flex-1 bg-[#2A2A2A]" />
+          </div>
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+            <div className="divide-y divide-[#2A2A2A]">
+              {filteredResolved.map((bug) => renderBugRow(bug, true))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
