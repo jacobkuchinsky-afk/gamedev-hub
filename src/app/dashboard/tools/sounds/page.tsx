@@ -16,6 +16,9 @@ import {
   Heart,
   MousePointerClick,
   Dice5,
+  AlertTriangle,
+  CheckCircle,
+  Wind,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -73,6 +76,21 @@ const PRESETS: Preset[] = [
     name: "Blip/Select",
     icon: MousePointerClick,
     params: { waveType: "sine", freqStart: 660, freqEnd: 880, duration: 0.08, volume: 0.2, decay: 0.05 },
+  },
+  {
+    name: "Error",
+    icon: AlertTriangle,
+    params: { waveType: "square", freqStart: 200, freqEnd: 120, duration: 0.4, volume: 0.3, decay: 0.35 },
+  },
+  {
+    name: "Success",
+    icon: CheckCircle,
+    params: { waveType: "sine", freqStart: 523, freqEnd: 1047, duration: 0.3, volume: 0.25, decay: 0.2 },
+  },
+  {
+    name: "Whoosh",
+    icon: Wind,
+    params: { waveType: "sawtooth", freqStart: 900, freqEnd: 80, duration: 0.25, volume: 0.2, decay: 0.22 },
   },
   {
     name: "Random",

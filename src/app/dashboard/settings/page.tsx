@@ -14,9 +14,10 @@ import {
   Check,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
+import { getProjects, getTasks, getDevlog } from "@/lib/store";
 
 const SETTINGS_KEY = "gameforge_user_settings";
-const VERSION = "0.4.2";
+const VERSION = "1.0.0";
 
 interface UserSettings {
   username: string;
@@ -73,6 +74,9 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [clearConfirmText, setClearConfirmText] = useState("");
+  const [stats, setStats] = useState({ projects: 0, tasks: 0, devlogs: 0, storageKB: 0 });
 
   useEffect(() => {
     console.log("[SettingsPage] rendered");
@@ -85,6 +89,25 @@ export default function SettingsPage() {
       );
     }
   }, [user]);
+
+  useEffect(() => {
+    const projects = getProjects();
+    const tasks = getTasks();
+    const devlogs = getDevlog();
+    let totalBytes = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith("gameforge_")) {
+        totalBytes += (localStorage.getItem(key) || "").length * 2;
+      }
+    }
+    setStats({
+      projects: projects.length,
+      tasks: tasks.length,
+      devlogs: devlogs.length,
+      storageKB: Math.round((totalBytes / 1024) * 10) / 10,
+    });
+  }, []);
 
   const updateField = useCallback(
     <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => {
@@ -166,9 +189,6 @@ export default function SettingsPage() {
   }, []);
 
   const handleClearAll = useCallback(() => {
-    if (!confirm("Are you sure you want to delete ALL GameForge data? This includes all projects, tasks, bugs, devlog entries, settings, and GDDs. This CANNOT be undone.")) return;
-    if (!confirm("Really? This will wipe everything. Last chance.")) return;
-
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
@@ -176,7 +196,6 @@ export default function SettingsPage() {
     }
     keysToRemove.forEach((k) => localStorage.removeItem(k));
     console.log("[Settings] cleared", keysToRemove.length, "keys");
-    alert("All data cleared. The page will reload.");
     window.location.reload();
   }, []);
 
@@ -408,7 +427,7 @@ export default function SettingsPage() {
           )}
 
           <button
-            onClick={handleClearAll}
+            onClick={() => { setShowClearModal(true); setClearConfirmText(""); }}
             className="flex w-full items-center gap-3 rounded-lg border border-red-500/20 px-4 py-3 text-left transition-colors hover:border-red-500/40 hover:bg-red-500/5"
           >
             <Trash2 className="h-4 w-4 shrink-0 text-red-400" />
@@ -450,6 +469,23 @@ export default function SettingsPage() {
               <ExternalLink className="h-3 w-3" />
             </a>
           </div>
+          <div className="my-3 h-px bg-[#2A2A2A]" />
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[#9CA3AF]">Total Projects</span>
+            <span className="text-sm tabular-nums text-[#F5F5F5]">{stats.projects}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[#9CA3AF]">Total Tasks</span>
+            <span className="text-sm tabular-nums text-[#F5F5F5]">{stats.tasks}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[#9CA3AF]">Devlog Entries</span>
+            <span className="text-sm tabular-nums text-[#F5F5F5]">{stats.devlogs}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[#9CA3AF]">Storage Used</span>
+            <span className="text-sm tabular-nums text-[#F5F5F5]">{stats.storageKB} KB</span>
+          </div>
           <div className="mt-2 rounded-lg bg-[#0F0F0F] p-3">
             <p className="text-xs leading-relaxed text-[#6B7280]">
               GameForge is a game development productivity platform built to help indie devs
@@ -459,6 +495,50 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {showClearModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6 shadow-2xl">
+            <div className="mb-4 flex items-center gap-2 text-red-400">
+              <Trash2 className="h-5 w-5" />
+              <h3 className="text-lg font-bold">Delete All Data</h3>
+            </div>
+            <p className="mb-2 text-sm text-[#D1D5DB]">
+              This will permanently delete all projects, tasks, bugs, devlogs, and tool data. This cannot be undone.
+            </p>
+            <p className="mb-4 text-sm text-[#9CA3AF]">
+              Type <span className="font-mono font-bold text-red-400">DELETE</span> to confirm.
+            </p>
+            <input
+              type="text"
+              value={clearConfirmText}
+              onChange={(e) => setClearConfirmText(e.target.value)}
+              placeholder="Type DELETE"
+              className="mb-4 w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] transition-colors focus:border-red-500/50 focus:outline-none"
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowClearModal(false)}
+                className="flex-1 rounded-lg border border-[#2A2A2A] px-4 py-2.5 text-sm font-medium text-[#9CA3AF] transition-colors hover:bg-[#1F1F1F] hover:text-[#F5F5F5]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (clearConfirmText === "DELETE") {
+                    handleClearAll();
+                  }
+                }}
+                disabled={clearConfirmText !== "DELETE"}
+                className="flex-1 rounded-lg bg-red-500 px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                Delete Everything
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
