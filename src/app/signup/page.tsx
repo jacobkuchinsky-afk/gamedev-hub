@@ -81,7 +81,7 @@ export default function SignupPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#0F0F0F] px-4 py-12">
-      <div className="animate-fade-in w-full max-w-md">
+      <div className="animate-slide-up w-full max-w-md">
         <div className="mb-8 flex flex-col items-center">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F59E0B]/10 shadow-lg shadow-[#F59E0B]/5">
             <Gamepad2 className="h-7 w-7 text-[#F59E0B]" />
