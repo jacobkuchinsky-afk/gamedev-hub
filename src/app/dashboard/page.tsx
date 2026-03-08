@@ -20,6 +20,7 @@ import {
   PenLine,
   Sparkles,
   X,
+  ChevronRight,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
 import {
@@ -90,6 +91,7 @@ export default function DashboardPage() {
   const [recentBugs, setRecentBugs] = useState<BugType[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [projectHealth, setProjectHealth] = useState<ProjectHealth[]>([]);
+  const [allProjects, setAllProjects] = useState<(Project & { taskPct: number })[]>([]);
   const [totalProjects, setTotalProjects] = useState(0);
   const [welcomeDismissed, setWelcomeDismissed] = useState(true);
 
@@ -111,6 +113,14 @@ export default function DashboardPage() {
 
     setTotalProjects(projects.length);
     const projectMap = Object.fromEntries(projects.map((p) => [p.id, p.name]));
+
+    setAllProjects(
+      projects.map((p) => {
+        const pTasks = tasks.filter((t) => t.projectId === p.id);
+        const done = pTasks.filter((t) => t.status === "done").length;
+        return { ...p, taskPct: pTasks.length > 0 ? Math.round((done / pTasks.length) * 100) : 0 };
+      })
+    );
 
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -440,6 +450,64 @@ export default function DashboardPage() {
             <ArrowRight className="ml-auto h-3.5 w-3.5 shrink-0 text-[#6B7280] transition-transform group-hover:translate-x-0.5" />
           </Link>
         ))}
+      </div>
+
+      {/* Your Projects */}
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-semibold">Your Projects</h2>
+          <Link
+            href="/dashboard/projects"
+            className="flex items-center gap-1 text-xs text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
+          >
+            View all <ChevronRight className="h-3 w-3" />
+          </Link>
+        </div>
+        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+          {allProjects.map((project) => (
+            <Link
+              key={project.id}
+              href={`/dashboard/projects/${project.id}`}
+              className="group flex w-56 shrink-0 flex-col rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] transition-all hover:border-[#F59E0B]/20 hover:bg-[#1F1F1F]"
+              style={{ borderLeftColor: project.coverColor, borderLeftWidth: "3px" }}
+            >
+              <div className="flex-1 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-sm font-semibold">{project.name}</p>
+                  <span
+                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium capitalize ${statusBadge[project.status]}`}
+                  >
+                    {project.status}
+                  </span>
+                </div>
+                <div className="mt-3">
+                  <div className="flex items-center justify-between text-xs text-[#6B7280]">
+                    <span>Tasks</span>
+                    <span className="tabular-nums">{project.taskPct}%</span>
+                  </div>
+                  <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[#2A2A2A]">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${project.taskPct}%`,
+                        backgroundColor: project.coverColor,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </Link>
+          ))}
+          <Link
+            href="/dashboard/projects/new"
+            className="flex w-56 shrink-0 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[#2A2A2A] bg-[#1A1A1A]/50 p-4 transition-all hover:border-[#F59E0B]/30 hover:bg-[#1F1F1F]"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F59E0B]/10">
+              <Plus className="h-5 w-5 text-[#F59E0B]" />
+            </div>
+            <span className="text-sm font-medium text-[#6B7280]">New Project</span>
+          </Link>
+        </div>
       </div>
 
       {/* Content grid */}

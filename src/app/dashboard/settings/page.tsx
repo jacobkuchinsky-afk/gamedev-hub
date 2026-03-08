@@ -15,6 +15,7 @@ import {
   Lock,
   Eye,
   EyeOff,
+  Sparkles,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
 import { getProjects, getTasks, getDevlog } from "@/lib/store";
@@ -39,6 +40,15 @@ const AVATAR_COLORS = [
 ];
 
 const GAME_TYPES = ["2D", "3D", "VR/AR", "Mobile", "Web", "Tabletop"];
+
+const AI_PREFS_KEY = "gameforge_ai_prefs";
+const WRITING_STYLES = ["Professional", "Casual", "Technical", "Creative"] as const;
+const RESPONSE_LENGTHS = ["Concise", "Standard", "Detailed"] as const;
+
+interface AIPrefs {
+  writingStyle: (typeof WRITING_STYLES)[number];
+  responseLength: (typeof RESPONSE_LENGTHS)[number];
+}
 
 function loadSettings(fallback: Partial<UserSettings>): UserSettings {
   if (typeof window === "undefined") {
@@ -89,6 +99,7 @@ export default function SettingsPage() {
   const [changingPassword, setChangingPassword] = useState(false);
   const [showCurrentPw, setShowCurrentPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
+  const [aiPrefs, setAiPrefs] = useState<AIPrefs>({ writingStyle: "Professional", responseLength: "Standard" });
 
   useEffect(() => {
     console.log("[SettingsPage] rendered");
@@ -101,6 +112,21 @@ export default function SettingsPage() {
       );
     }
   }, [user]);
+
+  useEffect(() => {
+    const raw = localStorage.getItem(AI_PREFS_KEY);
+    if (raw) {
+      try { setAiPrefs({ writingStyle: "Professional", responseLength: "Standard", ...JSON.parse(raw) }); } catch {}
+    }
+  }, []);
+
+  const updateAiPref = useCallback(<K extends keyof AIPrefs>(key: K, value: AIPrefs[K]) => {
+    setAiPrefs((prev) => {
+      const next = { ...prev, [key]: value };
+      localStorage.setItem(AI_PREFS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const projects = getProjects();
@@ -463,6 +489,69 @@ export default function SettingsPage() {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* AI Preferences */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+        <div className="flex items-center gap-2 border-b border-[#2A2A2A] px-5 py-4">
+          <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+          <h2 className="font-semibold">AI Preferences</h2>
+        </div>
+        <div className="space-y-5 p-5">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-[#D1D5DB]">
+              Writing Style
+            </label>
+            <p className="mb-2.5 text-xs text-[#6B7280]">
+              Controls the tone AI uses when generating text for you
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {WRITING_STYLES.map((style) => (
+                <button
+                  key={style}
+                  onClick={() => updateAiPref("writingStyle", style)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                    aiPrefs.writingStyle === style
+                      ? "bg-[#F59E0B] text-[#0F0F0F]"
+                      : "border border-[#2A2A2A] text-[#9CA3AF] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                  }`}
+                >
+                  {style}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-[#D1D5DB]">
+              AI Response Length
+            </label>
+            <p className="mb-2.5 text-xs text-[#6B7280]">
+              How detailed AI-generated content should be
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {RESPONSE_LENGTHS.map((len) => (
+                <button
+                  key={len}
+                  onClick={() => updateAiPref("responseLength", len)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                    aiPrefs.responseLength === len
+                      ? "bg-[#F59E0B] text-[#0F0F0F]"
+                      : "border border-[#2A2A2A] text-[#9CA3AF] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                  }`}
+                >
+                  {len}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-[#0F0F0F] p-3">
+            <p className="text-xs leading-relaxed text-[#6B7280]">
+              These preferences will be used by AI features across GameForge, including the idea generator, devlog assistant, and dialogue writer.
+            </p>
           </div>
         </div>
       </div>
