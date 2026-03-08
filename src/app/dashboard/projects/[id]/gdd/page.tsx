@@ -32,6 +32,7 @@ import {
   Trophy,
   Copy,
   Map,
+  GraduationCap,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -518,6 +519,10 @@ export default function GDDPage() {
   const [scenePlannerResult, setScenePlannerResult] = useState("");
   const [showScenePlanner, setShowScenePlanner] = useState(false);
   const [scenePlannerCopied, setScenePlannerCopied] = useState(false);
+  const [tutorialLoading, setTutorialLoading] = useState(false);
+  const [tutorialResult, setTutorialResult] = useState("");
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialCopied, setTutorialCopied] = useState(false);
 
   useEffect(() => {
     console.log("[GDDPage] rendered, id:", projectId);
@@ -798,6 +803,47 @@ export default function GDDPage() {
     }
   }, [project, data]);
 
+  const handleTutorialFlow = useCallback(async () => {
+    if (!project) return;
+    setTutorialLoading(true);
+    setShowTutorial(true);
+
+    const genre = data.genre || project.genre || "unspecified";
+    const name = data.gameTitle || project.name || "Untitled";
+
+    const prompt = `Design a tutorial sequence for a ${genre} game called '${name}'. Create 8 tutorial steps that teach the player core mechanics. For each step: step number, what the player learns, how it's presented (popup, highlight, level design), estimated duration. Format as a numbered list with bold headers.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+
+      const apiData = await response.json();
+      const content = apiData.choices?.[0]?.message?.content || apiData.choices?.[0]?.message?.reasoning || "";
+      setTutorialResult(content);
+      setToast({ message: "Generated 8-step tutorial flow!", type: "success" });
+    } catch (err) {
+      console.error("[GDD Tutorial Flow]", err);
+      setTutorialResult("Failed to generate tutorial flow. Please try again.");
+      setToast({ message: "Failed to generate tutorial — try again", type: "error" });
+    } finally {
+      setTutorialLoading(false);
+    }
+  }, [project, data]);
+
   const filledFields = Object.values(data).filter((v) => v.trim().length > 0).length;
   const totalFields = GDD_SECTIONS.reduce((acc, s) => acc + s.fields.length, 0);
   const completionPct = totalFields > 0 ? Math.round((filledFields / totalFields) * 100) : 0;
@@ -890,6 +936,18 @@ export default function GDDPage() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleTutorialFlow}
+                disabled={tutorialLoading}
+                className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {tutorialLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <GraduationCap className="h-3.5 w-3.5" />
+                )}
+                AI Tutorial
+              </button>
               <button
                 onClick={handleScenePlanner}
                 disabled={scenePlannerLoading}
@@ -1168,6 +1226,82 @@ export default function GDDPage() {
                 <button
                   onClick={handleScenePlanner}
                   disabled={scenePlannerLoading}
+                  className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black hover:bg-[#F59E0B]/90 disabled:opacity-50"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Regenerate
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* AI Tutorial Flow Panel */}
+        {showTutorial && (
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                  <GraduationCap className="h-4 w-4 text-[#F59E0B]" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">AI Tutorial Flow</h3>
+                  <p className="text-xs text-[#6B7280]">
+                    8-step tutorial sequence for {project?.name}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {tutorialResult && !tutorialLoading && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(tutorialResult);
+                      setTutorialCopied(true);
+                      setTimeout(() => setTutorialCopied(false), 2000);
+                    }}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                      tutorialCopied
+                        ? "bg-[#10B981] text-white"
+                        : "border border-[#2A2A2A] text-[#9CA3AF] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                    }`}
+                  >
+                    {tutorialCopied ? (
+                      <><CheckCircle2 className="h-3.5 w-3.5" /> Copied!</>
+                    ) : (
+                      <><Copy className="h-3.5 w-3.5" /> Copy</>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowTutorial(false)}
+                  className="rounded-lg p-1 text-[#9CA3AF] hover:text-[#F5F5F5]"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5">
+              {tutorialLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#F59E0B]" />
+                  <p className="text-sm text-[#6B7280]">Designing tutorial flow...</p>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4">
+                  <pre className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB] font-sans">
+                    {tutorialResult}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            {tutorialResult && !tutorialLoading && (
+              <div className="flex items-center justify-between border-t border-[#2A2A2A] px-5 py-3">
+                <p className="text-xs text-[#6B7280]">Based on your game genre and title</p>
+                <button
+                  onClick={handleTutorialFlow}
+                  disabled={tutorialLoading}
                   className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black hover:bg-[#F59E0B]/90 disabled:opacity-50"
                 >
                   <Sparkles className="h-3.5 w-3.5" />

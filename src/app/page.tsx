@@ -19,6 +19,10 @@ import {
   Lightbulb,
   Globe,
   Map,
+  Twitter,
+  Github,
+  MessageCircle,
+  Heart,
 } from "lucide-react";
 
 const features = [
@@ -366,33 +370,78 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-[#2A2A2A] bg-[#0A0A0A] py-12">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="flex flex-col items-center justify-between gap-8 md:flex-row">
+      <footer className="border-t border-[#2A2A2A] bg-[#0A0A0A]">
+        <div className="mx-auto max-w-6xl px-6 pt-16 pb-8">
+          <div className="mb-12">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
-                <Gamepad2 className="h-4 w-4 text-[#F59E0B]" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                <Gamepad2 className="h-5 w-5 text-[#F59E0B]" />
               </div>
-              <span className="font-bold">GameForge</span>
+              <span className="text-lg font-bold tracking-tight">GameForge</span>
             </div>
-            <div className="flex flex-wrap justify-center gap-8 text-sm text-[#9CA3AF]">
-              <Link href="/login" className="transition-colors hover:text-[#F59E0B]">
-                Sign In
-              </Link>
-              <Link href="/signup" className="transition-colors hover:text-[#F59E0B]">
-                Sign Up
-              </Link>
-              <Link href="/dashboard" className="transition-colors hover:text-[#F59E0B]">
-                Dashboard
-              </Link>
-              <Link href="/dashboard/tools" className="transition-colors hover:text-[#F59E0B]">
-                Tools
-              </Link>
-            </div>
+            <p className="mt-3 max-w-sm text-sm leading-relaxed text-[#9CA3AF]">
+              The all-in-one productivity platform built for game developers.
+              Organize, create, and ship &mdash; faster.
+            </p>
           </div>
-          <div className="mt-8 border-t border-[#2A2A2A] pt-8 text-center">
-            <p className="text-sm text-[#6B7280]">
-              Built for game developers &middot; &copy; 2026 GameForge
+
+          <nav aria-label="Footer navigation" className="grid grid-cols-2 gap-8 sm:grid-cols-4">
+            <div>
+              <h4 className="mb-4 text-sm font-semibold text-[#F5F5F5]">Product</h4>
+              <ul className="space-y-3">
+                <li><Link href="/dashboard" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">Dashboard</Link></li>
+                <li><Link href="/dashboard/tools" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">Tools</Link></li>
+                <li><Link href="/dashboard/projects" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">Projects</Link></li>
+                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">AI Features</Link></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="mb-4 text-sm font-semibold text-[#F5F5F5]">Resources</h4>
+              <ul className="space-y-3">
+                <li><Link href="/dashboard/tools/cheatsheet" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">Cheat Sheet</Link></li>
+                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">Documentation</Link></li>
+                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">Changelog</Link></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="mb-4 text-sm font-semibold text-[#F5F5F5]">Company</h4>
+              <ul className="space-y-3">
+                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">About</Link></li>
+                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">Contact</Link></li>
+                <li><Link href="#" className="text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">Privacy</Link></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="mb-4 text-sm font-semibold text-[#F5F5F5]">Social</h4>
+              <ul className="space-y-3">
+                <li>
+                  <a href="#" className="flex items-center gap-2 text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">
+                    <Twitter className="h-4 w-4" />
+                    Twitter
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="flex items-center gap-2 text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">
+                    <MessageCircle className="h-4 w-4" />
+                    Discord
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="flex items-center gap-2 text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]">
+                    <Github className="h-4 w-4" />
+                    GitHub
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </nav>
+
+          <div className="mt-12 border-t border-[#2A2A2A] pt-8 text-center">
+            <p className="flex items-center justify-center gap-1.5 text-sm text-[#6B7280]">
+              Made with <Heart className="h-3.5 w-3.5 text-[#F59E0B]" /> for game developers &middot; &copy; 2026 GameForge
             </p>
           </div>
         </div>
