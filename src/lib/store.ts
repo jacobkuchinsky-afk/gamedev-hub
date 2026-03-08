@@ -36,6 +36,7 @@ export interface Task {
   sprint: string;
   assignee: string;
   tags?: TaskTag[];
+  blockedBy?: string;
   created_at: string;
 }
 

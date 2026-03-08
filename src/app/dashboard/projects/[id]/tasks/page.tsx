@@ -17,6 +17,7 @@ import {
   Sparkles,
   Loader2,
   Tag,
+  Lock,
 } from "lucide-react";
 import {
   getProject,
@@ -91,6 +92,8 @@ export default function TaskBoardPage() {
   const [newSprint, setNewSprint] = useState("");
   const [newTags, setNewTags] = useState<TaskTag[]>([]);
   const [editTags, setEditTags] = useState<TaskTag[]>([]);
+  const [newBlockedBy, setNewBlockedBy] = useState("");
+  const [editBlockedBy, setEditBlockedBy] = useState("");
   const [filterTag, setFilterTag] = useState<TaskTag | "all">("all");
   const [aiDetailLoading, setAiDetailLoading] = useState(false);
 
@@ -175,11 +178,13 @@ export default function TaskBoardPage() {
       sprint: newSprint || defaultSprint,
       assignee: newAssignee,
       tags: newTags.length > 0 ? newTags : undefined,
+      blockedBy: newBlockedBy || undefined,
     });
     setNewTitle("");
     setNewDesc("");
     setNewPriority("medium");
     setNewTags([]);
+    setNewBlockedBy("");
     setShowAddForm(false);
     reload();
   };
@@ -232,6 +237,7 @@ export default function TaskBoardPage() {
     setEditDesc(task.description || "");
     setEditPriority(task.priority);
     setEditTags(task.tags || []);
+    setEditBlockedBy(task.blockedBy || "");
   };
 
   const saveEdit = () => {
@@ -241,6 +247,7 @@ export default function TaskBoardPage() {
       description: editDesc.trim(),
       priority: editPriority,
       tags: editTags.length > 0 ? editTags : undefined,
+      blockedBy: editBlockedBy || undefined,
     });
     setEditingTask(null);
     reload();
@@ -277,6 +284,64 @@ export default function TaskBoardPage() {
     if (selectedSprint === "all" || selectedSprint === "backlog") return null;
     return sprints.find((s) => s.name === selectedSprint) || null;
   }, [selectedSprint, sprints]);
+
+  const burndownData = useMemo(() => {
+    if (
+      !currentSprintInfo ||
+      !currentSprintInfo.startDate ||
+      !currentSprintInfo.endDate
+    )
+      return null;
+
+    const sprintTasks = tasks.filter((t) => t.sprint === selectedSprint);
+    const total = sprintTasks.length;
+    if (total === 0) return null;
+
+    const start = new Date(currentSprintInfo.startDate + "T00:00:00");
+    const end = new Date(currentSprintInfo.endDate + "T00:00:00");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const totalDays = Math.max(
+      1,
+      Math.ceil((end.getTime() - start.getTime()) / 86400000)
+    );
+    const elapsedDays = Math.max(
+      0,
+      Math.min(
+        totalDays,
+        Math.ceil((today.getTime() - start.getTime()) / 86400000)
+      )
+    );
+
+    const remaining = sprintTasks.filter((t) => t.status !== "done").length;
+    const done = total - remaining;
+    const idealRemaining = total - (total * elapsedDays) / totalDays;
+
+    let health: string;
+    let healthColor: string;
+    if (elapsedDays === 0) {
+      health = "Just Started";
+      healthColor = "#9CA3AF";
+    } else if (remaining <= idealRemaining) {
+      health = remaining < idealRemaining * 0.7 ? "Ahead" : "On Track";
+      healthColor = "#10B981";
+    } else {
+      health = "Behind";
+      healthColor = "#EF4444";
+    }
+
+    return {
+      total,
+      remaining,
+      done,
+      totalDays,
+      elapsedDays,
+      idealRemaining,
+      health,
+      healthColor,
+    };
+  }, [tasks, selectedSprint, currentSprintInfo]);
 
   const sortedFilteredTasks = useMemo(() => {
     let filtered = tasks;
@@ -531,6 +596,251 @@ export default function TaskBoardPage() {
         </div>
       </div>
 
+      {/* Sprint Burndown Chart */}
+      {burndownData && currentSprintInfo && (
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-[#F5F5F5]">
+              Sprint Burndown
+            </h3>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-[#6B7280]">
+                {currentSprintInfo.startDate?.slice(5)} &mdash;{" "}
+                {currentSprintInfo.endDate?.slice(5)}
+              </span>
+              <span
+                className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                style={{
+                  backgroundColor: `${burndownData.healthColor}15`,
+                  color: burndownData.healthColor,
+                }}
+              >
+                {burndownData.health}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-6">
+            <svg
+              viewBox="0 0 320 150"
+              className="h-36 w-full max-w-md"
+              preserveAspectRatio="xMidYMid meet"
+            >
+              {/* Axes */}
+              <line
+                x1="35"
+                y1="10"
+                x2="35"
+                y2="125"
+                stroke="#2A2A2A"
+                strokeWidth="1"
+              />
+              <line
+                x1="35"
+                y1="125"
+                x2="305"
+                y2="125"
+                stroke="#2A2A2A"
+                strokeWidth="1"
+              />
+              {/* Horizontal grid lines */}
+              {[0.25, 0.5, 0.75].map((f) => (
+                <line
+                  key={f}
+                  x1="35"
+                  y1={10 + (1 - f) * 115}
+                  x2="305"
+                  y2={10 + (1 - f) * 115}
+                  stroke="#1F1F1F"
+                  strokeWidth="1"
+                />
+              ))}
+              {/* Y-axis labels */}
+              <text
+                x="30"
+                y="15"
+                fill="#6B7280"
+                fontSize="9"
+                textAnchor="end"
+              >
+                {burndownData.total}
+              </text>
+              <text
+                x="30"
+                y="60"
+                fill="#4B5563"
+                fontSize="8"
+                textAnchor="end"
+              >
+                {Math.round(burndownData.total * 0.5)}
+              </text>
+              <text
+                x="30"
+                y="129"
+                fill="#6B7280"
+                fontSize="9"
+                textAnchor="end"
+              >
+                0
+              </text>
+              {/* X-axis day markers */}
+              {[0, 0.25, 0.5, 0.75, 1].map((f) => (
+                <line
+                  key={f}
+                  x1={35 + f * 270}
+                  y1="125"
+                  x2={35 + f * 270}
+                  y2="128"
+                  stroke="#3A3A3A"
+                  strokeWidth="1"
+                />
+              ))}
+              <text
+                x="35"
+                y="140"
+                fill="#6B7280"
+                fontSize="8"
+                textAnchor="start"
+              >
+                Day 0
+              </text>
+              <text
+                x="305"
+                y="140"
+                fill="#6B7280"
+                fontSize="8"
+                textAnchor="end"
+              >
+                Day {burndownData.totalDays}
+              </text>
+              {/* Ideal burndown line (dashed) */}
+              <line
+                x1="35"
+                y1="10"
+                x2="305"
+                y2="125"
+                stroke="#2A2A2A"
+                strokeWidth="2"
+                strokeDasharray="6 4"
+              />
+              {/* Today marker */}
+              {burndownData.elapsedDays > 0 &&
+                burndownData.elapsedDays < burndownData.totalDays && (
+                  <line
+                    x1={
+                      35 +
+                      (burndownData.elapsedDays / burndownData.totalDays) * 270
+                    }
+                    y1="10"
+                    x2={
+                      35 +
+                      (burndownData.elapsedDays / burndownData.totalDays) * 270
+                    }
+                    y2="125"
+                    stroke="#F59E0B"
+                    strokeWidth="1"
+                    strokeDasharray="3 3"
+                    opacity="0.3"
+                  />
+                )}
+              {/* Actual burndown line */}
+              {burndownData.elapsedDays > 0 && (
+                <>
+                  <line
+                    x1="35"
+                    y1="10"
+                    x2={
+                      35 +
+                      (burndownData.elapsedDays / burndownData.totalDays) * 270
+                    }
+                    y2={
+                      10 +
+                      (1 - burndownData.remaining / burndownData.total) * 115
+                    }
+                    stroke="#F59E0B"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                  />
+                  <circle
+                    cx={
+                      35 +
+                      (burndownData.elapsedDays / burndownData.totalDays) * 270
+                    }
+                    cy={
+                      10 +
+                      (1 - burndownData.remaining / burndownData.total) * 115
+                    }
+                    r="4"
+                    fill="#F59E0B"
+                  />
+                  <circle
+                    cx={
+                      35 +
+                      (burndownData.elapsedDays / burndownData.totalDays) * 270
+                    }
+                    cy={
+                      10 +
+                      (1 - burndownData.remaining / burndownData.total) * 115
+                    }
+                    r="7"
+                    fill="#F59E0B"
+                    opacity="0.2"
+                  />
+                </>
+              )}
+              {/* Start point */}
+              <circle cx="35" cy="10" r="3" fill="#6B7280" />
+              {/* Legend */}
+              <line
+                x1="50"
+                y1="148"
+                x2="66"
+                y2="148"
+                stroke="#2A2A2A"
+                strokeWidth="2"
+                strokeDasharray="4 3"
+              />
+              <text x="70" y="150" fill="#6B7280" fontSize="7">
+                Ideal
+              </text>
+              <line
+                x1="100"
+                y1="148"
+                x2="116"
+                y2="148"
+                stroke="#F59E0B"
+                strokeWidth="2"
+              />
+              <text x="120" y="150" fill="#6B7280" fontSize="7">
+                Actual
+              </text>
+            </svg>
+            <div className="flex shrink-0 flex-col gap-3 text-xs">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">
+                  Remaining
+                </p>
+                <p className="text-xl font-bold text-[#F5F5F5]">
+                  {burndownData.remaining}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">
+                  Completed
+                </p>
+                <p className="text-xl font-bold text-[#10B981]">
+                  {burndownData.done}
+                </p>
+              </div>
+              <div className="rounded-lg border border-[#2A2A2A] px-2.5 py-1.5 text-center">
+                <p className="text-[10px] text-[#6B7280]">
+                  Day {burndownData.elapsedDays} / {burndownData.totalDays}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create Sprint Modal */}
       {showCreateSprint && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -761,6 +1071,25 @@ export default function TaskBoardPage() {
                   })}
                 </div>
               </div>
+              <div>
+                <label className="mb-1 block text-xs text-[#6B7280]">
+                  Blocked By
+                </label>
+                <select
+                  value={newBlockedBy}
+                  onChange={(e) => setNewBlockedBy(e.target.value)}
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+                >
+                  <option value="">None</option>
+                  {tasks
+                    .filter((t) => t.projectId === projectId)
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.title}
+                      </option>
+                    ))}
+                </select>
+              </div>
               <button
                 type="submit"
                 className="w-full rounded-lg bg-[#F59E0B] py-2.5 text-sm font-semibold text-black transition-colors hover:bg-[#F59E0B]/90"
@@ -843,9 +1172,18 @@ export default function TaskBoardPage() {
                 {columnTasks.map((task) => {
                   const isEditing = editingTask === task.id;
                   const isExpanded = expandedTask === task.id;
+                  const blockingTask = task.blockedBy
+                    ? tasks.find((t) => t.id === task.blockedBy)
+                    : null;
+                  const isBlocked = blockingTask
+                    ? blockingTask.status !== "done"
+                    : false;
 
                   return (
-                    <div key={task.id} className="group">
+                    <div
+                      key={task.id}
+                      className={`group ${isBlocked ? "opacity-60" : ""}`}
+                    >
                       <div
                         className={`rounded-lg border bg-[#1A1A1A] p-3 transition-all duration-500 ${
                           flashingTask === task.id
@@ -881,8 +1219,16 @@ export default function TaskBoardPage() {
                             }
                           >
                             <p className="text-sm font-medium leading-tight">
+                              {isBlocked && (
+                                <Lock className="mr-1 inline h-3 w-3 text-[#F59E0B]/70" />
+                              )}
                               {task.title}
                             </p>
+                            {isBlocked && blockingTask && (
+                              <p className="mt-0.5 text-[10px] text-[#F59E0B]/70">
+                                Blocked by: {blockingTask.title}
+                              </p>
+                            )}
                             <div className="mt-2 flex flex-wrap items-center gap-1.5">
                               <span
                                 className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs font-medium"
@@ -1018,6 +1364,25 @@ export default function TaskBoardPage() {
                                     );
                                   })}
                                 </div>
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-xs text-[#6B7280]">
+                                  Blocked By
+                                </label>
+                                <select
+                                  value={editBlockedBy}
+                                  onChange={(e) => setEditBlockedBy(e.target.value)}
+                                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+                                >
+                                  <option value="">None</option>
+                                  {tasks
+                                    .filter((t) => t.projectId === projectId && t.id !== editingTask)
+                                    .map((t) => (
+                                      <option key={t.id} value={t.id}>
+                                        {t.title}
+                                      </option>
+                                    ))}
+                                </select>
                               </div>
                               <div className="flex gap-2">
                                 <button
