@@ -42,6 +42,16 @@ import {
   Pause,
   RotateCcw,
   Activity,
+  History,
+  Settings,
+  Paintbrush,
+  Music,
+  Palette,
+  ScrollText,
+  Calculator,
+  Map,
+  Film,
+  LayoutDashboard,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
 import {
@@ -63,6 +73,25 @@ import {
   type DevlogEntry,
   type Sprint,
 } from "@/lib/store";
+
+const RECENT_PAGE_ICONS: Record<string, typeof LayoutDashboard> = {
+  "/dashboard": LayoutDashboard,
+  "/dashboard/projects": FolderKanban,
+  "/dashboard/tools": Wrench,
+  "/dashboard/devlog": BookOpen,
+  "/dashboard/settings": Settings,
+  "/dashboard/tools/sprites": Paintbrush,
+  "/dashboard/tools/sounds": Music,
+  "/dashboard/tools/colors": Palette,
+  "/dashboard/tools/names": ScrollText,
+  "/dashboard/tools/balance": Calculator,
+  "/dashboard/tools/dialogue": MessageSquare,
+  "/dashboard/tools/ideas": Lightbulb,
+  "/dashboard/tools/tilemap": Map,
+  "/dashboard/tools/effects": Sparkles,
+  "/dashboard/tools/animation": Film,
+  "/dashboard/tools/easing": Activity,
+};
 
 interface Stats {
   activeProjects: number;
@@ -464,6 +493,8 @@ export default function DashboardPage() {
     perProject: { name: string; hours: number; color: string }[];
   }>({ totalHours: 0, avgDailyHours: 0, perProject: [] });
 
+  const [recentlyVisited, setRecentlyVisited] = useState<Array<{ href: string; label: string; ts: number }>>([]);
+
   useEffect(() => {
     const dismissed = localStorage.getItem("gameforge_welcome_dismissed") === "true";
     setWelcomeDismissed(dismissed);
@@ -472,6 +503,10 @@ export default function DashboardPage() {
     setBackupLoaded(true);
     setStreak(updateStreak());
     setJamState(getJamState());
+    try {
+      const stored = JSON.parse(localStorage.getItem("gameforge_recent_pages") || "[]");
+      setRecentlyVisited(stored.filter((p: { href: string }) => p.href !== "/dashboard").slice(0, 4));
+    } catch { setRecentlyVisited([]); }
   }, []);
 
   const handleDismissWelcome = () => {
@@ -1891,6 +1926,34 @@ export default function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      {/* Recently Visited */}
+      {recentlyVisited.length > 0 && (
+        <div>
+          <div className="mb-3 flex items-center gap-2">
+            <History className="h-4 w-4 text-[#6B7280]" />
+            <h2 className="text-sm font-semibold text-[#9CA3AF]">Recently Visited</h2>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {recentlyVisited.map((page) => {
+              const Icon = RECENT_PAGE_ICONS[page.href] || FileText;
+              return (
+                <Link
+                  key={page.href}
+                  href={page.href}
+                  className="group flex items-center gap-3 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3.5 py-3 transition-all hover:border-[#F59E0B]/20"
+                >
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#F59E0B]/10">
+                    <Icon className="h-3.5 w-3.5 text-[#F59E0B]" />
+                  </div>
+                  <span className="truncate text-sm text-[#D1D5DB] group-hover:text-[#F5F5F5]">{page.label}</span>
+                  <ChevronRight className="ml-auto h-3 w-3 shrink-0 text-[#4B5563] transition-transform group-hover:translate-x-0.5 group-hover:text-[#6B7280]" />
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Quick Create Modal */}
       {showQuickCreate && (

@@ -15,6 +15,7 @@ import {
   Send,
   Sparkles,
   Loader2,
+  CalendarDays,
 } from "lucide-react";
 import {
   getProject,
@@ -185,6 +186,8 @@ export default function DevlogPage() {
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
   const [aiReflections, setAiReflections] = useState<Record<string, string>>({});
   const [aiReflectLoading, setAiReflectLoading] = useState<string | null>(null);
+  const [monthlyRecap, setMonthlyRecap] = useState("");
+  const [monthlyRecapLoading, setMonthlyRecapLoading] = useState(false);
 
   const reload = useCallback(() => {
     const e = getDevlog(projectId);
@@ -292,6 +295,47 @@ export default function DevlogPage() {
     }
   };
 
+  const handleMonthlyRecap = async () => {
+    if (monthlyRecapLoading) return;
+    setMonthlyRecapLoading(true);
+    try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const recentEntries = entries.filter(
+        (e) => new Date(e.date) >= thirtyDaysAgo
+      );
+      if (recentEntries.length === 0) {
+        setMonthlyRecap("No devlog entries in the past 30 days to summarize.");
+        return;
+      }
+      const entrySummaries = recentEntries
+        .map((e) => `[${e.date}] ${e.title} (${e.mood}): ${e.content}`)
+        .join("\n");
+      const prompt = `Write a monthly development recap based on these devlog entries: ${entrySummaries}. Highlight: top 3 accomplishments, biggest challenge overcome, and goals for next month. 4-5 sentences.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setMonthlyRecap(content || "Could not generate recap.");
+    } catch {
+      setMonthlyRecap("Failed to generate monthly recap.");
+    } finally {
+      setMonthlyRecapLoading(false);
+    }
+  };
+
   if (!project) return null;
 
   return (
@@ -308,18 +352,62 @@ export default function DevlogPage() {
         />
         <div className="mt-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Development Log</h1>
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-[#F59E0B]/90"
-          >
-            <Plus className="h-4 w-4" />
-            Write Entry
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleMonthlyRecap}
+              disabled={monthlyRecapLoading}
+              className="flex items-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-4 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {monthlyRecapLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CalendarDays className="h-4 w-4" />
+              )}
+              AI Monthly Recap
+            </button>
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-[#F59E0B]/90"
+            >
+              <Plus className="h-4 w-4" />
+              Write Entry
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Calendar Heatmap */}
       <CalendarHeatmap entries={entries} />
+
+      {/* AI Monthly Recap Panel */}
+      {(monthlyRecap || monthlyRecapLoading) && (
+        <div className="rounded-xl border border-[#F59E0B]/20 bg-[#1A1A1A] p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-[#F59E0B]" />
+              <h3 className="text-sm font-semibold text-[#F5F5F5]">Monthly Recap</h3>
+            </div>
+            {!monthlyRecapLoading && (
+              <button
+                onClick={() => setMonthlyRecap("")}
+                className="rounded-md p-1 text-[#6B7280] hover:text-[#F5F5F5]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          {monthlyRecapLoading ? (
+            <div className="flex items-center gap-2 py-4">
+              <Loader2 className="h-4 w-4 animate-spin text-[#F59E0B]" />
+              <span className="text-sm text-[#9CA3AF]">Generating recap from the last 30 days...</span>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {renderMarkdown(monthlyRecap)}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Add Entry Modal */}
       {showAddForm && (
