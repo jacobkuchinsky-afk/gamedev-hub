@@ -21,6 +21,7 @@ import {
   Wand2,
   Sparkles,
   Loader2,
+  Printer,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -331,6 +332,13 @@ export default function GDDPage() {
     URL.revokeObjectURL(url);
   }, [project, data]);
 
+  const handlePrint = useCallback(() => {
+    const allOpen: Record<string, boolean> = {};
+    GDD_SECTIONS.forEach((s) => (allOpen[s.id] = true));
+    setExpanded(allOpen);
+    setTimeout(() => window.print(), 200);
+  }, []);
+
   const toggleSection = useCallback((id: string) => {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
@@ -522,6 +530,13 @@ export default function GDDPage() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={handlePrint}
+                className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Print
+              </button>
               <button
                 onClick={handleExport}
                 className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
@@ -715,6 +730,56 @@ export default function GDDPage() {
           </div>
         </div>
       )}
+
+      <style>{`
+        @media print {
+          body, html { background: white !important; }
+          *, *::before, *::after {
+            color: black !important;
+            box-shadow: none !important;
+          }
+          div, section, main { background: transparent !important; }
+          aside, [data-sidebar] { display: none !important; }
+          .flex.gap-8 > nav { display: none !important; }
+          .flex.gap-8 { display: block !important; }
+          .border-dashed { display: none !important; }
+          svg { display: none !important; }
+          h1 { font-size: 24pt !important; margin-bottom: 12px !important; }
+          label { color: #333 !important; font-weight: 600 !important; font-size: 11pt !important; }
+          input, textarea, select {
+            border: none !important;
+            background: transparent !important;
+            color: black !important;
+            padding: 2px 0 !important;
+            font-size: 10pt !important;
+            line-height: 1.5 !important;
+          }
+          textarea {
+            overflow: visible !important;
+            height: auto !important;
+            resize: none !important;
+          }
+          button { display: none !important; }
+          .scroll-mt-6 > button:first-child {
+            display: flex !important;
+            pointer-events: none !important;
+            border-bottom: 2px solid #333 !important;
+            padding: 8px 0 !important;
+            margin-bottom: 8px !important;
+          }
+          .scroll-mt-6 > button:first-child .font-semibold {
+            font-size: 14pt !important;
+            font-weight: 700 !important;
+          }
+          .scroll-mt-6 > button:first-child svg,
+          .scroll-mt-6 > button:first-child .h-8 {
+            display: none !important;
+          }
+          .scroll-mt-6 { page-break-inside: avoid; border: none !important; margin-bottom: 16px !important; }
+          .rounded-full { display: none !important; }
+          @page { margin: 0.75in; }
+        }
+      `}</style>
     </div>
   );
 }

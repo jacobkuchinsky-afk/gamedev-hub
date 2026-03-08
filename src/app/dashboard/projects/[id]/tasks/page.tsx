@@ -66,6 +66,22 @@ const SPRINT_STATUS_STYLES: Record<
   planned: { bg: "bg-[#9CA3AF]/10", text: "text-[#9CA3AF]" },
 };
 
+const AVATAR_COLORS = ["#F59E0B", "#10B981", "#3B82F6", "#8B5CF6", "#EC4899", "#EF4444", "#06B6D4", "#F97316"];
+
+function getAvatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export default function TaskBoardPage() {
   const params = useParams();
   const projectId = params.id as string;
@@ -97,6 +113,8 @@ export default function TaskBoardPage() {
   const [editTags, setEditTags] = useState<TaskTag[]>([]);
   const [newBlockedBy, setNewBlockedBy] = useState("");
   const [editBlockedBy, setEditBlockedBy] = useState("");
+  const [editAssignee, setEditAssignee] = useState("");
+  const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [filterTag, setFilterTag] = useState<TaskTag | "all">("all");
   const [aiDetailLoading, setAiDetailLoading] = useState(false);
   const [editEstimate, setEditEstimate] = useState<Record<string, string>>({});
@@ -344,6 +362,7 @@ export default function TaskBoardPage() {
     setEditPriority(task.priority);
     setEditTags(task.tags || []);
     setEditBlockedBy(task.blockedBy || "");
+    setEditAssignee(task.assignee || "");
   };
 
   const saveEdit = () => {
@@ -352,6 +371,7 @@ export default function TaskBoardPage() {
       title: editTitle.trim(),
       description: editDesc.trim(),
       priority: editPriority,
+      assignee: editAssignee.trim(),
       tags: editTags.length > 0 ? editTags : undefined,
       blockedBy: editBlockedBy || undefined,
     });
@@ -432,6 +452,11 @@ export default function TaskBoardPage() {
     return count / completed.length;
   }, [tasks, sprints]);
 
+  const uniqueAssignees = useMemo(() => {
+    const assignees = new Set(tasks.map((t) => t.assignee).filter(Boolean));
+    return Array.from(assignees).sort();
+  }, [tasks]);
+
   const currentSprintInfo = useMemo(() => {
     if (selectedSprint === "all" || selectedSprint === "backlog") return null;
     return sprints.find((s) => s.name === selectedSprint) || null;
@@ -510,6 +535,9 @@ export default function TaskBoardPage() {
     if (filterTag !== "all") {
       filtered = filtered.filter((t) => t.tags?.includes(filterTag));
     }
+    if (filterAssignee !== "all") {
+      filtered = filtered.filter((t) => t.assignee === filterAssignee);
+    }
     return [...filtered].sort((a, b) => {
       switch (sortBy) {
         case "priority":
@@ -522,7 +550,7 @@ export default function TaskBoardPage() {
           return 0;
       }
     });
-  }, [tasks, filterPriority, filterTag, sortBy, selectedSprint]);
+  }, [tasks, filterPriority, filterTag, filterAssignee, sortBy, selectedSprint]);
 
   if (!project) return null;
 
@@ -588,6 +616,24 @@ export default function TaskBoardPage() {
                 {ALL_TASK_TAGS.map((tag) => (
                   <option key={tag} value={tag}>
                     {tag}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+            </div>
+            <div className="relative">
+              <div className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2">
+                <User className="h-3.5 w-3.5 text-[#6B7280]" />
+              </div>
+              <select
+                value={filterAssignee}
+                onChange={(e) => setFilterAssignee(e.target.value)}
+                className="appearance-none rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2 pl-8 pr-8 text-sm text-[#9CA3AF] outline-none focus:border-[#F59E0B]/50"
+              >
+                <option value="all">All Assignees</option>
+                {uniqueAssignees.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
                   </option>
                 ))}
               </select>
@@ -1500,9 +1546,12 @@ export default function TaskBoardPage() {
                                 </span>
                               ))}
                               {task.assignee && (
-                                <span className="flex items-center gap-1 text-xs text-[#6B7280]">
-                                  <User className="h-3 w-3" />
-                                  {task.assignee}
+                                <span
+                                  className="flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold leading-none"
+                                  style={{ backgroundColor: `${getAvatarColor(task.assignee)}20`, color: getAvatarColor(task.assignee) }}
+                                  title={task.assignee}
+                                >
+                                  {getInitials(task.assignee)}
                                 </span>
                               )}
                               {task.subtasks && task.subtasks.length > 0 && (() => {
@@ -1615,6 +1664,18 @@ export default function TaskBoardPage() {
                                     );
                                   })}
                                 </div>
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-xs text-[#6B7280]">
+                                  Assignee
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editAssignee}
+                                  onChange={(e) => setEditAssignee(e.target.value)}
+                                  placeholder="Assignee name"
+                                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/50"
+                                />
                               </div>
                               <div>
                                 <label className="mb-1 block text-xs text-[#6B7280]">
@@ -1802,7 +1863,15 @@ export default function TaskBoardPage() {
                               <div className="flex items-center gap-3 text-xs text-[#6B7280]">
                                 <span>Sprint: {task.sprint}</span>
                                 {task.assignee && (
-                                  <span>Assignee: {task.assignee}</span>
+                                  <span className="flex items-center gap-1.5">
+                                    <span
+                                      className="flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold leading-none"
+                                      style={{ backgroundColor: `${getAvatarColor(task.assignee)}20`, color: getAvatarColor(task.assignee) }}
+                                    >
+                                      {getInitials(task.assignee)}
+                                    </span>
+                                    {task.assignee}
+                                  </span>
                                 )}
                               </div>
                               <div className="flex items-center justify-between">
