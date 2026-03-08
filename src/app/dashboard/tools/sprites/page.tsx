@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   Pencil,
   Eraser,
@@ -15,13 +15,24 @@ import {
   Download,
   ClipboardCopy,
   FlipHorizontal,
+  Eye,
+  EyeOff,
+  Plus,
 } from "lucide-react";
 
 type Tool = "pencil" | "eraser" | "fill" | "line" | "rectangle" | "eyedropper";
 type GridSize = 8 | 16 | 32 | 64;
 type PaletteName = "pico8" | "gameboy" | "nes" | "grayscale" | "monochrome" | "custom";
 
+interface Layer {
+  id: string;
+  name: string;
+  visible: boolean;
+  data: (string | null)[][];
+}
+
 const MAX_UNDO = 20;
+const MAX_LAYERS = 4;
 const GRID_SIZES: GridSize[] = [8, 16, 32, 64];
 const DEFAULT_ZOOM: Record<GridSize, number> = { 8: 32, 16: 20, 32: 16, 64: 8 };
 const MINIMAP_TARGET = 64;
@@ -78,6 +89,10 @@ function createEmptyGrid(size: number): (string | null)[][] {
 
 function cloneGrid(grid: (string | null)[][]): (string | null)[][] {
   return grid.map((row) => [...row]);
+}
+
+function cloneLayers(layers: Layer[]): Layer[] {
+  return layers.map((l) => ({ ...l, data: cloneGrid(l.data) }));
 }
 
 function colorsMatch(a: string | null, b: string | null): boolean {
@@ -150,7 +165,10 @@ function getRectPixels(x0: number, y0: number, x1: number, y1: number): [number,
 
 export default function SpriteEditorPage() {
   const [canvasSize, setCanvasSize] = useState<GridSize>(32);
-  const [pixelData, setPixelData] = useState<(string | null)[][]>(() => createEmptyGrid(32));
+  const [layers, setLayers] = useState<Layer[]>(() => [
+    { id: "1", name: "Layer 1", visible: true, data: createEmptyGrid(32) },
+  ]);
+  const [activeLayerIndex, setActiveLayerIndex] = useState(0);
   const [currentTool, setCurrentTool] = useState<Tool>("pencil");
   const [currentColor, setCurrentColor] = useState("#F59E0B");
   const [recentColors, setRecentColors] = useState<string[]>(["#F59E0B"]);
@@ -159,8 +177,8 @@ export default function SpriteEditorPage() {
   const [activePalette, setActivePalette] = useState<PaletteName>("pico8");
   const [customPalette, setCustomPalette] = useState<string[]>([]);
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
-  const [undoStack, setUndoStack] = useState<(string | null)[][][]>([]);
-  const [redoStack, setRedoStack] = useState<(string | null)[][][]>([]);
+  const [undoStack, setUndoStack] = useState<Layer[][]>([]);
+  const [redoStack, setRedoStack] = useState<Layer[][]>([]);
   const [notification, setNotification] = useState<string | null>(null);
   const [hexInput, setHexInput] = useState("#F59E0B");
   const [mirrorMode, setMirrorMode] = useState(false);
@@ -174,19 +192,58 @@ export default function SpriteEditorPage() {
 
   const canvasSizeRef = useRef(canvasSize);
   canvasSizeRef.current = canvasSize;
-  const pixelDataRef = useRef(pixelData);
-  pixelDataRef.current = pixelData;
+  const layersRef = useRef(layers);
+  layersRef.current = layers;
+  const activeLayerIndexRef = useRef(activeLayerIndex);
+  activeLayerIndexRef.current = activeLayerIndex;
   const undoStackRef = useRef(undoStack);
   undoStackRef.current = undoStack;
   const redoStackRef = useRef(redoStack);
   redoStackRef.current = redoStack;
 
+  const compositeData = useMemo(() => {
+    const result = createEmptyGrid(canvasSize);
+    for (const layer of layers) {
+      if (!layer.visible) continue;
+      for (let y = 0; y < canvasSize; y++) {
+        for (let x = 0; x < canvasSize; x++) {
+          const c = layer.data[y]?.[x];
+          if (c) result[y][x] = c;
+        }
+      }
+    }
+    return result;
+  }, [layers, canvasSize]);
+
+  const compositeRef = useRef(compositeData);
+  compositeRef.current = compositeData;
+
+  const safeActiveIndex = Math.min(activeLayerIndex, layers.length - 1);
   const displaySize = canvasSize * zoom;
   const minimapScale = Math.max(1, Math.floor(MINIMAP_TARGET / canvasSize));
   const minimapPx = canvasSize * minimapScale;
 
   const currentPaletteColors =
     activePalette === "custom" ? customPalette : PALETTES[activePalette].colors;
+
+  const updateActiveLayerData = useCallback(
+    (updater: (data: (string | null)[][]) => (string | null)[][]) => {
+      setLayers((prev) =>
+        prev.map((layer, i) =>
+          i === activeLayerIndexRef.current ? { ...layer, data: updater(layer.data) } : layer
+        )
+      );
+    },
+    []
+  );
+
+  const setActiveLayerData = useCallback((data: (string | null)[][]) => {
+    setLayers((prev) =>
+      prev.map((layer, i) =>
+        i === activeLayerIndexRef.current ? { ...layer, data } : layer
+      )
+    );
+  }, []);
 
   const notify = useCallback((msg: string) => {
     setNotification(msg);
@@ -202,7 +259,7 @@ export default function SpriteEditorPage() {
   }, []);
 
   const pushUndo = useCallback(() => {
-    const snap = cloneGrid(pixelDataRef.current);
+    const snap = cloneLayers(layersRef.current);
     setUndoStack((prev) => [...prev.slice(-(MAX_UNDO - 1)), snap]);
     setRedoStack([]);
   }, []);
@@ -211,8 +268,8 @@ export default function SpriteEditorPage() {
     const stack = undoStackRef.current;
     if (stack.length === 0) return;
     const restored = stack[stack.length - 1];
-    setRedoStack((prev) => [...prev, cloneGrid(pixelDataRef.current)]);
-    setPixelData(cloneGrid(restored));
+    setRedoStack((prev) => [...prev, cloneLayers(layersRef.current)]);
+    setLayers(cloneLayers(restored));
     setUndoStack(stack.slice(0, -1));
   }, []);
 
@@ -220,8 +277,8 @@ export default function SpriteEditorPage() {
     const stack = redoStackRef.current;
     if (stack.length === 0) return;
     const restored = stack[stack.length - 1];
-    setUndoStack((prev) => [...prev, cloneGrid(pixelDataRef.current)]);
-    setPixelData(cloneGrid(restored));
+    setUndoStack((prev) => [...prev, cloneLayers(layersRef.current)]);
+    setLayers(cloneLayers(restored));
     setRedoStack(stack.slice(0, -1));
   }, []);
 
@@ -258,7 +315,7 @@ export default function SpriteEditorPage() {
         lastPos.current = { x, y };
         const color = currentTool === "pencil" ? currentColor : null;
         const size = canvasSizeRef.current;
-        setPixelData((prev) => {
+        updateActiveLayerData((prev) => {
           const next = cloneGrid(prev);
           next[y][x] = color;
           if (mirrorMode) {
@@ -270,14 +327,16 @@ export default function SpriteEditorPage() {
         if (currentTool === "pencil") addRecentColor(currentColor);
       } else if (currentTool === "fill") {
         pushUndo();
-        setPixelData((prev) => floodFill(prev, x, y, currentColor));
+        updateActiveLayerData((prev) => floodFill(prev, x, y, currentColor));
         addRecentColor(currentColor);
       } else if (currentTool === "line" || currentTool === "rectangle") {
         pushUndo();
         drawStart.current = { x, y };
-        snapshotRef.current = cloneGrid(pixelDataRef.current);
+        snapshotRef.current = cloneGrid(
+          layersRef.current[activeLayerIndexRef.current].data
+        );
       } else if (currentTool === "eyedropper") {
-        const picked = pixelDataRef.current[y]?.[x];
+        const picked = compositeRef.current[y]?.[x];
         if (picked) {
           setCurrentColor(picked);
           setHexInput(picked);
@@ -285,7 +344,7 @@ export default function SpriteEditorPage() {
         }
       }
     },
-    [currentTool, currentColor, mirrorMode, getPixelCoords, pushUndo, addRecentColor],
+    [currentTool, currentColor, mirrorMode, getPixelCoords, pushUndo, addRecentColor, updateActiveLayerData],
   );
 
   const handlePointerMove = useCallback(
@@ -302,7 +361,7 @@ export default function SpriteEditorPage() {
         lastPos.current = { x, y };
         const color = currentTool === "pencil" ? currentColor : null;
         const size = canvasSizeRef.current;
-        setPixelData((prev) => {
+        updateActiveLayerData((prev) => {
           const next = cloneGrid(prev);
           for (const [px, py] of pixels) {
             if (px >= 0 && px < size && py >= 0 && py < size) {
@@ -328,7 +387,7 @@ export default function SpriteEditorPage() {
             }
           }
         }
-        setPixelData(next);
+        setActiveLayerData(next);
       } else if (currentTool === "rectangle" && snapshotRef.current) {
         const pixels = getRectPixels(drawStart.current.x, drawStart.current.y, x, y);
         const next = cloneGrid(snapshotRef.current);
@@ -342,10 +401,10 @@ export default function SpriteEditorPage() {
             }
           }
         }
-        setPixelData(next);
+        setActiveLayerData(next);
       }
     },
-    [currentTool, currentColor, mirrorMode, getPixelCoords],
+    [currentTool, currentColor, mirrorMode, getPixelCoords, updateActiveLayerData, setActiveLayerData],
   );
 
   const handlePointerUp = useCallback(() => {
@@ -364,7 +423,6 @@ export default function SpriteEditorPage() {
   const pointerUpRef = useRef(handlePointerUp);
   pointerUpRef.current = handlePointerUp;
 
-  // Canvas + minimap rendering
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -386,7 +444,7 @@ export default function SpriteEditorPage() {
 
     for (let y = 0; y < canvasSize; y++) {
       for (let x = 0; x < canvasSize; x++) {
-        const color = pixelData[y]?.[x];
+        const color = compositeData[y]?.[x];
         if (color) {
           ctx.fillStyle = color;
           ctx.fillRect(x * zoom, y * zoom, zoom, zoom);
@@ -409,7 +467,6 @@ export default function SpriteEditorPage() {
       }
     }
 
-    // Mirror center line
     if (mirrorMode && zoom >= 4) {
       const cx = Math.floor(canvasSize / 2) * zoom;
       ctx.strokeStyle = "rgba(245, 158, 11, 0.35)";
@@ -422,7 +479,6 @@ export default function SpriteEditorPage() {
       ctx.setLineDash([]);
     }
 
-    // Minimap
     const minimap = minimapRef.current;
     if (minimap) {
       const mCtx = minimap.getContext("2d")!;
@@ -438,7 +494,7 @@ export default function SpriteEditorPage() {
       }
       for (let y = 0; y < canvasSize; y++) {
         for (let x = 0; x < canvasSize; x++) {
-          const color = pixelData[y]?.[x];
+          const color = compositeData[y]?.[x];
           if (color) {
             mCtx.fillStyle = color;
             mCtx.fillRect(x * minimapScale, y * minimapScale, minimapScale, minimapScale);
@@ -446,7 +502,7 @@ export default function SpriteEditorPage() {
         }
       }
     }
-  }, [pixelData, canvasSize, zoom, showGrid, displaySize, mirrorMode, minimapScale, minimapPx]);
+  }, [compositeData, canvasSize, zoom, showGrid, displaySize, mirrorMode, minimapScale, minimapPx]);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => pointerMoveRef.current(e.clientX, e.clientY);
@@ -506,18 +562,22 @@ export default function SpriteEditorPage() {
 
   const clearCanvas = () => {
     pushUndo();
-    setPixelData(createEmptyGrid(canvasSize));
+    updateActiveLayerData(() => createEmptyGrid(canvasSize));
   };
 
   const handleCanvasSizeChange = (newSize: GridSize) => {
-    const newGrid = createEmptyGrid(newSize);
-    const copySize = Math.min(newSize, canvasSize);
-    for (let y = 0; y < copySize; y++) {
-      for (let x = 0; x < copySize; x++) {
-        newGrid[y][x] = pixelData[y]?.[x] ?? null;
-      }
-    }
-    setPixelData(newGrid);
+    setLayers((prev) =>
+      prev.map((layer) => {
+        const newGrid = createEmptyGrid(newSize);
+        const copySize = Math.min(newSize, canvasSize);
+        for (let y = 0; y < copySize; y++) {
+          for (let x = 0; x < copySize; x++) {
+            newGrid[y][x] = layer.data[y]?.[x] ?? null;
+          }
+        }
+        return { ...layer, data: newGrid };
+      })
+    );
     setCanvasSize(newSize);
     setZoom(DEFAULT_ZOOM[newSize]);
     setUndoStack([]);
@@ -531,7 +591,7 @@ export default function SpriteEditorPage() {
     const ctx = offscreen.getContext("2d")!;
     for (let y = 0; y < canvasSize; y++) {
       for (let x = 0; x < canvasSize; x++) {
-        const c = pixelData[y]?.[x];
+        const c = compositeData[y]?.[x];
         if (c) {
           ctx.fillStyle = c;
           ctx.fillRect(x, y, 1, 1);
@@ -576,6 +636,37 @@ export default function SpriteEditorPage() {
     addRecentColor(color);
   };
 
+  const addLayer = () => {
+    if (layers.length >= MAX_LAYERS) return;
+    pushUndo();
+    const newLayer: Layer = {
+      id: String(Date.now()),
+      name: `Layer ${layers.length + 1}`,
+      visible: true,
+      data: createEmptyGrid(canvasSize),
+    };
+    setLayers((prev) => [...prev, newLayer]);
+    setActiveLayerIndex(layers.length);
+  };
+
+  const deleteLayer = (index: number) => {
+    if (layers.length <= 1) return;
+    pushUndo();
+    const newLength = layers.length - 1;
+    setLayers((prev) => prev.filter((_, i) => i !== index));
+    setActiveLayerIndex((prevIdx) => {
+      if (prevIdx >= newLength) return Math.max(0, newLength - 1);
+      if (prevIdx > index) return prevIdx - 1;
+      return prevIdx;
+    });
+  };
+
+  const toggleLayerVisibility = (index: number) => {
+    setLayers((prev) =>
+      prev.map((layer, i) => (i === index ? { ...layer, visible: !layer.visible } : layer))
+    );
+  };
+
   return (
     <div className="-m-6 flex flex-col overflow-hidden" style={{ height: "calc(100vh - 4rem)" }}>
       {/* Header */}
@@ -587,6 +678,11 @@ export default function SpriteEditorPage() {
         {mirrorMode && (
           <span className="rounded bg-[#F59E0B]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B]">
             Mirror
+          </span>
+        )}
+        {layers.length > 1 && (
+          <span className="rounded bg-[#F59E0B]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B]">
+            {layers.length} Layers
           </span>
         )}
         <div className="ml-auto flex items-center gap-2 text-[11px] text-[#6B7280]">
@@ -762,6 +858,75 @@ export default function SpriteEditorPage() {
               </section>
             )}
 
+            {/* Layers */}
+            <section>
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-[#F59E0B]/70">
+                  Layers
+                </h3>
+                <button
+                  onClick={addLayer}
+                  disabled={layers.length >= MAX_LAYERS}
+                  className="flex items-center gap-0.5 rounded border border-[#2A2A2A] px-1.5 py-0.5 text-[11px] text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B] disabled:opacity-30 disabled:hover:border-[#2A2A2A] disabled:hover:text-[#9CA3AF]"
+                >
+                  <Plus size={11} />
+                  Add
+                </button>
+              </div>
+              <div className="space-y-0.5">
+                {layers
+                  .slice()
+                  .reverse()
+                  .map((layer, revIdx) => {
+                    const idx = layers.length - 1 - revIdx;
+                    const isActive = safeActiveIndex === idx;
+                    return (
+                      <div
+                        key={layer.id}
+                        onClick={() => setActiveLayerIndex(idx)}
+                        className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors ${
+                          isActive
+                            ? "border border-[#F59E0B]/25 bg-[#F59E0B]/10"
+                            : "border border-transparent hover:bg-[#1F1F1F]"
+                        }`}
+                      >
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleLayerVisibility(idx);
+                          }}
+                          className="shrink-0 transition-colors"
+                        >
+                          {layer.visible ? (
+                            <Eye size={13} className="text-[#F59E0B]" />
+                          ) : (
+                            <EyeOff size={13} className="text-[#4A4A4A]" />
+                          )}
+                        </button>
+                        <span
+                          className={`flex-1 text-xs ${
+                            isActive ? "text-[#F59E0B]" : "text-[#D1D5DB]"
+                          }`}
+                        >
+                          {layer.name}
+                        </span>
+                        {layers.length > 1 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteLayer(idx);
+                            }}
+                            className="shrink-0 text-[#4A4A4A] transition-colors hover:text-red-400"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            </section>
+
             {/* Palette */}
             <section>
               <div className="mb-2 flex items-center justify-between">
@@ -883,7 +1048,7 @@ export default function SpriteEditorPage() {
                   className="flex w-full items-center justify-center gap-1.5 rounded border border-[#2A2A2A] bg-[#1A1A1A] py-1.5 text-xs text-[#9CA3AF] transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
                 >
                   <Trash2 size={13} />
-                  Clear canvas
+                  Clear layer
                 </button>
               </div>
             </section>
@@ -927,6 +1092,8 @@ export default function SpriteEditorPage() {
         <span>{zoom}x zoom</span>
         <span className="text-[#2A2A2A]">|</span>
         <span className="capitalize">{currentTool}</span>
+        <span className="text-[#2A2A2A]">|</span>
+        <span className="text-[#F59E0B]">{layers[safeActiveIndex]?.name}</span>
         {mirrorMode && (
           <>
             <span className="text-[#2A2A2A]">|</span>

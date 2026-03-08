@@ -19,6 +19,8 @@ import {
   AlertTriangle,
   CheckCircle,
   Wind,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -162,6 +164,8 @@ function encodeWAV(samples: Float32Array, sampleRate: number): Blob {
 export default function SoundsPage() {
   const [params, setParams] = useState<SoundParams>(PRESETS[0].params);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -276,6 +280,50 @@ export default function SoundsPage() {
     const p = randomParams();
     setParams(p);
     playSound(p);
+  };
+
+  const handleAIDescribe = async () => {
+    if (!aiPrompt.trim() || aiLoading) return;
+    setAiLoading(true);
+    try {
+      const prompt = `I want to create a retro game sound effect described as: '${aiPrompt.trim()}'. Suggest the best oscillator settings: waveform (sine/square/sawtooth/triangle), base frequency (Hz), end frequency (Hz), attack (0-1), decay (0-1), sustain (0-1), duration (0.1-2.0). Return ONLY a JSON object with these keys: waveform, frequency, endFrequency, attack, decay, sustain, duration.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content =
+        data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const jsonMatch = content.match(/\{[\s\S]*?\}/);
+      if (!jsonMatch) throw new Error("No JSON in response");
+      const parsed = JSON.parse(jsonMatch[0]);
+      const newParams: SoundParams = {
+        waveType: WAVE_TYPES.includes(parsed.waveform) ? parsed.waveform : "square",
+        freqStart: Math.max(20, Math.min(4000, Number(parsed.frequency) || 440)),
+        freqEnd: Math.max(20, Math.min(4000, Number(parsed.endFrequency) || 220)),
+        duration: Math.max(0.01, Math.min(2, Number(parsed.duration) || 0.3)),
+        volume: Math.max(0, Math.min(1, Number(parsed.sustain) || 0.3)),
+        decay: Math.max(0.01, Math.min(2, Number(parsed.decay) || 0.2)),
+      };
+      setParams(newParams);
+      playSound(newParams);
+    } catch {
+      const p = randomParams();
+      setParams(p);
+      playSound(p);
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const exportWAV = async () => {
@@ -462,6 +510,38 @@ export default function SoundsPage() {
           >
             <Shuffle className="h-4 w-4 text-[#F59E0B]" /> Randomize
           </button>
+
+          {/* AI Sound Designer */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              AI Sound Designer
+            </h3>
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAIDescribe()}
+                placeholder="e.g. heavy footstep on metal"
+                className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/40"
+              />
+              <button
+                onClick={handleAIDescribe}
+                disabled={aiLoading || !aiPrompt.trim()}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-3 py-2.5 text-sm font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/20 active:scale-[0.97] disabled:opacity-50"
+              >
+                {aiLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" /> AI Describe
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
 
           <button
             onClick={exportWAV}
