@@ -1,0 +1,554 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  ArrowLeft,
+  Lock,
+  Unlock,
+  Copy,
+  Check,
+  RefreshCw,
+  Download,
+  Trash2,
+  Bookmark,
+  Star,
+  Shuffle,
+} from "lucide-react";
+import Link from "next/link";
+
+interface PaletteColor {
+  hex: string;
+  locked: boolean;
+}
+
+interface SavedPalette {
+  id: string;
+  colors: string[];
+  name: string;
+  timestamp: number;
+}
+
+type HarmonyMode = "random" | "analogous" | "complementary" | "triadic" | "monochromatic";
+type ExportFormat = "css" | "json" | "png";
+
+const HARMONY_MODES: { id: HarmonyMode; label: string }[] = [
+  { id: "random", label: "Random" },
+  { id: "analogous", label: "Analogous" },
+  { id: "complementary", label: "Complementary" },
+  { id: "triadic", label: "Triadic" },
+  { id: "monochromatic", label: "Monochromatic" },
+];
+
+const GAME_PRESETS: { name: string; colors: string[] }[] = [
+  { name: "NES", colors: ["#FCE4A8", "#F08030", "#E82010", "#7890F8", "#0058F8"] },
+  { name: "SNES", colors: ["#F8D878", "#A83800", "#503000", "#0078F8", "#005800"] },
+  { name: "Game Boy", colors: ["#9BBC0F", "#8BAC0F", "#306230", "#0F380F", "#E0F8CF"] },
+  { name: "Arcade", colors: ["#FF0055", "#FFDD00", "#00DDFF", "#FF6600", "#AA00FF"] },
+  { name: "Pixel Art", colors: ["#FF6B6B", "#4ECDC4", "#FFE66D", "#2C3E50", "#95E1D3"] },
+  { name: "Fantasy RPG", colors: ["#8B4513", "#DAA520", "#2E8B57", "#4B0082", "#DC143C"] },
+  { name: "Sci-Fi", colors: ["#00F0FF", "#FF00E5", "#0D0D2B", "#1A1A4E", "#4D4DFF"] },
+  { name: "Horror", colors: ["#1A0A0A", "#4A0E0E", "#8B0000", "#2D1B1B", "#C0392B"] },
+];
+
+function hslToHex(h: number, s: number, l: number): string {
+  h = ((h % 360) + 360) % 360;
+  s = Math.max(0, Math.min(100, s));
+  l = Math.max(0, Math.min(100, l));
+  const sn = s / 100;
+  const ln = l / 100;
+  const c = (1 - Math.abs(2 * ln - 1)) * sn;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = ln - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; }
+  else if (h < 120) { r = x; g = c; }
+  else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; }
+  else if (h < 300) { r = x; b = c; }
+  else { r = c; b = x; }
+  const toHex = (n: number) => Math.round((n + m) * 255).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
+}
+
+function hexToHSL(hex: string): [number, number, number] {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, Math.round(l * 100)];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+  else if (max === g) h = ((b - r) / d + 2) * 60;
+  else h = ((r - g) / d + 4) * 60;
+  return [Math.round(h), Math.round(s * 100), Math.round(l * 100)];
+}
+
+function hexToRGB(hex: string): [number, number, number] {
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ];
+}
+
+function relativeLuminance(hex: string): number {
+  const [r, g, b] = hexToRGB(hex).map((c) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrastRatio(hex1: string, hex2: string): number {
+  const l1 = relativeLuminance(hex1);
+  const l2 = relativeLuminance(hex2);
+  const lighter = Math.max(l1, l2);
+  const darker = Math.min(l1, l2);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function generateHarmony(mode: HarmonyMode, locked: PaletteColor[]): string[] {
+  const baseH = Math.random() * 360;
+  const baseS = 55 + Math.random() * 35;
+  const baseL = 40 + Math.random() * 25;
+
+  const gen = (count: number, fn: (i: number) => string): string[] => {
+    const result: string[] = [];
+    let genIdx = 0;
+    for (let i = 0; i < 5; i++) {
+      if (locked[i]?.locked) {
+        result.push(locked[i].hex);
+      } else {
+        result.push(fn(genIdx));
+        genIdx++;
+      }
+    }
+    return result;
+  };
+
+  switch (mode) {
+    case "analogous":
+      return gen(5, (i) => hslToHex(baseH + (i - 2) * 30, baseS + (i - 2) * 5, baseL + (i - 2) * 8));
+    case "complementary":
+      return gen(5, (i) => {
+        const hues = [baseH, baseH, baseH + 180, baseH + 180, baseH + 30];
+        const ls = [baseL - 10, baseL, baseL, baseL + 10, baseL + 20];
+        return hslToHex(hues[i] ?? baseH, baseS, ls[i] ?? baseL);
+      });
+    case "triadic":
+      return gen(5, (i) => {
+        const hues = [baseH, baseH, baseH + 120, baseH + 120, baseH + 240];
+        const ls = [baseL - 8, baseL + 8, baseL, baseL + 12, baseL];
+        return hslToHex(hues[i] ?? baseH, baseS, ls[i] ?? baseL);
+      });
+    case "monochromatic":
+      return gen(5, (i) => hslToHex(baseH, baseS - i * 8, 25 + i * 14));
+    default:
+      return gen(5, () => hslToHex(Math.random() * 360, 50 + Math.random() * 40, 35 + Math.random() * 35));
+  }
+}
+
+const STORAGE_KEY = "gameforge_saved_palettes";
+
+export default function ColorsPage() {
+  const [colors, setColors] = useState<PaletteColor[]>(() =>
+    generateHarmony("random", []).map((hex) => ({ hex, locked: false }))
+  );
+  const [mode, setMode] = useState<HarmonyMode>("random");
+  const [saved, setSaved] = useState<SavedPalette[]>([]);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [paletteName, setPaletteName] = useState("");
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    console.log("[ColorsPage] rendered");
+    try {
+      const data = localStorage.getItem(STORAGE_KEY);
+      if (data) setSaved(JSON.parse(data));
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    } catch {}
+  }, [saved]);
+
+  const regenerate = useCallback(() => {
+    console.log("[ColorsPage] regenerate, mode:", mode);
+    const newHexes = generateHarmony(mode, colors);
+    setColors(newHexes.map((hex, i) => ({
+      hex: colors[i]?.locked ? colors[i].hex : hex,
+      locked: colors[i]?.locked ?? false,
+    })));
+  }, [mode, colors]);
+
+  const toggleLock = (idx: number) => {
+    console.log("[ColorsPage] toggle lock:", idx);
+    setColors((prev) => prev.map((c, i) => (i === idx ? { ...c, locked: !c.locked } : c)));
+  };
+
+  const copyHex = (hex: string, idx: number) => {
+    console.log("[ColorsPage] copy:", hex);
+    navigator.clipboard.writeText(hex);
+    setCopiedIdx(idx);
+    setTimeout(() => setCopiedIdx(null), 1500);
+  };
+
+  const applyPreset = (preset: { name: string; colors: string[] }) => {
+    console.log("[ColorsPage] apply preset:", preset.name);
+    setColors(preset.colors.map((hex) => ({ hex, locked: false })));
+  };
+
+  const savePalette = () => {
+    const name = paletteName.trim() || `Palette ${saved.length + 1}`;
+    console.log("[ColorsPage] save palette:", name);
+    setSaved((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), colors: colors.map((c) => c.hex), name, timestamp: Date.now() },
+    ]);
+    setPaletteName("");
+  };
+
+  const deleteSaved = (id: string) => {
+    console.log("[ColorsPage] delete saved:", id);
+    setSaved((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const loadPalette = (palette: SavedPalette) => {
+    console.log("[ColorsPage] load palette:", palette.name);
+    setColors(palette.colors.map((hex) => ({ hex, locked: false })));
+  };
+
+  const exportPalette = (format: ExportFormat) => {
+    console.log("[ColorsPage] export as:", format);
+    const hexes = colors.map((c) => c.hex);
+
+    if (format === "css") {
+      const css = `:root {\n${hexes.map((h, i) => `  --color-${i + 1}: ${h};`).join("\n")}\n}`;
+      downloadText(css, "palette.css", "text/css");
+    } else if (format === "json") {
+      downloadText(JSON.stringify(hexes, null, 2), "palette.json", "application/json");
+    } else if (format === "png") {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d")!;
+      canvas.width = 500;
+      canvas.height = 100;
+      hexes.forEach((hex, i) => {
+        ctx.fillStyle = hex;
+        ctx.fillRect(i * 100, 0, 100, 100);
+      });
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "palette.png";
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-6">
+      <div className="flex items-center gap-3">
+        <Link
+          href="/dashboard/tools"
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] text-[#9CA3AF] transition-colors hover:text-[#F5F5F5]"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Link>
+        <div>
+          <h1 className="text-2xl font-bold">Color Palette Generator</h1>
+          <p className="mt-0.5 text-sm text-[#9CA3AF]">
+            Generate harmonious palettes for your game&apos;s art direction
+          </p>
+        </div>
+      </div>
+
+      {/* Main palette display */}
+      <div className="overflow-hidden rounded-xl border border-[#2A2A2A]">
+        <div className="grid grid-cols-5">
+          {colors.map((color, i) => {
+            const [h, s, l] = hexToHSL(color.hex);
+            const [r, g, b] = hexToRGB(color.hex);
+            const textColor = relativeLuminance(color.hex) > 0.4 ? "#0F0F0F" : "#F5F5F5";
+            const whiteContrast = contrastRatio(color.hex, "#FFFFFF").toFixed(1);
+            const blackContrast = contrastRatio(color.hex, "#000000").toFixed(1);
+
+            return (
+              <div
+                key={i}
+                className="group relative flex flex-col items-center justify-end pb-4 pt-20 transition-all hover:pt-16"
+                style={{ backgroundColor: color.hex }}
+              >
+                {/* Lock button */}
+                <button
+                  onClick={() => toggleLock(i)}
+                  className="absolute right-2 top-2 rounded-md p-1.5 opacity-0 transition-opacity group-hover:opacity-100"
+                  style={{ color: textColor, backgroundColor: `${textColor}15` }}
+                >
+                  {color.locked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+                </button>
+
+                {color.locked && (
+                  <Lock
+                    className="absolute left-2 top-2 h-3 w-3"
+                    style={{ color: textColor, opacity: 0.5 }}
+                  />
+                )}
+
+                {/* Color info */}
+                <button
+                  onClick={() => copyHex(color.hex, i)}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-sm font-bold tracking-wide transition-all hover:scale-105"
+                  style={{ color: textColor }}
+                >
+                  {copiedIdx === i ? (
+                    <><Check className="h-3.5 w-3.5" /> Copied!</>
+                  ) : (
+                    <><Copy className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity" /> {color.hex}</>
+                  )}
+                </button>
+
+                <div
+                  className="mt-1 space-y-0.5 text-center text-[10px] font-medium opacity-0 transition-opacity group-hover:opacity-80"
+                  style={{ color: textColor }}
+                >
+                  <div>RGB({r}, {g}, {b})</div>
+                  <div>HSL({h}, {s}%, {l}%)</div>
+                  <div className="mt-1.5 flex gap-2">
+                    <span title="Contrast with white">W {whiteContrast}</span>
+                    <span title="Contrast with black">B {blackContrast}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Controls row */}
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Harmony mode */}
+        <div className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-1">
+          {HARMONY_MODES.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => { setMode(m.id); console.log("[ColorsPage] mode:", m.id); }}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                mode === m.id
+                  ? "bg-[#F59E0B] text-[#0F0F0F]"
+                  : "text-[#9CA3AF] hover:text-[#F5F5F5]"
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={regenerate}
+          className="flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-bold text-[#0F0F0F] transition-all hover:bg-[#D97706] active:scale-[0.97]"
+        >
+          <RefreshCw className="h-4 w-4" /> Generate
+        </button>
+
+        <button
+          onClick={() => setColors(colors.map((c) => ({ ...c, locked: false })))}
+          className="rounded-lg border border-[#2A2A2A] px-3 py-2 text-xs text-[#9CA3AF] transition-colors hover:text-[#F5F5F5]"
+        >
+          Unlock All
+        </button>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+        <div className="space-y-5">
+          {/* Preset game palettes */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              Game Presets
+            </h2>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {GAME_PRESETS.map((preset) => (
+                <button
+                  key={preset.name}
+                  onClick={() => applyPreset(preset)}
+                  className="group flex flex-col gap-2 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 transition-all hover:border-[#F59E0B]/40"
+                >
+                  <div className="flex gap-0.5 overflow-hidden rounded">
+                    {preset.colors.map((c, i) => (
+                      <div key={i} className="h-5 flex-1" style={{ backgroundColor: c }} />
+                    ))}
+                  </div>
+                  <span className="text-xs font-medium text-[#9CA3AF] group-hover:text-[#F5F5F5] transition-colors">
+                    {preset.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Export options */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              Export
+            </h2>
+            <div className="flex gap-2">
+              {(["css", "json", "png"] as ExportFormat[]).map((fmt) => (
+                <button
+                  key={fmt}
+                  onClick={() => exportPalette(fmt)}
+                  className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm font-medium text-[#F5F5F5] transition-all hover:border-[#F59E0B]/40 hover:bg-[#F59E0B]/5 active:scale-[0.97]"
+                >
+                  <Download className="h-3.5 w-3.5 text-[#F59E0B]" />
+                  {fmt.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            <canvas ref={canvasRef} className="hidden" />
+          </div>
+
+          {/* Contrast checker */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              Contrast Checker
+            </h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-[#6B7280]">
+                    <th className="pb-2 text-left font-medium">Color</th>
+                    <th className="pb-2 text-center font-medium">vs White</th>
+                    <th className="pb-2 text-center font-medium">vs Black</th>
+                    <th className="pb-2 text-center font-medium">AA Text</th>
+                    <th className="pb-2 text-center font-medium">AA Large</th>
+                    <th className="pb-2 text-center font-medium">AAA</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {colors.map((color, i) => {
+                    const wc = contrastRatio(color.hex, "#FFFFFF");
+                    const bc = contrastRatio(color.hex, "#000000");
+                    return (
+                      <tr key={i} className="border-t border-[#2A2A2A]">
+                        <td className="py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="h-5 w-5 rounded" style={{ backgroundColor: color.hex }} />
+                            <span className="font-mono text-[#F5F5F5]">{color.hex}</span>
+                          </div>
+                        </td>
+                        <td className="py-2 text-center font-mono text-[#9CA3AF]">{wc.toFixed(1)}</td>
+                        <td className="py-2 text-center font-mono text-[#9CA3AF]">{bc.toFixed(1)}</td>
+                        <td className="py-2 text-center">
+                          <ContrastBadge pass={Math.max(wc, bc) >= 4.5} />
+                        </td>
+                        <td className="py-2 text-center">
+                          <ContrastBadge pass={Math.max(wc, bc) >= 3} />
+                        </td>
+                        <td className="py-2 text-center">
+                          <ContrastBadge pass={Math.max(wc, bc) >= 7} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Saved palettes sidebar */}
+        <div className="space-y-4">
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              Save Current
+            </h3>
+            <div className="flex gap-2">
+              <input
+                value={paletteName}
+                onChange={(e) => setPaletteName(e.target.value)}
+                placeholder="Palette name..."
+                className="min-w-0 flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/50"
+              />
+              <button
+                onClick={savePalette}
+                className="rounded-lg bg-[#F59E0B] px-3 py-2 text-sm font-bold text-[#0F0F0F] transition-all hover:bg-[#D97706] active:scale-[0.97]"
+              >
+                <Bookmark className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              Saved Palettes
+            </h3>
+            {saved.length === 0 ? (
+              <p className="text-xs text-[#4B5563]">No saved palettes yet</p>
+            ) : (
+              <div className="space-y-2">
+                {saved.map((palette) => (
+                  <div
+                    key={palette.id}
+                    className="group rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-2.5 transition-all hover:border-[#F59E0B]/30"
+                  >
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <button
+                        onClick={() => loadPalette(palette)}
+                        className="text-xs font-medium text-[#F5F5F5] transition-colors hover:text-[#F59E0B]"
+                      >
+                        {palette.name}
+                      </button>
+                      <button
+                        onClick={() => deleteSaved(palette.id)}
+                        className="text-[#4B5563] opacity-0 transition-all hover:text-[#EF4444] group-hover:opacity-100"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => loadPalette(palette)}
+                      className="flex w-full gap-0.5 overflow-hidden rounded"
+                    >
+                      {palette.colors.map((c, i) => (
+                        <div key={i} className="h-6 flex-1" style={{ backgroundColor: c }} />
+                      ))}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContrastBadge({ pass }: { pass: boolean }) {
+  return (
+    <span
+      className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-bold ${
+        pass ? "bg-[#10B981]/15 text-[#10B981]" : "bg-[#EF4444]/15 text-[#EF4444]"
+      }`}
+    >
+      {pass ? "Pass" : "Fail"}
+    </span>
+  );
+}
+
+function downloadText(content: string, filename: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

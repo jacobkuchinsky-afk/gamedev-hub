@@ -1,65 +1,237 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect } from "react";
+import Link from "next/link";
+import {
+  Gamepad2,
+  Target,
+  Rocket,
+  Palette,
+  Music,
+  Swords,
+  BookOpen,
+  Calculator,
+  MessageSquare,
+  ArrowRight,
+  Sparkles,
+  Zap,
+} from "lucide-react";
+
+const features = [
+  {
+    icon: Target,
+    title: "Organize",
+    description:
+      "Project boards, sprint tracking, and task management designed for how games are actually built. From concept to gold master.",
+    color: "#3B82F6",
+  },
+  {
+    icon: Palette,
+    title: "Create",
+    description:
+      "Built-in sprite editor, sound generator, and color palette tools. Stop context-switching between a dozen apps.",
+    color: "#F59E0B",
+  },
+  {
+    icon: Rocket,
+    title: "Ship",
+    description:
+      "Bug tracking with severity levels, launch checklists, and platform-specific issue management. Ship with confidence.",
+    color: "#10B981",
+  },
+];
+
+const tools = [
+  { icon: Palette, name: "Sprite Editor", desc: "Pixel art & sprite sheets", color: "#F59E0B" },
+  { icon: Music, name: "Sound Generator", desc: "SFX & ambient audio", color: "#8B5CF6" },
+  { icon: Sparkles, name: "Color Palettes", desc: "Game-ready color schemes", color: "#EC4899" },
+  { icon: Swords, name: "Name Generator", desc: "Characters, places, items", color: "#EF4444" },
+  { icon: Calculator, name: "Balance Calculator", desc: "Stat & economy tuning", color: "#3B82F6" },
+  { icon: MessageSquare, name: "Dialogue Trees", desc: "Branching conversations", color: "#10B981" },
+];
+
+export default function LandingPage() {
+  useEffect(() => {
+    console.log("[LandingPage] rendered");
+  }, []);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen bg-[#0F0F0F] text-[#F5F5F5]">
+      {/* Nav */}
+      <nav className="sticky top-0 z-50 border-b border-[#2A2A2A] bg-[#0F0F0F]/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+              <Gamepad2 className="h-5 w-5 text-[#F59E0B]" />
+            </div>
+            <span className="text-lg font-bold tracking-tight">GameForge</span>
+          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/login"
+              className="rounded-lg px-4 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:text-[#F5F5F5]"
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/signup"
+              className="rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-bold text-[#0F0F0F] transition-colors hover:bg-[#D97706]"
+            >
+              Get Started
+            </Link>
+          </div>
+        </div>
+      </nav>
+
+      {/* Hero */}
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(245,158,11,0.08)_0%,_transparent_60%)]" />
+        <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-24 text-center md:pt-32 md:pb-28">
+          <div className="animate-fade-in mb-6 inline-flex items-center gap-2 rounded-full border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-1.5 text-sm text-[#9CA3AF]">
+            <Zap className="h-3.5 w-3.5 text-[#F59E0B]" />
+            Now in open beta
+          </div>
+          <h1 className="animate-fade-in stagger-1 mx-auto max-w-3xl text-5xl font-extrabold leading-tight tracking-tight md:text-7xl">
+            Build Games{" "}
+            <span className="bg-gradient-to-r from-[#F59E0B] to-[#D97706] bg-clip-text text-transparent">
+              Better
+            </span>
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="animate-fade-in stagger-2 mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-[#9CA3AF] md:text-xl">
+            The productivity platform built for game developers. Organize your project,
+            track bugs, design sprites, generate sounds — all in one place.
           </p>
+          <div className="animate-fade-in stagger-3 mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <Link
+              href="/signup"
+              className="group flex items-center gap-2 rounded-xl bg-[#F59E0B] px-8 py-3.5 text-base font-bold text-[#0F0F0F] shadow-lg shadow-[#F59E0B]/20 transition-all hover:bg-[#D97706] hover:shadow-[#F59E0B]/30"
+            >
+              Get Started Free
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </Link>
+            <Link
+              href="#tools"
+              className="flex items-center gap-2 rounded-xl border border-[#2A2A2A] px-8 py-3.5 text-base font-medium text-[#F5F5F5] transition-all hover:border-[#F59E0B]/40 hover:bg-[#1A1A1A]"
+            >
+              See Tools
+            </Link>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      {/* Feature Cards */}
+      <section className="mx-auto max-w-6xl px-6 pb-24">
+        <div className="grid gap-6 md:grid-cols-3">
+          {features.map((f, i) => (
+            <div
+              key={f.title}
+              className={`animate-fade-in stagger-${i + 1} group rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-8 transition-all hover:border-[${f.color}]/30 hover:shadow-lg`}
+            >
+              <div
+                className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl"
+                style={{ backgroundColor: `${f.color}15` }}
+              >
+                <f.icon className="h-6 w-6" style={{ color: f.color }} />
+              </div>
+              <h3 className="mb-3 text-xl font-bold">{f.title}</h3>
+              <p className="leading-relaxed text-[#9CA3AF]">{f.description}</p>
+            </div>
+          ))}
         </div>
-      </main>
+      </section>
+
+      {/* Tools Showcase */}
+      <section id="tools" className="border-t border-[#2A2A2A] bg-[#0A0A0A] py-24">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="mb-14 text-center">
+            <h2 className="text-3xl font-bold md:text-4xl">
+              Everything You Need to{" "}
+              <span className="text-[#F59E0B]">Create</span>
+            </h2>
+            <p className="mt-4 text-[#9CA3AF]">
+              Standalone tools that work together. No more juggling 10 different apps.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {tools.map((tool, i) => (
+              <Link
+                key={tool.name}
+                href="/dashboard/tools"
+                className={`animate-fade-in stagger-${i + 1} group flex items-center gap-4 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 transition-all hover:border-[#F59E0B]/30 hover:bg-[#1F1F1F]`}
+              >
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: `${tool.color}15` }}
+                >
+                  <tool.icon className="h-5 w-5" style={{ color: tool.color }} />
+                </div>
+                <div>
+                  <p className="font-semibold">{tool.name}</p>
+                  <p className="text-sm text-[#9CA3AF]">{tool.desc}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Social Proof */}
+      <section className="border-t border-[#2A2A2A] py-20">
+        <div className="mx-auto max-w-6xl px-6 text-center">
+          <div className="mx-auto max-w-lg">
+            <BookOpen className="mx-auto mb-4 h-8 w-8 text-[#F59E0B]" />
+            <p className="text-2xl font-bold">Built by game devs, for game devs</p>
+            <p className="mt-3 text-[#9CA3AF]">
+              We got tired of using project management tools that don&apos;t understand game
+              development. So we built one that does.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="border-t border-[#2A2A2A] bg-[#0A0A0A] py-20">
+        <div className="mx-auto max-w-6xl px-6 text-center">
+          <h2 className="text-3xl font-bold md:text-4xl">Ready to forge your next game?</h2>
+          <p className="mt-4 text-[#9CA3AF]">
+            Join game developers who ship faster with GameForge.
+          </p>
+          <Link
+            href="/signup"
+            className="mt-8 inline-flex items-center gap-2 rounded-xl bg-[#F59E0B] px-8 py-3.5 text-base font-bold text-[#0F0F0F] shadow-lg shadow-[#F59E0B]/20 transition-all hover:bg-[#D97706]"
+          >
+            Get Started Free
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-[#2A2A2A] py-12">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 px-6 md:flex-row">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+              <Gamepad2 className="h-4 w-4 text-[#F59E0B]" />
+            </div>
+            <span className="font-bold">GameForge</span>
+          </div>
+          <div className="flex gap-8 text-sm text-[#9CA3AF]">
+            <Link href="/dashboard" className="transition-colors hover:text-[#F5F5F5]">
+              Dashboard
+            </Link>
+            <Link href="/dashboard/tools" className="transition-colors hover:text-[#F5F5F5]">
+              Tools
+            </Link>
+            <Link href="/login" className="transition-colors hover:text-[#F5F5F5]">
+              Sign In
+            </Link>
+            <Link href="/signup" className="transition-colors hover:text-[#F5F5F5]">
+              Sign Up
+            </Link>
+          </div>
+          <p className="text-sm text-[#9CA3AF]">&copy; 2026 GameForge. Ship it.</p>
+        </div>
+      </footer>
     </div>
   );
 }
