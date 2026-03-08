@@ -176,6 +176,43 @@ function getGamificationStats() {
   return { projects, bugs, devlogs, completedSprints, toolsUsed, aiUses };
 }
 
+interface StreakData {
+  lastActiveDate: string;
+  currentStreak: number;
+  longestStreak: number;
+}
+
+function getStreakData(): StreakData {
+  if (typeof window === "undefined") return { lastActiveDate: "", currentStreak: 0, longestStreak: 0 };
+  const raw = localStorage.getItem("gameforge_dev_streak");
+  if (raw) return JSON.parse(raw);
+  return { lastActiveDate: "", currentStreak: 0, longestStreak: 0 };
+}
+
+function updateStreak(): StreakData {
+  const today = new Date().toISOString().split("T")[0];
+  const data = getStreakData();
+
+  if (data.lastActiveDate === today) return data;
+
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+  const newStreak = data.lastActiveDate === yesterday ? data.currentStreak + 1 : 1;
+  const newLongest = Math.max(data.longestStreak, newStreak);
+
+  const updated: StreakData = { lastActiveDate: today, currentStreak: newStreak, longestStreak: newLongest };
+  localStorage.setItem("gameforge_dev_streak", JSON.stringify(updated));
+  return updated;
+}
+
+function getStreakMessage(streak: number): string {
+  if (streak >= 30) return "Legendary! A full month of shipping!";
+  if (streak >= 14) return "Two weeks strong. Unstoppable!";
+  if (streak >= 7) return "One week streak! Keep the momentum!";
+  if (streak >= 3) return "Nice streak! Don't break the chain!";
+  if (streak >= 1) return "Every day counts. Keep it going!";
+  return "Start your streak today!";
+}
+
 const LAUNCH_ITEMS = [
   { id: "sp_title", label: "Finalize game title" },
   { id: "sp_desc", label: "Write store description" },
@@ -277,6 +314,7 @@ export default function DashboardPage() {
   const [standupCopied, setStandupCopied] = useState(false);
 
   const [badgeStats, setBadgeStats] = useState<ReturnType<typeof getGamificationStats>>({ projects: 0, bugs: 0, devlogs: 0, completedSprints: 0, toolsUsed: 0, aiUses: 0 });
+  const [streak, setStreak] = useState<StreakData>({ lastActiveDate: "", currentStreak: 0, longestStreak: 0 });
 
   const [weeklySummary, setWeeklySummary] = useState<{
     tasksCompleted: Task[];
@@ -300,6 +338,7 @@ export default function DashboardPage() {
     const ts = localStorage.getItem("gameforge_last_backup");
     setLastBackup(ts);
     setBackupLoaded(true);
+    setStreak(updateStreak());
   }, []);
 
   const handleDismissWelcome = () => {
@@ -784,6 +823,64 @@ export default function DashboardPage() {
             <p className="mt-3 text-sm text-[#9CA3AF]">{stat.label}</p>
           </Link>
         ))}
+      </div>
+
+      {/* Dev Streak */}
+      <div className="rounded-2xl border border-[#F59E0B]/20 bg-gradient-to-r from-[#F59E0B]/8 via-[#1A1A1A] to-[#1A1A1A] overflow-hidden">
+        <div className="flex items-center gap-5 px-6 py-5">
+          <div className="relative flex h-16 w-16 shrink-0 items-center justify-center">
+            <div className="absolute inset-0 rounded-2xl bg-[#F59E0B]/10" />
+            <Flame className="relative h-8 w-8 text-[#F59E0B]" />
+            {streak.currentStreak >= 7 && (
+              <div className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#F59E0B] text-[9px] font-bold text-black">
+                {streak.currentStreak >= 30 ? "!" : streak.currentStreak >= 14 ? "+" : "~"}
+              </div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-extrabold tabular-nums text-[#F59E0B]">
+                {streak.currentStreak}
+              </span>
+              <span className="text-sm font-medium text-[#9CA3AF]">
+                day{streak.currentStreak !== 1 ? "s" : ""} streak
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-[#6B7280]">
+              {getStreakMessage(streak.currentStreak)}
+            </p>
+          </div>
+          <div className="hidden sm:flex shrink-0 flex-col items-end gap-1">
+            <div className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2">
+              <Trophy className="h-3.5 w-3.5 text-[#F59E0B]" />
+              <div className="text-right">
+                <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">Longest</p>
+                <p className="text-sm font-bold tabular-nums text-[#F5F5F5]">
+                  {streak.longestStreak} day{streak.longestStreak !== 1 ? "s" : ""}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+        {streak.currentStreak > 0 && (
+          <div className="border-t border-[#2A2A2A]/50 px-6 py-2.5">
+            <div className="flex items-center gap-2">
+              {Array.from({ length: Math.min(streak.currentStreak, 14) }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-1.5 flex-1 rounded-full transition-all"
+                  style={{
+                    backgroundColor: `rgba(245, 158, 11, ${0.3 + (i / Math.min(streak.currentStreak, 14)) * 0.7})`,
+                    maxWidth: "24px",
+                  }}
+                />
+              ))}
+              {streak.currentStreak > 14 && (
+                <span className="text-[10px] font-medium text-[#F59E0B]">+{streak.currentStreak - 14}</span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Today's Focus */}

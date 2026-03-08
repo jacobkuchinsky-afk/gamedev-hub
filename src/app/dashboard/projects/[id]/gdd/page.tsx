@@ -31,6 +31,7 @@ import {
   Joystick,
   Trophy,
   Copy,
+  Map,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -513,6 +514,10 @@ export default function GDDPage() {
   const [achievementsLoading, setAchievementsLoading] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [achievementsCopied, setAchievementsCopied] = useState(false);
+  const [scenePlannerLoading, setScenePlannerLoading] = useState(false);
+  const [scenePlannerResult, setScenePlannerResult] = useState("");
+  const [showScenePlanner, setShowScenePlanner] = useState(false);
+  const [scenePlannerCopied, setScenePlannerCopied] = useState(false);
 
   useEffect(() => {
     console.log("[GDDPage] rendered, id:", projectId);
@@ -752,6 +757,47 @@ export default function GDDPage() {
     }
   }, [project, data]);
 
+  const handleScenePlanner = useCallback(async () => {
+    if (!project) return;
+    setScenePlannerLoading(true);
+    setShowScenePlanner(true);
+
+    const genre = data.genre || project.genre || "unspecified";
+    const description = data.elevatorPitch || data.tagline || project.description || "No description";
+
+    const prompt = `Design 5 game levels/scenes for a ${genre} game: '${description}'. For each level include: name, setting description, objectives (2-3), enemies/obstacles, estimated playtime, and difficulty progression. Format as a numbered list with bold headers.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 1024,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+
+      const apiData = await response.json();
+      const content = apiData.choices?.[0]?.message?.content || apiData.choices?.[0]?.message?.reasoning || "";
+      setScenePlannerResult(content);
+      setToast({ message: "Generated 5 level designs!", type: "success" });
+    } catch (err) {
+      console.error("[GDD Scene Planner]", err);
+      setScenePlannerResult("Failed to generate level designs. Please try again.");
+      setToast({ message: "Failed to generate levels — try again", type: "error" });
+    } finally {
+      setScenePlannerLoading(false);
+    }
+  }, [project, data]);
+
   const filledFields = Object.values(data).filter((v) => v.trim().length > 0).length;
   const totalFields = GDD_SECTIONS.reduce((acc, s) => acc + s.fields.length, 0);
   const completionPct = totalFields > 0 ? Math.round((filledFields / totalFields) * 100) : 0;
@@ -844,6 +890,18 @@ export default function GDDPage() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleScenePlanner}
+                disabled={scenePlannerLoading}
+                className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {scenePlannerLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Map className="h-3.5 w-3.5" />
+                )}
+                AI Scene Planner
+              </button>
               <button
                 onClick={handleGenerateAchievements}
                 disabled={achievementsLoading}
@@ -1043,6 +1101,82 @@ export default function GDDPage() {
             );
           })}
         </div>
+
+        {/* AI Scene Planner Panel */}
+        {showScenePlanner && (
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                  <Map className="h-4 w-4 text-[#F59E0B]" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">AI Scene / Level Planner</h3>
+                  <p className="text-xs text-[#6B7280]">
+                    5 levels designed for {project?.name}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {scenePlannerResult && !scenePlannerLoading && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(scenePlannerResult);
+                      setScenePlannerCopied(true);
+                      setTimeout(() => setScenePlannerCopied(false), 2000);
+                    }}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                      scenePlannerCopied
+                        ? "bg-[#10B981] text-white"
+                        : "border border-[#2A2A2A] text-[#9CA3AF] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                    }`}
+                  >
+                    {scenePlannerCopied ? (
+                      <><CheckCircle2 className="h-3.5 w-3.5" /> Copied!</>
+                    ) : (
+                      <><Copy className="h-3.5 w-3.5" /> Copy</>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowScenePlanner(false)}
+                  className="rounded-lg p-1 text-[#9CA3AF] hover:text-[#F5F5F5]"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5">
+              {scenePlannerLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#F59E0B]" />
+                  <p className="text-sm text-[#6B7280]">Designing levels...</p>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4">
+                  <pre className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB] font-sans">
+                    {scenePlannerResult}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            {scenePlannerResult && !scenePlannerLoading && (
+              <div className="flex items-center justify-between border-t border-[#2A2A2A] px-5 py-3">
+                <p className="text-xs text-[#6B7280]">Based on your GDD genre and description</p>
+                <button
+                  onClick={handleScenePlanner}
+                  disabled={scenePlannerLoading}
+                  className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black hover:bg-[#F59E0B]/90 disabled:opacity-50"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Regenerate
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* AI Achievements Modal */}
