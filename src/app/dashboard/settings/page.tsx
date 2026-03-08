@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   User,
   Palette,
@@ -18,16 +18,41 @@ import {
   Sparkles,
   Clock,
   HardDrive,
+  AlertTriangle,
+  FileJson,
+  Merge,
+  Replace,
+  X,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
 import { getProjects, getTasks, getDevlog } from "@/lib/store";
 import { changePassword } from "@/lib/auth";
 
 const SETTINGS_KEY = "gameforge_user_settings";
+const ACCENT_COLOR_KEY = "gameforge_accent_color";
 const VERSION = "1.0.0";
 const FIRST_LOGIN_KEY = "gameforge_first_login";
 const LOGIN_COUNT_KEY = "gameforge_login_count";
 const LIFETIME_PROJECTS_KEY = "gameforge_lifetime_projects";
+
+const ACCENT_COLORS = [
+  { name: "Amber", hex: "#F59E0B" },
+  { name: "Blue", hex: "#3B82F6" },
+  { name: "Green", hex: "#10B981" },
+  { name: "Purple", hex: "#8B5CF6" },
+  { name: "Rose", hex: "#F43F5E" },
+  { name: "Cyan", hex: "#06B6D4" },
+] as const;
+
+interface ImportPreview {
+  raw: Record<string, unknown>;
+  keys: string[];
+  projectCount: number;
+  taskCount: number;
+  devlogCount: number;
+  settingsFound: boolean;
+  totalKeys: number;
+}
 
 interface UserSettings {
   username: string;
@@ -105,6 +130,12 @@ export default function SettingsPage() {
   const [showCurrentPw, setShowCurrentPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
   const [aiPrefs, setAiPrefs] = useState<AIPrefs>({ writingStyle: "Professional", responseLength: "Standard" });
+  const [accentColor, setAccentColor] = useState("#F59E0B");
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [aboutStats, setAboutStats] = useState({
     firstLoginDate: "",
     timeSinceFirstLogin: "",
@@ -131,6 +162,8 @@ export default function SettingsPage() {
     if (raw) {
       try { setAiPrefs({ writingStyle: "Professional", responseLength: "Standard", ...JSON.parse(raw) }); } catch {}
     }
+    const savedAccent = localStorage.getItem(ACCENT_COLOR_KEY);
+    if (savedAccent) setAccentColor(savedAccent);
   }, []);
 
   const updateAiPref = useCallback(<K extends keyof AIPrefs>(key: K, value: AIPrefs[K]) => {
@@ -237,39 +270,102 @@ export default function SettingsPage() {
     console.log("[Settings] exported data, keys:", Object.keys(allKeys).length);
   }, []);
 
-  const handleImport = useCallback(() => {
-    setImportError(null);
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        try {
-          const data = JSON.parse(ev.target?.result as string);
-          if (typeof data !== "object" || data === null) {
-            setImportError("Invalid file format — expected a JSON object.");
-            return;
-          }
-          let count = 0;
-          for (const [key, value] of Object.entries(data)) {
-            if (key.startsWith("gameforge_")) {
-              localStorage.setItem(key, typeof value === "string" ? value : JSON.stringify(value));
-              count++;
-            }
-          }
-          console.log("[Settings] imported", count, "keys");
-          alert(`Imported ${count} data entries. Refresh to see changes.`);
-        } catch {
-          setImportError("Failed to parse JSON file.");
-        }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
+  const handleSelectAccent = useCallback((hex: string) => {
+    setAccentColor(hex);
+    localStorage.setItem(ACCENT_COLOR_KEY, hex);
   }, []);
+
+  const handleImportFile = useCallback(() => {
+    setImportError(null);
+    setImportSuccess(null);
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportError(null);
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string);
+        if (typeof data !== "object" || data === null || Array.isArray(data)) {
+          setImportError("Invalid format — expected a JSON object with gameforge_ keys.");
+          return;
+        }
+
+        const keys = Object.keys(data).filter((k) => k.startsWith("gameforge_"));
+        if (keys.length === 0) {
+          setImportError("No GameForge data found in this file. Keys must start with \"gameforge_\".");
+          return;
+        }
+
+        let projectCount = 0;
+        let taskCount = 0;
+        let devlogCount = 0;
+        let settingsFound = false;
+
+        for (const key of keys) {
+          if (key === SETTINGS_KEY) settingsFound = true;
+          const val = data[key];
+          if (key === "gameforge_projects" && Array.isArray(val)) projectCount = val.length;
+          else if (key === "gameforge_tasks" && Array.isArray(val)) taskCount = val.length;
+          else if (key === "gameforge_devlog" && Array.isArray(val)) devlogCount = val.length;
+          else if (typeof val === "string") {
+            try {
+              const parsed = JSON.parse(val);
+              if (key === "gameforge_projects" && Array.isArray(parsed)) projectCount = parsed.length;
+              else if (key === "gameforge_tasks" && Array.isArray(parsed)) taskCount = parsed.length;
+              else if (key === "gameforge_devlog" && Array.isArray(parsed)) devlogCount = parsed.length;
+            } catch {}
+          }
+        }
+
+        setImportPreview({
+          raw: data,
+          keys,
+          projectCount,
+          taskCount,
+          devlogCount,
+          settingsFound,
+          totalKeys: keys.length,
+        });
+        setImportMode("merge");
+        setShowImportModal(true);
+      } catch {
+        setImportError("Failed to parse JSON file. Make sure it's valid JSON.");
+      }
+    };
+    reader.readAsText(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }, []);
+
+  const handleConfirmImport = useCallback(() => {
+    if (!importPreview) return;
+    const { raw, keys } = importPreview;
+
+    if (importMode === "replace") {
+      const existingKeys: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith("gameforge_")) existingKeys.push(key);
+      }
+      existingKeys.forEach((k) => localStorage.removeItem(k));
+    }
+
+    let count = 0;
+    for (const key of keys) {
+      const value = raw[key];
+      localStorage.setItem(key, typeof value === "string" ? value : JSON.stringify(value));
+      count++;
+    }
+
+    setShowImportModal(false);
+    setImportPreview(null);
+    setImportSuccess(`Successfully ${importMode === "merge" ? "merged" : "replaced"} ${count} data entries. Refreshing...`);
+    setTimeout(() => window.location.reload(), 1500);
+  }, [importPreview, importMode]);
 
   const handleClearAll = useCallback(() => {
     const keysToRemove: string[] = [];
@@ -487,7 +583,45 @@ export default function SettingsPage() {
               </div>
               <span className="text-xs text-[#6B7280]">More themes coming soon</span>
             </div>
-            <div className="mt-3 flex items-center gap-4 rounded-lg border border-[#2A2A2A] p-3">
+
+            <div className="mt-4">
+              <label className="mb-2 block text-sm font-medium text-[#D1D5DB]">
+                Accent Color
+              </label>
+              <div className="flex flex-wrap gap-3">
+                {ACCENT_COLORS.map((color) => (
+                  <button
+                    key={color.hex}
+                    onClick={() => handleSelectAccent(color.hex)}
+                    className="group relative flex flex-col items-center gap-1.5"
+                    title={color.name}
+                  >
+                    <div
+                      className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
+                        accentColor === color.hex
+                          ? "ring-2 ring-white ring-offset-2 ring-offset-[#1A1A1A] scale-110"
+                          : "hover:scale-110"
+                      }`}
+                      style={{ backgroundColor: color.hex }}
+                    >
+                      {accentColor === color.hex && (
+                        <Check className="h-4.5 w-4.5 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" />
+                      )}
+                    </div>
+                    <span className={`text-[10px] transition-colors ${
+                      accentColor === color.hex ? "text-[#F5F5F5]" : "text-[#6B7280] group-hover:text-[#9CA3AF]"
+                    }`}>
+                      {color.name}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-[#6B7280]">
+                Accent color affects buttons, highlights, and interactive elements
+              </p>
+            </div>
+
+            <div className="mt-4 flex items-center gap-4 rounded-lg border border-[#2A2A2A] p-3">
               <div className="flex flex-col items-center gap-1.5">
                 <div className="h-8 w-8 rounded-md bg-[#0F0F0F] ring-1 ring-[#3A3A3A]" />
                 <span className="text-[10px] text-[#6B7280]">BG</span>
@@ -497,8 +631,14 @@ export default function SettingsPage() {
                 <span className="text-[10px] text-[#6B7280]">Cards</span>
               </div>
               <div className="flex flex-col items-center gap-1.5">
-                <div className="h-8 w-8 rounded-md bg-[#F59E0B]" />
+                <div className="h-8 w-8 rounded-md" style={{ backgroundColor: accentColor }} />
                 <span className="text-[10px] text-[#6B7280]">Accent</span>
+              </div>
+              <div className="ml-auto flex items-center gap-2 rounded-lg px-3 py-1.5" style={{ backgroundColor: `${accentColor}15` }}>
+                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: accentColor }} />
+                <span className="text-xs font-medium" style={{ color: accentColor }}>
+                  {ACCENT_COLORS.find((c) => c.hex === accentColor)?.name || "Custom"}
+                </span>
               </div>
             </div>
           </div>
@@ -701,20 +841,35 @@ export default function SettingsPage() {
             </div>
           </button>
 
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleFileSelected}
+            className="hidden"
+          />
           <button
-            onClick={handleImport}
+            onClick={handleImportFile}
             className="flex w-full items-center gap-3 rounded-lg border border-[#2A2A2A] px-4 py-3 text-left transition-colors hover:border-[#F59E0B]/30 hover:bg-[#1F1F1F]"
           >
             <Upload className="h-4 w-4 shrink-0 text-[#10B981]" />
             <div>
               <p className="text-sm font-medium text-[#F5F5F5]">Import Data</p>
-              <p className="text-xs text-[#6B7280]">Restore from a previously exported JSON file</p>
+              <p className="text-xs text-[#6B7280]">Restore from a previously exported JSON file with preview</p>
             </div>
           </button>
 
           {importError && (
-            <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            <p className="flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
               {importError}
+            </p>
+          )}
+
+          {importSuccess && (
+            <p className="flex items-center gap-2 rounded-lg bg-[#10B981]/10 px-3 py-2 text-sm text-[#10B981]">
+              <Check className="h-3.5 w-3.5 shrink-0" />
+              {importSuccess}
             </p>
           )}
 
@@ -838,6 +993,120 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {showImportModal && importPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[#F59E0B]">
+                <FileJson className="h-5 w-5" />
+                <h3 className="text-lg font-bold text-[#F5F5F5]">Import Preview</h3>
+              </div>
+              <button
+                onClick={() => { setShowImportModal(false); setImportPreview(null); }}
+                className="rounded-lg p-1 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mb-4 space-y-2 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[#9CA3AF]">Total Data Keys</span>
+                <span className="font-medium text-[#F5F5F5]">{importPreview.totalKeys}</span>
+              </div>
+              {importPreview.projectCount > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[#9CA3AF]">Projects</span>
+                  <span className="font-medium text-[#F59E0B]">{importPreview.projectCount}</span>
+                </div>
+              )}
+              {importPreview.taskCount > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[#9CA3AF]">Tasks</span>
+                  <span className="font-medium text-[#3B82F6]">{importPreview.taskCount}</span>
+                </div>
+              )}
+              {importPreview.devlogCount > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[#9CA3AF]">Devlog Entries</span>
+                  <span className="font-medium text-[#10B981]">{importPreview.devlogCount}</span>
+                </div>
+              )}
+              {importPreview.settingsFound && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[#9CA3AF]">User Settings</span>
+                  <span className="font-medium text-[#8B5CF6]">Included</span>
+                </div>
+              )}
+            </div>
+
+            <div className="mb-4">
+              <label className="mb-2 block text-sm font-medium text-[#D1D5DB]">
+                Import Mode
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setImportMode("merge")}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    importMode === "merge"
+                      ? "bg-[#F59E0B] text-[#0F0F0F]"
+                      : "border border-[#2A2A2A] text-[#9CA3AF] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                  }`}
+                >
+                  <Merge className="h-3.5 w-3.5" />
+                  Merge
+                </button>
+                <button
+                  onClick={() => setImportMode("replace")}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    importMode === "replace"
+                      ? "bg-red-500 text-white"
+                      : "border border-[#2A2A2A] text-[#9CA3AF] hover:border-red-500/30 hover:text-red-400"
+                  }`}
+                >
+                  <Replace className="h-3.5 w-3.5" />
+                  Replace
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-[#6B7280]">
+                {importMode === "merge"
+                  ? "Merge adds imported data on top of your existing data. Matching keys will be overwritten."
+                  : "Replace deletes ALL existing GameForge data first, then imports the file."}
+              </p>
+            </div>
+
+            {importMode === "replace" && (
+              <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/5 p-3">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+                <p className="text-xs leading-relaxed text-red-300">
+                  This will permanently delete all your current data before importing. Make sure you have a backup.
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowImportModal(false); setImportPreview(null); }}
+                className="flex-1 rounded-lg border border-[#2A2A2A] px-4 py-2.5 text-sm font-medium text-[#9CA3AF] transition-colors hover:bg-[#1F1F1F] hover:text-[#F5F5F5]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmImport}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-bold transition-all ${
+                  importMode === "replace"
+                    ? "bg-red-500 text-white hover:bg-red-600"
+                    : "bg-[#F59E0B] text-[#0F0F0F] hover:bg-[#F59E0B]/90"
+                }`}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                {importMode === "merge" ? "Merge Data" : "Replace All Data"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showClearModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
