@@ -903,11 +903,11 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                     href={item.href}
                     aria-current={active ? "page" : undefined}
                     title={sidebarCollapsed ? item.label : undefined}
-                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                       sidebarCollapsed ? "justify-center px-2 md:justify-center" : ""
                     } ${
                       active
-                        ? "bg-[#F59E0B]/10 text-[#F59E0B]"
+                        ? "bg-[#F59E0B]/10 text-[#F59E0B] before:absolute before:left-0 before:top-1/2 before:h-5 before:w-[2px] before:-translate-y-1/2 before:rounded-full before:bg-[#F59E0B]"
                         : "text-[#9CA3AF] hover:bg-[#1A1A1A] hover:text-[#F5F5F5]"
                     }`}
                   >
@@ -955,11 +955,11 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                     <Link
                       href={projectPath}
                       title={sidebarCollapsed ? project.name : undefined}
-                      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                      className={`relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
                         sidebarCollapsed ? "justify-center px-2 md:justify-center md:px-2" : ""
                       } ${
                         active
-                          ? "bg-[#1A1A1A] text-[#F5F5F5]"
+                          ? "bg-[#1A1A1A] text-[#F5F5F5] before:absolute before:left-0 before:top-1/2 before:h-4 before:w-[2px] before:-translate-y-1/2 before:rounded-full before:bg-[#F59E0B]"
                           : "text-[#9CA3AF] hover:bg-[#1A1A1A] hover:text-[#F5F5F5]"
                       }`}
                     >
@@ -1009,11 +1009,11 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                       <Link
                         href={page.href}
                         title={sidebarCollapsed ? page.label : undefined}
-                        className={`flex flex-1 items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                        className={`relative flex flex-1 items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
                           sidebarCollapsed ? "justify-center px-2 md:flex-1 md:justify-center md:px-2" : ""
                         } ${
                           active
-                            ? "bg-[#F59E0B]/10 text-[#F59E0B]"
+                            ? "bg-[#F59E0B]/10 text-[#F59E0B] before:absolute before:left-0 before:top-1/2 before:h-4 before:w-[2px] before:-translate-y-1/2 before:rounded-full before:bg-[#F59E0B]"
                             : "text-[#9CA3AF] hover:bg-[#1A1A1A] hover:text-[#F5F5F5]"
                         }`}
                       >
