@@ -62,23 +62,37 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
   const [query, setQuery] = useState("");
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
 
   useEffect(() => {
     if (open) {
       setQuery("");
+      setProjects(getProjects());
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
 
-  const filtered = CMD_ITEMS.filter(
-    (item) =>
-      !query || item.label.toLowerCase().includes(query.toLowerCase())
+  const lq = query.toLowerCase();
+
+  const filteredStatic = CMD_ITEMS.filter(
+    (item) => !query || item.label.toLowerCase().includes(lq)
   );
 
-  const sections = filtered.reduce<Record<string, typeof CMD_ITEMS>>((acc, item) => {
+  const filteredProjects = projects.filter(
+    (p) => !query || p.name.toLowerCase().includes(lq) || p.engine.toLowerCase().includes(lq) || p.genre.toLowerCase().includes(lq)
+  );
+
+  const sections = filteredStatic.reduce<Record<string, typeof CMD_ITEMS>>((acc, item) => {
     (acc[item.section] ??= []).push(item);
     return acc;
   }, {});
+
+  const allEmpty = filteredStatic.length === 0 && filteredProjects.length === 0;
+
+  const allItems = [
+    ...filteredStatic.map((i) => i.href),
+    ...filteredProjects.map((p) => `/dashboard/projects/${p.id}`),
+  ];
 
   const go = (href: string) => {
     router.push(href);
@@ -103,16 +117,39 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Escape") onClose();
-              if (e.key === "Enter" && filtered.length > 0) go(filtered[0].href);
+              if (e.key === "Enter" && allItems.length > 0) go(allItems[0]);
             }}
-            placeholder="Search pages and tools..."
+            placeholder="Search pages, tools, and projects..."
             className="flex-1 bg-transparent text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none"
           />
           <kbd className="rounded bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] text-[#6B7280]">ESC</kbd>
         </div>
-        <div className="max-h-72 overflow-y-auto p-2">
-          {filtered.length === 0 && (
+        <div className="max-h-80 overflow-y-auto p-2">
+          {allEmpty && (
             <p className="px-3 py-6 text-center text-sm text-[#6B7280]">No results</p>
+          )}
+          {filteredProjects.length > 0 && (
+            <div>
+              <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                Projects
+              </p>
+              {filteredProjects.map((project) => (
+                <button
+                  key={project.id}
+                  onClick={() => go(`/dashboard/projects/${project.id}`)}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
+                >
+                  <div
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: getStatusColor(project.status) }}
+                  />
+                  <span className="flex-1 truncate text-left">{project.name}</span>
+                  <span className="rounded px-1.5 py-0.5 text-[10px] capitalize text-[#6B7280]">
+                    {project.status}
+                  </span>
+                </button>
+              ))}
+            </div>
           )}
           {Object.entries(sections).map(([section, items]) => (
             <div key={section}>

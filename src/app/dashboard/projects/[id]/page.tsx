@@ -24,6 +24,7 @@ import {
   TrendingUp,
   Pencil,
   X,
+  Trash2,
 } from "lucide-react";
 import {
   getProject,
@@ -36,6 +37,7 @@ import {
   getSeverityColor,
   getMoodEmoji,
   updateProject,
+  deleteProject,
   type Project,
   type Task,
   type Bug as BugType,
@@ -265,6 +267,80 @@ function EditProjectModal({
   );
 }
 
+function DeleteProjectModal({
+  project,
+  open,
+  onClose,
+  onConfirm,
+}: {
+  project: Project;
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const [confirmText, setConfirmText] = useState("");
+
+  useEffect(() => {
+    if (open) setConfirmText("");
+  }, [open]);
+
+  const canDelete = confirmText === project.name;
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/60" />
+      <div
+        className="relative z-10 w-full max-w-md overflow-hidden rounded-xl border border-[#EF4444]/20 bg-[#1A1A1A] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 border-b border-[#EF4444]/20 px-6 py-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#EF4444]/10">
+            <Trash2 className="h-4.5 w-4.5 text-[#EF4444]" />
+          </div>
+          <h2 className="text-lg font-semibold text-[#EF4444]">Delete Project</h2>
+        </div>
+
+        <div className="space-y-4 p-6">
+          <p className="text-sm leading-relaxed text-[#D1D5DB]">
+            Delete <span className="font-semibold text-[#F5F5F5]">{project.name}</span>? This will
+            permanently delete all tasks, bugs, devlogs, and data for this project.
+          </p>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-[#9CA3AF]">
+              Type <span className="font-mono text-[#EF4444]">{project.name}</span> to confirm
+            </label>
+            <input
+              type="text"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder={project.name}
+              className="w-full rounded-lg border border-[#EF4444]/20 bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none transition-colors focus:border-[#EF4444]/50"
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-[#2A2A2A] px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-sm text-[#9CA3AF] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={!canDelete}
+            className="rounded-lg bg-[#EF4444] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#DC2626] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Delete Forever
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -277,6 +353,7 @@ export default function ProjectDetailPage() {
   const [playtest, setPlaytest] = useState<PlaytestResponse[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -396,15 +473,28 @@ export default function ProjectDetailPage() {
     setProject(updated);
   };
 
+  const handleDeleteProject = () => {
+    deleteProject(projectId);
+    router.replace("/dashboard/projects");
+  };
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       {project && (
-        <EditProjectModal
-          project={project}
-          open={editOpen}
-          onClose={() => setEditOpen(false)}
-          onSave={handleProjectSave}
-        />
+        <>
+          <EditProjectModal
+            project={project}
+            open={editOpen}
+            onClose={() => setEditOpen(false)}
+            onSave={handleProjectSave}
+          />
+          <DeleteProjectModal
+            project={project}
+            open={deleteOpen}
+            onClose={() => setDeleteOpen(false)}
+            onConfirm={handleDeleteProject}
+          />
+        </>
       )}
 
       {/* Back + Header */}
@@ -464,6 +554,12 @@ export default function ProjectDetailPage() {
             >
               <Pencil className="h-3.5 w-3.5" />
               Edit Project
+            </button>
+            <button
+              onClick={() => setDeleteOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-[#EF4444]/20 px-3 py-2 text-sm text-[#EF4444]/70 transition-colors hover:border-[#EF4444]/40 hover:bg-[#EF4444]/5 hover:text-[#EF4444]"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>

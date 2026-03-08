@@ -332,6 +332,36 @@ export function updateProject(id: string, updates: Partial<Omit<Project, "id" | 
   return projects[idx];
 }
 
+export function deleteProject(id: string): boolean {
+  const projects = getProjects();
+  const filtered = projects.filter((p) => p.id !== id);
+  if (filtered.length === projects.length) return false;
+  save(PROJECTS_KEY, filtered);
+
+  const tasks = getTasks();
+  save(TASKS_KEY, tasks.filter((t) => t.projectId !== id));
+
+  const bugs = getBugs();
+  save(BUGS_KEY, bugs.filter((b) => b.projectId !== id));
+
+  const devlog = getDevlog();
+  save(DEVLOG_KEY, devlog.filter((d) => d.projectId !== id));
+
+  const assets = getAssets();
+  save(ASSETS_KEY, assets.filter((a) => a.projectId !== id));
+
+  const playtest = getPlaytestResponses();
+  save(PLAYTEST_KEY, playtest.filter((p) => p.projectId !== id));
+
+  const refs = getReferences();
+  save(REFERENCES_KEY, refs.filter((r) => r.projectId !== id));
+
+  const changelog = getChangelog();
+  save(CHANGELOG_KEY, changelog.filter((c) => c.projectId !== id));
+
+  return true;
+}
+
 export function getTasks(projectId?: string): Task[] {
   const tasks = getOrSeed(TASKS_KEY, SEED_TASKS);
   return projectId ? tasks.filter((t) => t.projectId === projectId) : tasks;
