@@ -26,13 +26,16 @@ import {
   CheckSquare,
   Square,
   ArrowRight,
+  Bug,
 } from "lucide-react";
 import {
   getProject,
   getTasks,
   addTask,
   updateTask,
+  deleteTask,
   deleteTasks,
+  addBug,
   getPriorityColor,
   getSprints,
   addSprint,
@@ -171,6 +174,28 @@ export default function TaskBoardPage() {
   const [bulkAssignInput, setBulkAssignInput] = useState("");
   const [showBulkAssign, setShowBulkAssign] = useState(false);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+
+  const [convertToBugId, setConvertToBugId] = useState<string | null>(null);
+
+  const handleConvertToBug = (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    addBug({
+      projectId: task.projectId,
+      title: task.title,
+      description: `Created from task: "${task.title}"\n\n${task.description}`,
+      severity: task.priority === "critical" ? "critical" : task.priority === "high" ? "major" : "minor",
+      status: "open",
+      platform: "All",
+      reproSteps: task.description || "Converted from task board — add repro steps.",
+    });
+
+    deleteTask(taskId);
+    setConvertToBugId(null);
+    setExpandedTask(null);
+    reload();
+  };
 
   const reload = useCallback(() => {
     setTasks(getTasks(projectId));
@@ -2079,14 +2104,48 @@ export default function TaskBoardPage() {
                                     </button>
                                   ))}
                                 </div>
-                                <button
-                                  onClick={() => startEdit(task)}
-                                  className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] px-2 py-1 text-xs text-[#6B7280] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
-                                >
-                                  <Pencil className="h-3 w-3" />
-                                  Edit
-                                </button>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    onClick={() => setConvertToBugId(task.id)}
+                                    className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] px-2 py-1 text-xs text-[#6B7280] transition-colors hover:border-[#EF4444]/30 hover:text-[#EF4444]"
+                                  >
+                                    <Bug className="h-3 w-3" />
+                                    Convert to Bug
+                                  </button>
+                                  <button
+                                    onClick={() => startEdit(task)}
+                                    className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] px-2 py-1 text-xs text-[#6B7280] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                    Edit
+                                  </button>
+                                </div>
                               </div>
+
+                              {/* Convert to Bug Confirmation */}
+                              {convertToBugId === task.id && (
+                                <div className="rounded-lg border border-[#EF4444]/20 bg-[#EF4444]/5 p-3 space-y-2">
+                                  <p className="text-xs font-medium text-[#EF4444]">Convert this task to a bug report?</p>
+                                  <p className="text-[10px] leading-relaxed text-[#9CA3AF]">
+                                    This will create a new bug with this task&apos;s title and description, then remove the task from the board.
+                                  </p>
+                                  <div className="flex gap-2 pt-1">
+                                    <button
+                                      onClick={() => handleConvertToBug(task.id)}
+                                      className="flex items-center gap-1.5 rounded-lg bg-[#EF4444] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#DC2626]"
+                                    >
+                                      <Bug className="h-3 w-3" />
+                                      Convert
+                                    </button>
+                                    <button
+                                      onClick={() => setConvertToBugId(null)}
+                                      className="rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs text-[#9CA3AF] transition-colors hover:text-[#F5F5F5]"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </>
                           )}
                         </div>

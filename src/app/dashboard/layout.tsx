@@ -37,6 +37,7 @@ import { getProjects, getStatusColor, getTasks, getBugs, validateStorage, type P
 import ShortcutsModal from "@/components/ShortcutsModal";
 import WhatsNew from "@/components/WhatsNew";
 import { ToastProvider } from "@/components/Toast";
+import NotificationCenter from "@/components/NotificationCenter";
 
 const NAV_ITEMS = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -731,6 +732,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           </button>
           <div className="ml-auto flex items-center gap-2">
             <FocusTimer />
+            <NotificationCenter />
             <button
               onClick={() => setCmdOpen(true)}
               className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-sm text-[#6B7280] transition-colors hover:border-[#F59E0B]/30 hover:text-[#9CA3AF]"
