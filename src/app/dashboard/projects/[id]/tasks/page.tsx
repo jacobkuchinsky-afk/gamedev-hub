@@ -2,9 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
 import {
-  ArrowLeft,
   Plus,
   X,
   ChevronDown,
@@ -24,6 +22,7 @@ import {
   type Project,
   type Task,
 } from "@/lib/store";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 const COLUMNS: { key: Task["status"]; label: string; color: string }[] = [
   { key: "todo", label: "To Do", color: "#9CA3AF" },
@@ -163,13 +162,14 @@ export default function TaskBoardPage() {
     <div className="mx-auto max-w-7xl space-y-6">
       {/* Header */}
       <div>
-        <Link
-          href={`/dashboard/projects/${projectId}`}
-          className="inline-flex items-center gap-1.5 text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {project.name}
-        </Link>
+        <Breadcrumbs
+          items={[
+            { label: "Dashboard", href: "/dashboard" },
+            { label: "Projects", href: "/dashboard/projects" },
+            { label: project.name, href: `/dashboard/projects/${projectId}` },
+            { label: "Tasks" },
+          ]}
+        />
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-bold">Task Board</h1>
           <div className="flex items-center gap-3">

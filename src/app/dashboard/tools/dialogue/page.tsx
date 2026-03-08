@@ -1151,9 +1151,15 @@ export default function DialoguePage() {
               Saved Trees
             </h3>
             {savedTrees.length === 0 ? (
-              <p className="text-xs text-gray-600 italic">
-                No saved trees yet
-              </p>
+              <div className="flex flex-col items-center gap-2 py-4 text-center">
+                <FolderOpen className="h-8 w-8 text-[#2A2A2A]" />
+                <p className="text-[11px] text-gray-600">
+                  No saved trees yet
+                </p>
+                <p className="text-[10px] text-gray-700">
+                  Name your tree and hit Save to keep it
+                </p>
+              </div>
             ) : (
               <div className="space-y-1">
                 {savedTrees.map((t) => (

@@ -2,9 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
 import {
-  ArrowLeft,
   Plus,
   X,
   Sun,
@@ -23,6 +21,7 @@ import {
   type Project,
   type DevlogEntry,
 } from "@/lib/store";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 const MOODS: {
   key: DevlogEntry["mood"];
@@ -245,13 +244,14 @@ export default function DevlogPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       {/* Header */}
       <div>
-        <Link
-          href={`/dashboard/projects/${projectId}`}
-          className="inline-flex items-center gap-1.5 text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {project.name}
-        </Link>
+        <Breadcrumbs
+          items={[
+            { label: "Dashboard", href: "/dashboard" },
+            { label: "Projects", href: "/dashboard/projects" },
+            { label: project.name, href: `/dashboard/projects/${projectId}` },
+            { label: "Devlog" },
+          ]}
+        />
         <div className="mt-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Development Log</h1>
           <button

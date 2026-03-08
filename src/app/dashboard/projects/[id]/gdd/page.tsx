@@ -2,9 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import {
-  ArrowLeft,
   ChevronDown,
   ChevronRight,
   Save,
@@ -25,6 +23,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 interface GDDSection {
   id: string;
@@ -507,13 +506,14 @@ export default function GDDPage() {
       <div className="flex-1 min-w-0 max-w-4xl space-y-6">
         {/* Header */}
         <div>
-          <Link
-            href={`/dashboard/projects/${projectId}`}
-            className="inline-flex items-center gap-1.5 text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            {project.name}
-          </Link>
+          <Breadcrumbs
+            items={[
+              { label: "Dashboard", href: "/dashboard" },
+              { label: "Projects", href: "/dashboard/projects" },
+              { label: project.name, href: `/dashboard/projects/${projectId}` },
+              { label: "GDD" },
+            ]}
+          />
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-bold">Game Design Document</h1>

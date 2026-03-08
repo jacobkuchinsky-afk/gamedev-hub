@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
 import {
-  ArrowLeft,
   Plus,
   FileText,
   X,
@@ -34,6 +32,7 @@ import {
   type VersionType,
   type ChangeCategory,
 } from "@/lib/store";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 const VERSION_TYPES: VersionType[] = ["Major", "Minor", "Patch", "Hotfix"];
 const CHANGE_CATEGORIES: ChangeCategory[] = ["Added", "Changed", "Fixed", "Removed", "Known Issues"];
@@ -287,13 +286,14 @@ Be specific and brief. Only include sections that have items.`;
     <div className="mx-auto max-w-4xl space-y-6">
       {/* Header */}
       <div>
-        <Link
-          href={`/dashboard/projects/${projectId}`}
-          className="inline-flex items-center gap-1.5 text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {project.name}
-        </Link>
+        <Breadcrumbs
+          items={[
+            { label: "Dashboard", href: "/dashboard" },
+            { label: "Projects", href: "/dashboard/projects" },
+            { label: project.name, href: `/dashboard/projects/${projectId}` },
+            { label: "Changelog" },
+          ]}
+        />
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#F59E0B]/10">

@@ -457,6 +457,16 @@ export default function IdeasPage() {
             />
           </button>
 
+          {showSaved && savedIdeas.length === 0 && (
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-8">
+              <Bookmark className="h-8 w-8 text-[#2A2A2A]" />
+              <p className="text-sm text-[#6B7280]">No saved ideas yet</p>
+              <p className="text-xs text-[#4B5563]">
+                Generate an idea and hit Save to keep it here
+              </p>
+            </div>
+          )}
+
           {showSaved && savedIdeas.length > 0 && (
             <div className="space-y-2">
               {savedIdeas.map((idea) => (
