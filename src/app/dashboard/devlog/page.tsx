@@ -13,6 +13,9 @@ import {
   Sparkles,
   Loader2,
   BarChart3,
+  Download,
+  Share2,
+  Check,
 } from "lucide-react";
 import {
   getDevlog,
@@ -182,6 +185,56 @@ export default function DevlogPage() {
   const [weeklySummary, setWeeklySummary] = useState("");
   const [weeklySummaryLoading, setWeeklySummaryLoading] = useState(false);
   const [showWeeklySummary, setShowWeeklySummary] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleExport = () => {
+    if (entries.length === 0) {
+      toast({ title: "Nothing to export", description: "Write some entries first.", type: "error" });
+      return;
+    }
+
+    const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+    const totalW = sorted.reduce((s, e) => s + wordCount(e.content), 0);
+    const moods: Record<string, number> = {};
+    sorted.forEach((e) => { moods[e.mood] = (moods[e.mood] || 0) + 1; });
+
+    const lines = ["# Game Development Devlog\n"];
+    sorted.forEach((e) => {
+      const moodLabel = `${getMoodEmoji(e.mood)} ${MOOD_LABELS[e.mood]}`;
+      lines.push(`## ${e.date} — ${e.title} (${moodLabel})`);
+      lines.push(e.content);
+      lines.push("\n---\n");
+    });
+
+    lines.push("## Stats");
+    lines.push(`- **Entries:** ${sorted.length}`);
+    lines.push(`- **Total words:** ${totalW.toLocaleString()}`);
+    lines.push(`- **Avg. words/entry:** ${sorted.length > 0 ? Math.round(totalW / sorted.length) : 0}`);
+    Object.entries(moods).forEach(([m, c]) => {
+      lines.push(`- **${MOOD_LABELS[m as DevlogEntry["mood"]]}:** ${c}`);
+    });
+
+    const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "devlog-export.md";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Exported!", description: `${sorted.length} entries saved as devlog-export.md`, type: "success" });
+  };
+
+  const handleShare = async (entry: DevlogEntry) => {
+    const moodLabel = `${getMoodEmoji(entry.mood)} ${MOOD_LABELS[entry.mood]}`;
+    const formatted = `\uD83D\uDCDD Devlog \u2014 ${entry.title}\n${formatDate(entry.date)} | Mood: ${moodLabel}\n\n${entry.content}`;
+    try {
+      await navigator.clipboard.writeText(formatted);
+      setCopiedId(entry.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      toast({ title: "Couldn't copy", description: "Clipboard access denied.", type: "error" });
+    }
+  };
 
   const handleWeeklySummary = async () => {
     setWeeklySummaryLoading(true);
@@ -419,6 +472,13 @@ export default function DevlogPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] px-4 py-2.5 text-sm font-medium text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </button>
           <button
             onClick={handleWeeklySummary}
             disabled={weeklySummaryLoading}
@@ -686,8 +746,21 @@ export default function DevlogPage() {
                     >
                       {getMoodEmoji(entry.mood)} {MOOD_LABELS[entry.mood]}
                     </span>
-                    <span className="ml-auto text-xs text-[#6B7280]">
-                      {wc} word{wc !== 1 ? "s" : ""}
+                    <span className="ml-auto flex items-center gap-2">
+                      <span className="text-xs text-[#6B7280]">
+                        {wc} word{wc !== 1 ? "s" : ""}
+                      </span>
+                      <button
+                        onClick={() => handleShare(entry)}
+                        className="rounded-md p-1 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F59E0B]"
+                        title="Copy to clipboard"
+                      >
+                        {copiedId === entry.id ? (
+                          <Check className="h-3.5 w-3.5 text-[#10B981]" />
+                        ) : (
+                          <Share2 className="h-3.5 w-3.5" />
+                        )}
+                      </button>
                     </span>
                   </div>
                   <h3 className="mt-2 text-base font-semibold text-[#F5F5F5]">
