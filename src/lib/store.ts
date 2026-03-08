@@ -1144,3 +1144,38 @@ export function updateSprint(id: string, updates: Partial<Sprint>): Sprint | und
   save(SPRINTS_KEY, sprints);
   return sprints[idx];
 }
+
+// ─── Data Integrity ───────────────────────────────────────────────────────────
+
+export function validateStorage(): void {
+  if (typeof window === "undefined") return;
+
+  const projectIds = new Set(getProjects().map((p) => p.id));
+  let cleaned = 0;
+
+  const filterOrphans = <T extends { projectId: string }>(key: string, getter: () => T[], label: string) => {
+    const items = getter();
+    const valid = items.filter((item) => projectIds.has(item.projectId));
+    const removed = items.length - valid.length;
+    if (removed > 0) {
+      save(key, valid);
+      cleaned += removed;
+      console.log(`[GameForge] Cleaned ${removed} orphaned ${label}`);
+    }
+  };
+
+  filterOrphans(TASKS_KEY, () => getTasks(), "tasks");
+  filterOrphans(BUGS_KEY, () => getBugs(), "bugs");
+  filterOrphans(DEVLOG_KEY, () => getDevlog(), "devlog entries");
+  filterOrphans(ASSETS_KEY, () => getAssets(), "assets");
+  filterOrphans(PLAYTEST_KEY, () => getPlaytestResponses(), "playtest responses");
+  filterOrphans(REFERENCES_KEY, () => getReferences(), "references");
+  filterOrphans(CHANGELOG_KEY, () => getChangelog(), "changelog entries");
+  filterOrphans(SPRINTS_KEY, () => getSprints(), "sprints");
+
+  if (cleaned === 0) {
+    console.log("[GameForge] Storage integrity check passed — no orphans found");
+  } else {
+    console.log(`[GameForge] Storage integrity check complete — cleaned ${cleaned} total orphaned items`);
+  }
+}

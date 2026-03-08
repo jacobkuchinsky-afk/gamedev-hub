@@ -32,8 +32,9 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { AuthProvider, useAuthContext } from "@/components/AuthProvider";
-import { getProjects, getStatusColor, getTasks, getBugs, type Project } from "@/lib/store";
+import { getProjects, getStatusColor, getTasks, getBugs, validateStorage, type Project } from "@/lib/store";
 import ShortcutsModal from "@/components/ShortcutsModal";
+import WhatsNew from "@/components/WhatsNew";
 import { ToastProvider } from "@/components/Toast";
 
 const NAV_ITEMS = [
@@ -386,6 +387,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (user) {
+      validateStorage();
       setProjects(getProjects());
       const openTasks = getTasks().filter((t) => t.status !== "done").length;
       const openBugs = getBugs().filter((b) => b.status !== "closed").length;
@@ -647,6 +649,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
         <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
         <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+        <WhatsNew />
 
         {/* Content */}
         <main id="main-content" aria-label="Page content" className="flex-1 overflow-y-auto p-6">{children}</main>
