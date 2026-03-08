@@ -116,11 +116,20 @@ export default function AssetPipelinePage() {
 
   const stats = useMemo(() => {
     const byStatus: Record<AssetStatus, number> = { concept: 0, wip: 0, review: 0, approved: 0, integrated: 0 };
-    assets.forEach((a) => byStatus[a.status]++);
+    const byType: Partial<Record<AssetType, number>> = {};
+    assets.forEach((a) => {
+      byStatus[a.status]++;
+      byType[a.type] = (byType[a.type] || 0) + 1;
+    });
     const total = assets.length;
     const completed = byStatus.integrated;
     const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-    return { byStatus, total, completed, pct };
+    const SIZE_EST: Record<AssetType, number> = { sprite: 2, model: 15, animation: 5, audio: 3, ui: 1, level: 25, vfx: 8 };
+    let estSizeMB = 0;
+    for (const [type, count] of Object.entries(byType)) {
+      estSizeMB += (count || 0) * (SIZE_EST[type as AssetType] || 5);
+    }
+    return { byStatus, byType, total, completed, pct, estSizeMB };
   }, [assets]);
 
   const handleAddAsset = (e: React.FormEvent) => {
@@ -202,6 +211,39 @@ export default function AssetPipelinePage() {
               Add Asset
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Summary Stats */}
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+          <p className="text-2xl font-bold">{stats.total}</p>
+          <p className="mt-1 text-xs text-[#9CA3AF]">Total Assets</p>
+        </div>
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+          <p className="text-2xl font-bold text-[#10B981]">{stats.completed}</p>
+          <p className="mt-1 text-xs text-[#9CA3AF]">Integrated</p>
+        </div>
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+          <p className="text-2xl font-bold text-[#F59E0B]">~{stats.estSizeMB >= 1000 ? `${(stats.estSizeMB / 1000).toFixed(1)} GB` : `${stats.estSizeMB} MB`}</p>
+          <p className="mt-1 text-xs text-[#9CA3AF]">Est. Total Size</p>
+        </div>
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+          <div className="flex flex-wrap gap-1">
+            {Object.entries(stats.byType).map(([type, count]) => (
+              <span
+                key={type}
+                className="rounded px-1.5 py-0.5 text-[10px] font-medium"
+                style={{
+                  backgroundColor: `${ASSET_TYPE_COLORS[type as AssetType]}15`,
+                  color: ASSET_TYPE_COLORS[type as AssetType],
+                }}
+              >
+                {count} {ASSET_TYPE_LABELS[type as AssetType]}
+              </span>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-[#9CA3AF]">By Type</p>
         </div>
       </div>
 

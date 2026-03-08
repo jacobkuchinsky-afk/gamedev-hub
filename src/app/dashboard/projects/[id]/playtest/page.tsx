@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   Eye,
   ExternalLink,
+  Tag,
 } from "lucide-react";
 import {
   getProject,
@@ -72,6 +73,30 @@ const COMMON_WORDS = [
   { word: "minimap", count: 1 },
 ];
 
+type FeedbackCategory = "bug" | "feature-request" | "ux-issue" | "performance" | "positive";
+
+const CATEGORY_CONFIG: Record<FeedbackCategory, { label: string; color: string }> = {
+  bug: { label: "Bug", color: "#EF4444" },
+  "feature-request": { label: "Feature Request", color: "#3B82F6" },
+  "ux-issue": { label: "UX Issue", color: "#F59E0B" },
+  performance: { label: "Performance", color: "#8B5CF6" },
+  positive: { label: "Positive", color: "#10B981" },
+};
+
+const ALL_CATEGORIES: FeedbackCategory[] = ["bug", "feature-request", "ux-issue", "performance", "positive"];
+
+function categorizeResponse(r: PlaytestResponse): FeedbackCategory[] {
+  const cats: FeedbackCategory[] = [];
+  const text = `${r.favoriteMoment} ${r.frustratingMoment} ${r.suggestions} ${r.bugDescription}`.toLowerCase();
+  if (r.bugEncountered) cats.push("bug");
+  if (/feature|add\b|wish|want|should have|would love|need\b|implement/.test(text)) cats.push("feature-request");
+  if (/confus|unclear|hard to|couldn't find|frustrat|unintuitive|clunky|awkward/.test(text)) cats.push("ux-issue");
+  if (/lag|fps|slow|crash|freeze|stutter|frame|performance|load/.test(text)) cats.push("performance");
+  if (r.overallRating >= 4 && !r.bugEncountered) cats.push("positive");
+  if (cats.length === 0) cats.push("positive");
+  return cats;
+}
+
 export default function PlaytestPage() {
   const params = useParams();
   const projectId = params.id as string;
@@ -82,6 +107,7 @@ export default function PlaytestPage() {
   const [expandedResponse, setExpandedResponse] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [filterCategory, setFilterCategory] = useState<FeedbackCategory | "all">("all");
 
   // Playtester form state
   const [ptName, setPtName] = useState("");
@@ -126,6 +152,19 @@ export default function PlaytestPage() {
 
     return { avgRating, difficultyDist, playAgainDist, platformDist, bugsReported, total: responses.length };
   }, [responses]);
+
+  const responseCategories = useMemo(() => {
+    const map = new Map<string, FeedbackCategory[]>();
+    responses.forEach((r) => {
+      map.set(r.id, categorizeResponse(r));
+    });
+    return map;
+  }, [responses]);
+
+  const filteredResponses = useMemo(() => {
+    if (filterCategory === "all") return responses;
+    return responses.filter((r) => responseCategories.get(r.id)?.includes(filterCategory));
+  }, [responses, filterCategory, responseCategories]);
 
   const handleSubmitPlaytest = (e: React.FormEvent) => {
     e.preventDefault();
@@ -273,33 +312,30 @@ export default function PlaytestPage() {
         <>
           {stats && (
             <>
-              {/* Top Stats */}
-              <div className="grid gap-3 sm:grid-cols-4">
-                <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
-                  <div className="flex items-center justify-between">
-                    <Star className="h-4 w-4 text-[#F59E0B]" />
-                    <span className="text-xl font-bold">{stats.avgRating.toFixed(1)}</span>
+              {/* Hero Rating + Stats */}
+              <div className="grid gap-4 sm:grid-cols-4">
+                <div className="sm:col-span-2 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6">
+                  <div className="flex items-center gap-6">
+                    <div>
+                      <span className="text-5xl font-bold text-[#F59E0B]">{stats.avgRating.toFixed(1)}</span>
+                      <span className="ml-1 text-lg text-[#6B7280]">/5</span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Star
+                            key={s}
+                            className="h-6 w-6"
+                            style={{
+                              color: s <= Math.round(stats.avgRating) ? "#F59E0B" : "#2A2A2A",
+                              fill: s <= Math.round(stats.avgRating) ? "#F59E0B" : "none",
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <p className="text-sm text-[#9CA3AF]">Average from <span className="font-medium text-[#D1D5DB]">{stats.total}</span> playtesters</p>
+                    </div>
                   </div>
-                  <p className="mt-2 text-xs text-[#9CA3AF]">Avg Rating</p>
-                  <div className="mt-1 flex gap-0.5">
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <Star
-                        key={s}
-                        className="h-3 w-3"
-                        style={{
-                          color: s <= Math.round(stats.avgRating) ? "#F59E0B" : "#2A2A2A",
-                          fill: s <= Math.round(stats.avgRating) ? "#F59E0B" : "none",
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
-                  <div className="flex items-center justify-between">
-                    <ClipboardList className="h-4 w-4 text-[#3B82F6]" />
-                    <span className="text-xl font-bold">{stats.total}</span>
-                  </div>
-                  <p className="mt-2 text-xs text-[#9CA3AF]">Total Responses</p>
                 </div>
                 <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
                   <div className="flex items-center justify-between">
@@ -307,6 +343,7 @@ export default function PlaytestPage() {
                     <span className="text-xl font-bold">{stats.bugsReported}</span>
                   </div>
                   <p className="mt-2 text-xs text-[#9CA3AF]">Bugs Reported</p>
+                  <p className="mt-0.5 text-[10px] text-[#6B7280]">{stats.total > 0 ? Math.round((stats.bugsReported / stats.total) * 100) : 0}% of sessions</p>
                 </div>
                 <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
                   <div className="flex items-center justify-between">
@@ -318,6 +355,7 @@ export default function PlaytestPage() {
                     </span>
                   </div>
                   <p className="mt-2 text-xs text-[#9CA3AF]">Would Play Again</p>
+                  <p className="mt-0.5 text-[10px] text-[#6B7280]">{stats.playAgainDist.definitely + stats.playAgainDist.yes} of {stats.total}</p>
                 </div>
               </div>
 
@@ -398,13 +436,78 @@ export default function PlaytestPage() {
             </>
           )}
 
+          {/* Ratings Over Time */}
+          {responses.length > 0 && (
+            <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+              <h3 className="text-sm font-medium mb-4">Ratings Over Time</h3>
+              <div className="flex items-end gap-1 h-32">
+                {responses.map((r) => {
+                  const colors = ["#EF4444", "#F97316", "#F59E0B", "#3B82F6", "#10B981"];
+                  return (
+                    <div
+                      key={r.id}
+                      className="flex-1 flex flex-col items-center gap-1 group"
+                      title={`${r.testerName}: ${r.overallRating}/5`}
+                    >
+                      <span className="text-[9px] text-[#6B7280] opacity-0 group-hover:opacity-100 transition-opacity">
+                        {r.overallRating}
+                      </span>
+                      <div
+                        className="w-full min-w-[6px] max-w-[32px] rounded-t transition-all hover:opacity-80"
+                        style={{
+                          height: `${(r.overallRating / 5) * 100}%`,
+                          backgroundColor: colors[r.overallRating - 1] || "#6B7280",
+                        }}
+                      />
+                      <span className="text-[8px] text-[#6B7280] truncate max-w-full">
+                        {r.testerName.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Category Filter */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Tag className="h-4 w-4 text-[#6B7280]" />
+            <button
+              onClick={() => setFilterCategory("all")}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                filterCategory === "all"
+                  ? "bg-[#F59E0B]/10 text-[#F59E0B]"
+                  : "text-[#6B7280] hover:text-[#9CA3AF]"
+              }`}
+            >
+              All ({responses.length})
+            </button>
+            {ALL_CATEGORIES.map((cat) => {
+              const count = responses.filter((r) => responseCategories.get(r.id)?.includes(cat)).length;
+              if (count === 0) return null;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setFilterCategory(filterCategory === cat ? "all" : cat)}
+                  className="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+                  style={{
+                    backgroundColor: filterCategory === cat ? `${CATEGORY_CONFIG[cat].color}15` : "transparent",
+                    color: filterCategory === cat ? CATEGORY_CONFIG[cat].color : "#6B7280",
+                  }}
+                >
+                  {CATEGORY_CONFIG[cat].label} ({count})
+                </button>
+              );
+            })}
+          </div>
+
           {/* Individual Responses */}
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
             <div className="border-b border-[#2A2A2A] px-5 py-4">
-              <h2 className="font-semibold">Individual Responses ({responses.length})</h2>
+              <h2 className="font-semibold">Individual Responses ({filteredResponses.length})</h2>
             </div>
             <div className="divide-y divide-[#2A2A2A]">
-              {responses.map((r) => (
+              {filteredResponses.map((r) => (
                 <div key={r.id}>
                   <div
                     onClick={() => {
@@ -452,6 +555,18 @@ export default function PlaytestPage() {
                           </span>
                         )}
                         <span className="text-[10px] text-[#6B7280]">{r.platform}</span>
+                        {responseCategories.get(r.id)?.map((cat) => (
+                          <span
+                            key={cat}
+                            className="rounded px-1.5 py-0.5 text-[10px] font-medium"
+                            style={{
+                              backgroundColor: `${CATEGORY_CONFIG[cat].color}15`,
+                              color: CATEGORY_CONFIG[cat].color,
+                            }}
+                          >
+                            {CATEGORY_CONFIG[cat].label}
+                          </span>
+                        ))}
                       </div>
                     </div>
                     <ChevronDown
@@ -518,7 +633,7 @@ export default function PlaytestPage() {
                   )}
                 </div>
               ))}
-              {responses.length === 0 && (
+              {filteredResponses.length === 0 && (
                 <div className="py-12 text-center">
                   <ClipboardList className="mx-auto h-8 w-8 text-[#6B7280]" />
                   <p className="mt-2 text-sm text-[#6B7280]">No responses yet</p>

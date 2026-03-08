@@ -18,6 +18,9 @@ import {
   Flag,
   RotateCcw,
   Download,
+  CheckCircle2,
+  Circle,
+  Wand2,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 
@@ -142,16 +145,16 @@ const CONSTELLAR_SEED: Record<string, string> = {
   controls: "Keyboard + Mouse (primary), full controller support. WASD for ship movement, mouse for aiming/camera. Context-sensitive interactions. Radial menu for quick access to tools and weapons.",
   cameraType: "Third Person",
   coreVerbs: "Explore, Scan, Build, Fight, Trade, Discover",
-  setting: "A galaxy on the edge of known space, filled with procedurally generated star systems. Ancient ruins dot habitable planets, left by the Architects — a civilization that vanished millennia ago. Space stations serve as trading hubs between frontier colonies.",
-  timePeriod: "Far future — humanity has achieved FTL travel but is still expanding into uncharted regions",
-  protagonist: "A Pathfinder — an independent explorer contracted by the Frontier Authority to chart new systems, establish outposts, and investigate Architect sites. Customizable appearance and backstory.",
-  antagonist: "The Void Collective — a rogue faction that believes Architect technology should be weaponized. Also: the mystery of what destroyed the Architects themselves.",
+  setting: "A galaxy on the edge of known space, filled with procedurally generated star systems. Ancient ruins dot habitable planets, left by the Architects \u2014 a civilization that vanished millennia ago. Space stations serve as trading hubs between frontier colonies.",
+  timePeriod: "Far future \u2014 humanity has achieved FTL travel but is still expanding into uncharted regions",
+  protagonist: "A Pathfinder \u2014 an independent explorer contracted by the Frontier Authority to chart new systems, establish outposts, and investigate Architect sites. Customizable appearance and backstory.",
+  antagonist: "The Void Collective \u2014 a rogue faction that believes Architect technology should be weaponized. Also: the mystery of what destroyed the Architects themselves.",
   narrativeStyle: "Environmental Storytelling",
   themes: "Discovery, Isolation, Legacy, the cost of progress",
   visualStyle: "Stylized/Cel-Shaded",
   colorPalette: "Deep space blues and purples for void. Warm amber/gold for Architect technology. Vibrant alien biomes with each planet having a distinct color identity. UI uses amber (#F59E0B) on dark backgrounds.",
   referenceImages: "https://www.artstation.com/artwork/space-exploration-concept\nhttps://www.pinterest.com/pin/sci-fi-outpost-design\nhttps://dribbble.com/shots/space-game-ui",
-  uiStyle: "Minimalist sci-fi HUD. Holographic elements that feel diegetic. Clean sans-serif fonts. Amber accent color. Information density increases in menus but gameplay HUD stays minimal — health, shield, compass, objective marker.",
+  uiStyle: "Minimalist sci-fi HUD. Holographic elements that feel diegetic. Clean sans-serif fonts. Amber accent color. Information density increases in menus but gameplay HUD stays minimal \u2014 health, shield, compass, objective marker.",
   musicStyle: "Ambient electronic with orchestral swells for key moments. Synth pads for exploration, driving percussion for combat. Inspired by the soundtracks of Mass Effect, Interstellar, and Outer Wilds.",
   soundDesign: "Realistic with stylized accents. Ship engines hum, airlocks hiss, weapons have punch. Alien environments have unique ambient soundscapes. Audio cues for nearby artifacts (ethereal tones).",
   voiceActing: "Partial (Key Scenes)",
@@ -162,12 +165,67 @@ const CONSTELLAR_SEED: Record<string, string> = {
   techPlatforms: "Windows, PlayStation 5, Xbox Series X|S",
   model: "Premium (Pay Once)",
   pricePoint: "$29.99",
-  iapStrategy: "No microtransactions. Post-launch DLC expansions planned — new star systems, story chapters, and ship types. First expansion ~6 months after launch.",
-  prototype: "2025-11-15 — Core flight model, procedural planet generation, basic landing",
-  alpha: "2026-01-30 — Combat system, outpost building, 3 hand-crafted story missions",
-  beta: "2026-03-01 — Full gameplay loop, trading, 10+ star systems, save/load",
-  launch: "2026-06-15 — Polished release with 50+ star systems, full story arc, Steam achievements",
-  postLaunch: "Month 1: Bug fixes and QoL patches\nMonth 3: Free content update (new biomes, ship customization)\nMonth 6: Paid DLC — 'The Architect's Wake' (new story chapter, 15 new systems)\nOngoing: Community mod support tools",
+  iapStrategy: "No microtransactions. Post-launch DLC expansions planned \u2014 new star systems, story chapters, and ship types. First expansion ~6 months after launch.",
+  prototype: "2025-11-15 \u2014 Core flight model, procedural planet generation, basic landing",
+  alpha: "2026-01-30 \u2014 Combat system, outpost building, 3 hand-crafted story missions",
+  beta: "2026-03-01 \u2014 Full gameplay loop, trading, 10+ star systems, save/load",
+  launch: "2026-06-15 \u2014 Polished release with 50+ star systems, full story arc, Steam achievements",
+  postLaunch: "Month 1: Bug fixes and QoL patches\nMonth 3: Free content update (new biomes, ship customization)\nMonth 6: Paid DLC \u2014 'The Architect's Wake' (new story chapter, 15 new systems)\nOngoing: Community mod support tools",
+};
+
+const QUICK_FILL_TEMPLATES: Record<string, Record<string, string>> = {
+  overview: {
+    gameTitle: "My Game",
+    tagline: "A brief, memorable tagline for your game",
+    elevatorPitch: "Describe your game concept in 2-3 sentences. What makes it unique? What's the core experience players will have?",
+    targetAudience: "Core gamers aged 18-35 who enjoy [genre]",
+    platforms: "PC (Steam)",
+    genre: "Action Adventure",
+  },
+  coreMechanics: {
+    gameplayLoop: "The player [core action] to [short-term goal], which feeds into [long-term progression]. Each session involves [typical activities].",
+    controls: "Keyboard + Mouse primary. WASD movement, mouse aim. Full controller support planned.",
+    cameraType: "Third Person",
+    coreVerbs: "Move, Jump, Attack, Interact, Explore",
+  },
+  storySetting: {
+    setting: "Describe the world - its geography, culture, and atmosphere.",
+    timePeriod: "Modern day",
+    protagonist: "Describe the player character - their personality, motivations, and arc.",
+    antagonist: "Describe the main opposing force - whether a person, organization, or concept.",
+    narrativeStyle: "Linear",
+    themes: "Adventure, Discovery, Growth",
+  },
+  artDirection: {
+    visualStyle: "Stylized/Cel-Shaded",
+    colorPalette: "Define the mood through color. Reference specific palettes if available.",
+    referenceImages: "Paste URLs to concept art, mood boards, or visual references.",
+    uiStyle: "Clean, minimal HUD during gameplay. Detailed menus with clear iconography.",
+  },
+  audio: {
+    musicStyle: "Ambient electronic for exploration, orchestral swells for key moments.",
+    soundDesign: "Grounded and immersive with stylized accents for key interactions.",
+    voiceActing: "No Voice Acting",
+  },
+  technical: {
+    engine: "Unity",
+    targetFPS: "60 FPS",
+    minSpecs: "CPU: Intel i5 / Ryzen 5\nGPU: GTX 1060 / RX 580\nRAM: 8GB",
+    networking: "Singleplayer Only",
+    techPlatforms: "Windows",
+  },
+  monetization: {
+    model: "Premium (Pay Once)",
+    pricePoint: "$19.99",
+    iapStrategy: "No microtransactions. Post-launch DLC expansions planned.",
+  },
+  milestones: {
+    prototype: "Target date - Core mechanics playable, basic art pass",
+    alpha: "Target date - Feature complete, placeholder art acceptable",
+    beta: "Target date - Content complete, bug fixing, polish",
+    launch: "Target date - Full release with all planned features",
+    postLaunch: "Month 1: Bug fixes\nMonth 3: Free content update\nMonth 6: Paid DLC",
+  },
 };
 
 function getGDDKey(projectId: string) {
@@ -244,7 +302,7 @@ export default function GDDPage() {
   }, [projectId]);
 
   const handleExport = useCallback(() => {
-    const lines: string[] = [`# ${project?.name || "Untitled"} — Game Design Document\n`];
+    const lines: string[] = [`# ${project?.name || "Untitled"} - Game Design Document\n`];
 
     for (const section of GDD_SECTIONS) {
       const fieldValues = section.fields
@@ -274,6 +332,29 @@ export default function GDDPage() {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
 
+  const scrollToSection = useCallback((sectionId: string) => {
+    setExpanded((prev) => ({ ...prev, [sectionId]: true }));
+    setTimeout(() => {
+      document.getElementById(`gdd-${sectionId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  }, []);
+
+  const quickFillSection = useCallback((sectionId: string) => {
+    const templates = QUICK_FILL_TEMPLATES[sectionId];
+    if (!templates) return;
+    setData((prev) => {
+      const next = { ...prev };
+      for (const [key, value] of Object.entries(templates)) {
+        if (!next[key]?.trim()) {
+          next[key] = value;
+        }
+      }
+      return next;
+    });
+    setDirty(true);
+    setSaved(false);
+  }, []);
+
   const filledFields = Object.values(data).filter((v) => v.trim().length > 0).length;
   const totalFields = GDD_SECTIONS.reduce((acc, s) => acc + s.fields.length, 0);
   const completionPct = totalFields > 0 ? Math.round((filledFields / totalFields) * 100) : 0;
@@ -281,161 +362,249 @@ export default function GDDPage() {
   if (!project) return null;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      {/* Header */}
-      <div>
-        <Link
-          href={`/dashboard/projects/${projectId}`}
-          className="inline-flex items-center gap-1.5 text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {project.name}
-        </Link>
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Game Design Document</h1>
-            <p className="mt-1 text-sm text-[#6B7280]">
-              Define every aspect of {project.name} in one place
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleExport}
-              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Export .md
-            </button>
-            <button
-              onClick={handleReset}
-              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-red-500/30 hover:text-red-400"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Reset
-            </button>
-            <button
-              onClick={handleSave}
-              className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-                saved
-                  ? "bg-[#10B981] text-white"
-                  : dirty
-                  ? "bg-[#F59E0B] text-[#0F0F0F] hover:bg-[#F59E0B]/90"
-                  : "bg-[#F59E0B]/10 text-[#F59E0B] hover:bg-[#F59E0B]/20"
-              }`}
-            >
-              <Save className="h-3.5 w-3.5" />
-              {saved ? "Saved!" : dirty ? "Save Changes" : "Save"}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Progress Bar */}
-      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-[#9CA3AF]">Document Completion</span>
-          <span className="font-medium text-[#F59E0B]">{completionPct}%</span>
-        </div>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#2A2A2A]">
-          <div
-            className="h-full rounded-full bg-[#F59E0B] transition-all duration-500"
-            style={{ width: `${completionPct}%` }}
-          />
-        </div>
-        <p className="mt-2 text-xs text-[#6B7280]">
-          {filledFields} of {totalFields} fields completed
-        </p>
-      </div>
-
-      {/* Sections */}
-      <div className="space-y-3">
-        {GDD_SECTIONS.map((section) => {
-          const isOpen = expanded[section.id] ?? false;
-          const sectionFilled = section.fields.filter(
-            (f) => data[f.key]?.trim().length > 0
-          ).length;
-          const sectionTotal = section.fields.length;
-
-          return (
-            <div
-              key={section.id}
-              className="overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]"
-            >
-              <button
-                onClick={() => toggleSection(section.id)}
-                className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-[#1F1F1F]"
-              >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#F59E0B]/10">
-                  <section.icon className="h-4 w-4 text-[#F59E0B]" />
-                </div>
-                <div className="flex-1">
-                  <span className="font-semibold">{section.title}</span>
-                  <span className="ml-2 text-xs text-[#6B7280]">
-                    {sectionFilled}/{sectionTotal} filled
-                  </span>
-                </div>
-                {sectionFilled === sectionTotal && sectionTotal > 0 ? (
-                  <span className="mr-2 rounded-full bg-[#10B981]/10 px-2 py-0.5 text-xs font-medium text-[#10B981]">
-                    Complete
-                  </span>
-                ) : sectionFilled > 0 ? (
-                  <span className="mr-2 rounded-full bg-[#F59E0B]/10 px-2 py-0.5 text-xs font-medium text-[#F59E0B]">
-                    In Progress
-                  </span>
-                ) : null}
-                {isOpen ? (
-                  <ChevronDown className="h-4 w-4 shrink-0 text-[#6B7280]" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 shrink-0 text-[#6B7280]" />
-                )}
-              </button>
-
-              {isOpen && (
-                <div className="space-y-4 border-t border-[#2A2A2A] px-5 py-5">
-                  {section.fields.map((field) => (
-                    <div key={field.key}>
-                      <label className="mb-1.5 block text-sm font-medium text-[#D1D5DB]">
-                        {field.label}
-                      </label>
-                      {field.type === "textarea" ? (
-                        <textarea
-                          value={data[field.key] || ""}
-                          onChange={(e) => handleFieldChange(field.key, e.target.value)}
-                          placeholder={field.placeholder}
-                          rows={4}
-                          className="w-full resize-y rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] transition-colors focus:border-[#F59E0B]/50 focus:outline-none"
-                        />
-                      ) : field.type === "select" ? (
-                        <select
-                          value={data[field.key] || ""}
-                          onChange={(e) => handleFieldChange(field.key, e.target.value)}
-                          className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] transition-colors focus:border-[#F59E0B]/50 focus:outline-none"
-                        >
-                          <option value="" className="text-[#6B7280]">
-                            {field.placeholder}
-                          </option>
-                          {field.options?.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type="text"
-                          value={data[field.key] || ""}
-                          onChange={(e) => handleFieldChange(field.key, e.target.value)}
-                          placeholder={field.placeholder}
-                          className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] transition-colors focus:border-[#F59E0B]/50 focus:outline-none"
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+    <div className="flex gap-8">
+      {/* TOC Sidebar */}
+      <nav className="hidden lg:block w-56 shrink-0">
+        <div className="sticky top-24 space-y-4">
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
+              Contents
+            </h3>
+            <div className="space-y-0.5">
+              {GDD_SECTIONS.map((section) => {
+                const sf = section.fields.filter((f) => data[f.key]?.trim().length > 0).length;
+                const st = section.fields.length;
+                const done = sf === st && st > 0;
+                const partial = sf > 0 && !done;
+                return (
+                  <button
+                    key={section.id}
+                    onClick={() => scrollToSection(section.id)}
+                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-[#2A2A2A]/50 group"
+                  >
+                    {done ? (
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-[#10B981]" />
+                    ) : partial ? (
+                      <div className="relative h-4 w-4 shrink-0">
+                        <Circle className="h-4 w-4 text-[#F59E0B]" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="h-1.5 w-1.5 rounded-full bg-[#F59E0B]" />
+                        </div>
+                      </div>
+                    ) : (
+                      <Circle className="h-4 w-4 shrink-0 text-[#3A3A3A]" />
+                    )}
+                    <span
+                      className={`truncate ${
+                        done
+                          ? "text-[#10B981]"
+                          : partial
+                          ? "text-[#D1D5DB]"
+                          : "text-[#6B7280]"
+                      } group-hover:text-[#F5F5F5]`}
+                    >
+                      {section.title}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+
+          {/* Mini progress */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            <div className="flex items-center justify-between text-xs mb-2">
+              <span className="text-[#6B7280]">Progress</span>
+              <span className="font-medium text-[#F59E0B]">{completionPct}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-[#2A2A2A]">
+              <div
+                className="h-full rounded-full bg-[#F59E0B] transition-all duration-500"
+                style={{ width: `${completionPct}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <div className="flex-1 min-w-0 max-w-4xl space-y-6">
+        {/* Header */}
+        <div>
+          <Link
+            href={`/dashboard/projects/${projectId}`}
+            className="inline-flex items-center gap-1.5 text-sm text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {project.name}
+          </Link>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">Game Design Document</h1>
+              <p className="mt-1 text-sm text-[#6B7280]">
+                Define every aspect of {project.name} in one place
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExport}
+                className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export .md
+              </button>
+              <button
+                onClick={handleReset}
+                className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-red-500/30 hover:text-red-400"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reset
+              </button>
+              <button
+                onClick={handleSave}
+                className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+                  saved
+                    ? "bg-[#10B981] text-white"
+                    : dirty
+                    ? "bg-[#F59E0B] text-[#0F0F0F] hover:bg-[#F59E0B]/90"
+                    : "bg-[#F59E0B]/10 text-[#F59E0B] hover:bg-[#F59E0B]/20"
+                }`}
+              >
+                <Save className="h-3.5 w-3.5" />
+                {saved ? "Saved!" : dirty ? "Save Changes" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-[#9CA3AF]">Document Completion</span>
+            <span className="font-medium text-[#F59E0B]">{completionPct}%</span>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#2A2A2A]">
+            <div
+              className="h-full rounded-full bg-[#F59E0B] transition-all duration-500"
+              style={{ width: `${completionPct}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-[#6B7280]">
+            {filledFields} of {totalFields} fields completed
+          </p>
+        </div>
+
+        {/* Sections */}
+        <div className="space-y-3">
+          {GDD_SECTIONS.map((section) => {
+            const isOpen = expanded[section.id] ?? false;
+            const sectionFilled = section.fields.filter(
+              (f) => data[f.key]?.trim().length > 0
+            ).length;
+            const sectionTotal = section.fields.length;
+            const sectionDone = sectionFilled === sectionTotal && sectionTotal > 0;
+            const sectionPartial = sectionFilled > 0 && !sectionDone;
+            const hasEmptyFields = sectionFilled < sectionTotal;
+
+            return (
+              <div
+                key={section.id}
+                id={`gdd-${section.id}`}
+                className="overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] scroll-mt-6"
+              >
+                <button
+                  onClick={() => toggleSection(section.id)}
+                  className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-[#1F1F1F]"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                    <section.icon className="h-4 w-4 text-[#F59E0B]" />
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-semibold">{section.title}</span>
+                    <span className="ml-2 text-xs text-[#6B7280]">
+                      {sectionFilled}/{sectionTotal} filled
+                    </span>
+                  </div>
+                  {sectionDone ? (
+                    <CheckCircle2 className="mr-2 h-5 w-5 text-[#10B981]" />
+                  ) : sectionPartial ? (
+                    <div className="relative mr-2 h-5 w-5">
+                      <Circle className="h-5 w-5 text-[#F59E0B]" />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="h-2 w-2 rounded-full bg-[#F59E0B]" />
+                      </div>
+                    </div>
+                  ) : (
+                    <Circle className="mr-2 h-5 w-5 text-[#3A3A3A]" />
+                  )}
+                  {isOpen ? (
+                    <ChevronDown className="h-4 w-4 shrink-0 text-[#6B7280]" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 shrink-0 text-[#6B7280]" />
+                  )}
+                </button>
+
+                {isOpen && (
+                  <div className="space-y-4 border-t border-[#2A2A2A] px-5 py-5">
+                    {hasEmptyFields && (
+                      <button
+                        onClick={() => quickFillSection(section.id)}
+                        className="flex items-center gap-2 rounded-lg border border-dashed border-[#F59E0B]/30 bg-[#F59E0B]/5 px-4 py-2.5 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10"
+                      >
+                        <Wand2 className="h-4 w-4" />
+                        Quick Fill Empty Fields
+                      </button>
+                    )}
+                    {section.fields.map((field) => (
+                      <div key={field.key}>
+                        <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-[#D1D5DB]">
+                          {field.label}
+                          {data[field.key]?.trim() ? (
+                            <CheckCircle2 className="h-3.5 w-3.5 text-[#10B981]" />
+                          ) : (
+                            <Circle className="h-3.5 w-3.5 text-[#3A3A3A]" />
+                          )}
+                        </label>
+                        {field.type === "textarea" ? (
+                          <textarea
+                            value={data[field.key] || ""}
+                            onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                            placeholder={field.placeholder}
+                            rows={4}
+                            className="w-full resize-y rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] transition-colors focus:border-[#F59E0B]/50 focus:outline-none"
+                          />
+                        ) : field.type === "select" ? (
+                          <select
+                            value={data[field.key] || ""}
+                            onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                            className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] transition-colors focus:border-[#F59E0B]/50 focus:outline-none"
+                          >
+                            <option value="" className="text-[#6B7280]">
+                              {field.placeholder}
+                            </option>
+                            {field.options?.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            value={data[field.key] || ""}
+                            onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                            placeholder={field.placeholder}
+                            className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] transition-colors focus:border-[#F59E0B]/50 focus:outline-none"
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
