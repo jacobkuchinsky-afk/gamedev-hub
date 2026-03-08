@@ -16,6 +16,8 @@ import {
   AlignCenter,
   AlignRight,
   Type,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 
 interface FontDef {
@@ -97,6 +99,9 @@ export default function FontPreviewPage() {
   const [glowIntensity, setGlowIntensity] = useState(8);
 
   const [pinned, setPinned] = useState<string[]>([]);
+  const [aiQuery, setAiQuery] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<{ fontName: string; reason: string } | null>(null);
 
   const previewBg = darkBg ? "#0F0F0F" : "#F0F0F0";
   const previewText = text || "Your Game Title";
@@ -141,6 +146,57 @@ export default function FontPreviewPage() {
     setPinned((prev) =>
       prev.includes(name) ? prev.filter((n) => n !== name) : prev.length < 2 ? [...prev, name] : prev
     );
+  };
+
+  const handleAiRecommend = async () => {
+    if (!aiQuery.trim() || aiLoading) return;
+    setAiLoading(true);
+    setAiResult(null);
+    try {
+      const fontNames = FONTS.map((f) => f.name).join(", ");
+      const prompt = `For a game UI described as '${aiQuery.trim()}', recommend the best web-safe font from this list: ${fontNames}. Respond with ONLY the font name and a one-line reason.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content =
+        data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const matchedFont = FONTS.find((f) =>
+        content.toLowerCase().includes(f.name.toLowerCase())
+      );
+      if (matchedFont) {
+        const reason =
+          content
+            .replace(new RegExp(matchedFont.name, "gi"), "")
+            .replace(/^[\s\-:.,*]+/, "")
+            .trim() || "Best match for your description";
+        setAiResult({ fontName: matchedFont.name, reason });
+        setPinned((prev) =>
+          prev.includes(matchedFont.name)
+            ? prev
+            : prev.length < 2
+              ? [...prev, matchedFont.name]
+              : [matchedFont.name]
+        );
+      } else {
+        setAiResult({ fontName: "", reason: content || "Could not determine a recommendation." });
+      }
+    } catch {
+      setAiResult({ fontName: "", reason: "Failed to get recommendation. Check your API key." });
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const filtered = useMemo(
@@ -381,6 +437,50 @@ export default function FontPreviewPage() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* AI Font Recommend */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+        <div className="mb-3 flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+          <h2 className="text-sm font-semibold text-[#F5F5F5]">AI Font Recommend</h2>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={aiQuery}
+            onChange={(e) => setAiQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAiRecommend()}
+            placeholder='e.g. "retro arcade title", "elegant RPG menu", "sci-fi HUD"'
+            className="flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+          />
+          <button
+            onClick={handleAiRecommend}
+            disabled={aiLoading || !aiQuery.trim()}
+            className="flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-[#D97706] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {aiLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            Recommend
+          </button>
+        </div>
+        {aiResult && aiResult.fontName && (
+          <div className="mt-3 flex items-start gap-3 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-3">
+            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[#F59E0B]" />
+            <div>
+              <span className="text-sm font-semibold text-[#F59E0B]">{aiResult.fontName}</span>
+              <p className="mt-0.5 text-xs text-[#9CA3AF]">{aiResult.reason}</p>
+            </div>
+          </div>
+        )}
+        {aiResult && !aiResult.fontName && (
+          <div className="mt-3 rounded-lg border border-[#EF4444]/20 bg-[#EF4444]/5 p-3">
+            <p className="text-xs text-[#EF4444]">{aiResult.reason}</p>
+          </div>
+        )}
       </div>
 
       {/* Compare Panel */}

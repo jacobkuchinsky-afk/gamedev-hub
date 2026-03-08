@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -17,6 +17,8 @@ import {
   Sword,
   Zap,
   Shield,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 
 interface EffectConfig {
@@ -40,6 +42,17 @@ const DEFAULT_EFFECTS: AllEffects = {
   chromatic: { enabled: false, intensity: 3 },
   vignette: { enabled: false, intensity: 50, color: "#000000" },
   crt: { enabled: false, intensity: 50 },
+};
+
+const EFFECT_NAME_MAP: Record<string, keyof AllEffects> = {
+  screenShake: "shake",
+  shake: "shake",
+  flash: "flash",
+  fade: "fade",
+  chromaticAberration: "chromatic",
+  chromatic: "chromatic",
+  vignette: "vignette",
+  crt: "crt",
 };
 
 interface RecordFrame {
@@ -195,6 +208,14 @@ export default function EffectsPage() {
   const [showRecord, setShowRecord] = useState(false);
   const [recordFrames, setRecordFrames] = useState<RecordFrame[]>([]);
   const [copiedCSS, setCopiedCSS] = useState(false);
+  const [aiQuery, setAiQuery] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiCombo, setAiCombo] = useState<{
+    effects: string[];
+    intensity: string;
+    reason: string;
+  } | null>(null);
+  const pendingAiPreview = useRef<string[]>([]);
   const screenRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -366,6 +387,93 @@ export default function EffectsPage() {
     setTimeout(() => setCopiedCSS(false), 1500);
   }
 
+  useEffect(() => {
+    if (pendingAiPreview.current.length > 0) {
+      const names = [...pendingAiPreview.current];
+      pendingAiPreview.current = [];
+      names.forEach((n, i) => setTimeout(() => triggerEffect(n), i * 100));
+    }
+  });
+
+  async function handleAiCombo() {
+    if (!aiQuery.trim() || aiLoading) return;
+    setAiLoading(true);
+    setAiCombo(null);
+    try {
+      const prompt = `For the game moment '${aiQuery.trim()}', suggest a combination of screen effects. Available: screenShake, flash, fade, chromaticAberration, vignette, crt. Respond with a JSON object: {"effects": ["effect1", "effect2"], "intensity": "low"|"medium"|"high", "reason": "brief explanation"}.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content =
+        data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        const suggestedEffects: string[] = parsed.effects || [];
+        const intensity: string = parsed.intensity || "medium";
+        const reason: string = parsed.reason || "";
+        setAiCombo({ effects: suggestedEffects, intensity, reason });
+
+        const intensityMap: Record<string, number> = { low: 0.5, medium: 1, high: 1.8 };
+        const multiplier = intensityMap[intensity] || 1;
+
+        const mappedNames: string[] = [];
+        for (const effect of suggestedEffects) {
+          const mapped = EFFECT_NAME_MAP[effect];
+          if (mapped) mappedNames.push(mapped);
+        }
+
+        setEffects((prev) => {
+          const next: AllEffects = {
+            shake: { ...prev.shake, enabled: false },
+            flash: { ...prev.flash, enabled: false },
+            fade: { ...prev.fade, enabled: false },
+            chromatic: { ...prev.chromatic, enabled: false },
+            vignette: { ...prev.vignette, enabled: false },
+            crt: { ...prev.crt, enabled: false },
+          };
+          for (const name of mappedNames) {
+            const key = name as keyof AllEffects;
+            (next[key] as EffectConfig).enabled = true;
+            const def = DEFAULT_EFFECTS[key];
+            if (typeof def.intensity === "number") {
+              (next[key] as EffectConfig).intensity = Math.round(def.intensity * multiplier);
+            }
+          }
+          return next;
+        });
+
+        pendingAiPreview.current = [...mappedNames];
+      } else {
+        setAiCombo({
+          effects: [],
+          intensity: "medium",
+          reason: content || "Could not parse recommendation.",
+        });
+      }
+    } catch {
+      setAiCombo({
+        effects: [],
+        intensity: "medium",
+        reason: "Failed to get recommendation. Check your API key.",
+      });
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   const crtIntensity = effects.crt.intensity;
   const showCrt = activeEffects.has("crt");
 
@@ -384,6 +492,67 @@ export default function EffectsPage() {
             Preview and tune game screen effects in real time
           </p>
         </div>
+      </div>
+
+      {/* AI Effect Combo */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+          <h2 className="text-sm font-semibold text-[#F5F5F5]">AI Effect Combo</h2>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={aiQuery}
+            onChange={(e) => setAiQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAiCombo()}
+            placeholder='e.g. "boss defeated", "player takes critical damage", "level complete"'
+            className="flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+          />
+          <button
+            onClick={handleAiCombo}
+            disabled={aiLoading || !aiQuery.trim()}
+            className="flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-[#D97706] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {aiLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            Combo
+          </button>
+        </div>
+        {aiCombo && aiCombo.effects.length > 0 && (
+          <div className="mt-3 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-3">
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {aiCombo.effects.map((e) => (
+                <span
+                  key={e}
+                  className="rounded-md bg-[#F59E0B]/15 px-2 py-0.5 text-xs font-medium text-[#F59E0B]"
+                >
+                  {e}
+                </span>
+              ))}
+              <span
+                className={`rounded-md px-2 py-0.5 text-xs font-medium ${
+                  aiCombo.intensity === "high"
+                    ? "bg-[#EF4444]/15 text-[#EF4444]"
+                    : aiCombo.intensity === "low"
+                      ? "bg-[#10B981]/15 text-[#10B981]"
+                      : "bg-[#3B82F6]/15 text-[#3B82F6]"
+                }`}
+              >
+                {aiCombo.intensity}
+              </span>
+            </div>
+            <p className="text-xs text-[#9CA3AF]">{aiCombo.reason}</p>
+          </div>
+        )}
+        {aiCombo && aiCombo.effects.length === 0 && (
+          <div className="mt-3 rounded-lg border border-[#EF4444]/20 bg-[#EF4444]/5 p-3">
+            <p className="text-xs text-[#EF4444]">{aiCombo.reason}</p>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-4">
