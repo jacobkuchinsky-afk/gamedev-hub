@@ -47,6 +47,14 @@ body {
   font-family: var(--font-sans);
 }
 
+a {
+  transition: color 150ms ease;
+}
+
+button {
+  transition: all 150ms ease;
+}
+
 ::selection {
   background: #F59E0B;
   color: #0F0F0F;
