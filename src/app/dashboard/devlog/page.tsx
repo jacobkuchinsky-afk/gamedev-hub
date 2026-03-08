@@ -182,6 +182,8 @@ export default function DevlogPage() {
   const [formContent, setFormContent] = useState("");
   const [formMood, setFormMood] = useState<DevlogEntry["mood"]>("productive");
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiTopicLoading, setAiTopicLoading] = useState(false);
+  const [aiTopics, setAiTopics] = useState<string[]>([]);
   const [weeklySummary, setWeeklySummary] = useState("");
   const [weeklySummaryLoading, setWeeklySummaryLoading] = useState(false);
   const [showWeeklySummary, setShowWeeklySummary] = useState(false);
@@ -309,6 +311,46 @@ export default function DevlogPage() {
       toast({ title: "AI assist failed", description: "Check your connection and try again.", type: "error" });
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  const handleAiTopics = async () => {
+    setAiTopicLoading(true);
+    setAiTopics([]);
+    try {
+      const selectedProject = projects.find((p) => p.id === formProject);
+      const genre = selectedProject?.genre || "indie";
+      const status = selectedProject?.status || "development";
+      const tasks = entries.filter((e) => e.projectId === formProject);
+      const tasksDone = tasks.length;
+
+      const prompt = `Suggest 5 game devlog topics for a developer working on a ${genre} game. The game is currently in ${status} stage with ${tasksDone} tasks completed. Include topics about: technical challenges, design decisions, art progress, community building, and personal reflections. Just a numbered list of titles.`;
+
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const parsed = content
+        .split("\n")
+        .map((line: string) => line.replace(/^\d+[\.\)]\s*/, "").trim())
+        .filter((line: string) => line.length > 0 && line.length < 120);
+      setAiTopics(parsed.slice(0, 5));
+    } catch {
+      setAiTopics(["Failed to generate topics. Try again."]);
+    } finally {
+      setAiTopicLoading(false);
     }
   };
 
@@ -824,6 +866,53 @@ export default function DevlogPage() {
                     className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
                   />
                 </div>
+              </div>
+
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-sm text-[#9CA3AF]">Title Ideas</label>
+                  <button
+                    type="button"
+                    onClick={handleAiTopics}
+                    disabled={aiTopicLoading}
+                    className="flex items-center gap-1.5 rounded-md border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-2.5 py-1 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {aiTopicLoading ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3 w-3" />
+                    )}
+                    {aiTopicLoading ? "Thinking..." : "AI Suggest Topics"}
+                  </button>
+                </div>
+                {(aiTopics.length > 0 || aiTopicLoading) && (
+                  <div className="flex flex-wrap gap-2">
+                    {aiTopicLoading ? (
+                      <div className="flex items-center gap-2 py-1">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F59E0B]" />
+                        <span className="text-xs text-[#6B7280]">Generating topic ideas...</span>
+                      </div>
+                    ) : (
+                      aiTopics.map((topic, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            setFormTitle(topic);
+                            setAiTopics([]);
+                          }}
+                          className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                            formTitle === topic
+                              ? "border-[#F59E0B]/50 bg-[#F59E0B]/10 text-[#F59E0B]"
+                              : "border-[#2A2A2A] text-[#D1D5DB] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                          }`}
+                        >
+                          {topic}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>

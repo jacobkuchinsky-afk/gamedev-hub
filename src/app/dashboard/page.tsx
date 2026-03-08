@@ -456,6 +456,12 @@ export default function DashboardPage() {
     platformDays: 0,
   });
 
+  const [timeTracking, setTimeTracking] = useState<{
+    totalHours: number;
+    avgDailyHours: number;
+    perProject: { name: string; hours: number; color: string }[];
+  }>({ totalHours: 0, avgDailyHours: 0, perProject: [] });
+
   useEffect(() => {
     const dismissed = localStorage.getItem("gameforge_welcome_dismissed") === "true";
     setWelcomeDismissed(dismissed);
@@ -869,6 +875,30 @@ export default function DashboardPage() {
       totalDevlogWords,
       totalAiRequests: totalAiReqs,
       platformDays,
+    });
+
+    const perProjectHours: Record<string, { name: string; hours: number; color: string }> = {};
+    tasks.forEach((t) => {
+      if (!t.loggedHours) return;
+      const pid = t.projectId;
+      if (!perProjectHours[pid]) {
+        const proj = projects.find((p) => p.id === pid);
+        perProjectHours[pid] = {
+          name: proj?.name || "Unknown",
+          hours: 0,
+          color: proj?.coverColor || "#F59E0B",
+        };
+      }
+      perProjectHours[pid].hours += t.loggedHours;
+    });
+    const perProjectArr = Object.values(perProjectHours)
+      .filter((p) => p.hours > 0)
+      .sort((a, b) => b.hours - a.hours);
+    const totalLoggedHours = perProjectArr.reduce((s, p) => s + p.hours, 0);
+    setTimeTracking({
+      totalHours: totalLoggedHours,
+      avgDailyHours: totalLoggedHours > 0 ? Math.round((totalLoggedHours / 7) * 10) / 10 : 0,
+      perProject: perProjectArr,
     });
 
     const calendarData: { date: string; count: number; label: string }[] = [];
@@ -2237,6 +2267,51 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Time Tracking */}
+      {timeTracking.totalHours > 0 && (
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3">
+            <div className="flex items-center gap-2">
+              <Timer className="h-4 w-4 text-[#F59E0B]" />
+              <h2 className="text-sm font-semibold">Time Tracking</h2>
+            </div>
+            <span className="text-[10px] text-[#6B7280]">This week</span>
+          </div>
+          <div className="px-5 py-4">
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 text-center">
+                <p className="text-2xl font-bold tabular-nums text-[#F5F5F5]">{timeTracking.totalHours}h</p>
+                <p className="mt-0.5 text-[10px] text-[#6B7280]">Total Logged</p>
+              </div>
+              <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 text-center">
+                <p className="text-2xl font-bold tabular-nums text-[#F5F5F5]">{timeTracking.avgDailyHours}h</p>
+                <p className="mt-0.5 text-[10px] text-[#6B7280]">Avg / Day</p>
+              </div>
+            </div>
+            <div className="space-y-2.5">
+              {timeTracking.perProject.map((proj) => {
+                const maxHours = timeTracking.perProject[0]?.hours || 1;
+                const pct = Math.round((proj.hours / maxHours) * 100);
+                return (
+                  <div key={proj.name}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="truncate text-xs font-medium text-[#D1D5DB]">{proj.name}</span>
+                      <span className="shrink-0 text-xs tabular-nums text-[#6B7280]">{proj.hours}h</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-[#2A2A2A]">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${pct}%`, backgroundColor: proj.color }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Activity Feed */}
       <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
