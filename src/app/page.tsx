@@ -841,8 +841,9 @@ export default function LandingPage() {
 
           <div className="mt-12 border-t border-[#2A2A2A] pt-8 text-center">
             <p className="flex items-center justify-center gap-1.5 text-sm text-[#6B7280]">
-              Made with <Heart className="h-3.5 w-3.5 text-[#F59E0B]" /> for game developers &middot; &copy; 2026 GameForge
+              Made with <Heart className="h-3.5 w-3.5 text-[#F59E0B]" /> for game developers &middot; &copy; {new Date().getFullYear()} GameForge
             </p>
+            <p className="mt-1 text-xs text-[#6B7280]">Made by AI</p>
           </div>
         </div>
       </footer>
