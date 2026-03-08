@@ -11,7 +11,6 @@ import {
   BookOpen,
   Settings,
   LogOut,
-  Menu,
   X,
   ChevronRight,
   Search,
@@ -325,10 +324,13 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         {/* Top bar */}
         <header className="flex h-16 items-center gap-4 border-b border-[#2A2A2A] px-6">
           <button
-            onClick={() => setSidebarOpen(true)}
-            className="rounded-lg p-2 text-[#9CA3AF] hover:bg-[#1A1A1A] hover:text-[#F5F5F5] md:hidden"
+            onClick={() => setSidebarOpen((prev) => !prev)}
+            className={`flex flex-col items-center justify-center gap-[5px] rounded-lg p-2 text-[#9CA3AF] hover:bg-[#1A1A1A] hover:text-[#F5F5F5] md:hidden ${sidebarOpen ? "hamburger-open" : ""}`}
+            aria-label="Toggle menu"
           >
-            <Menu className="h-5 w-5" />
+            <span className="hamburger-bar" />
+            <span className="hamburger-bar" />
+            <span className="hamburger-bar" />
           </button>
           <button
             onClick={() => setCmdOpen(true)}

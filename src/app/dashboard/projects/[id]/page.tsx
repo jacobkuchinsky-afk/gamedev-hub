@@ -22,6 +22,8 @@ import {
   Clock,
   Zap,
   TrendingUp,
+  Pencil,
+  X,
 } from "lucide-react";
 import {
   getProject,
@@ -33,6 +35,7 @@ import {
   getPriorityColor,
   getSeverityColor,
   getMoodEmoji,
+  updateProject,
   type Project,
   type Task,
   type Bug as BugType,
@@ -99,6 +102,169 @@ type Tab =
   | "references"
   | "changelog";
 
+const STATUS_OPTIONS: Project["status"][] = ["concept", "prototype", "alpha", "beta", "gold", "released"];
+const PRESET_COLORS = ["#6366F1", "#EF4444", "#F59E0B", "#10B981", "#3B82F6", "#8B5CF6", "#EC4899", "#F97316", "#06B6D4", "#84CC16"];
+
+function EditProjectModal({
+  project,
+  open,
+  onClose,
+  onSave,
+}: {
+  project: Project;
+  open: boolean;
+  onClose: () => void;
+  onSave: (updated: Project) => void;
+}) {
+  const [name, setName] = useState(project.name);
+  const [description, setDescription] = useState(project.description);
+  const [status, setStatus] = useState<Project["status"]>(project.status);
+  const [engine, setEngine] = useState(project.engine);
+  const [genre, setGenre] = useState(project.genre);
+  const [coverColor, setCoverColor] = useState(project.coverColor);
+
+  useEffect(() => {
+    if (open) {
+      setName(project.name);
+      setDescription(project.description);
+      setStatus(project.status);
+      setEngine(project.engine);
+      setGenre(project.genre);
+      setCoverColor(project.coverColor);
+    }
+  }, [open, project]);
+
+  const handleSave = () => {
+    const updated = updateProject(project.id, { name, description, status, engine, genre, coverColor });
+    if (updated) onSave(updated);
+    onClose();
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/60" />
+      <div
+        className="relative z-10 w-full max-w-lg overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
+          <h2 className="text-lg font-semibold">Edit Project</h2>
+          <button onClick={onClose} className="rounded-lg p-1 text-[#9CA3AF] transition-colors hover:text-[#F5F5F5]">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="max-h-[70vh] space-y-4 overflow-y-auto p-6">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-[#9CA3AF]">Project Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none transition-colors focus:border-[#F59E0B]/50"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-[#9CA3AF]">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className="w-full resize-none rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none transition-colors focus:border-[#F59E0B]/50"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-[#9CA3AF]">Status</label>
+            <div className="grid grid-cols-3 gap-2">
+              {STATUS_OPTIONS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setStatus(s)}
+                  className={`rounded-lg border px-3 py-2 text-xs font-medium capitalize transition-colors ${
+                    status === s
+                      ? "border-[#F59E0B]/50 bg-[#F59E0B]/10 text-[#F59E0B]"
+                      : "border-[#2A2A2A] bg-[#0F0F0F] text-[#9CA3AF] hover:border-[#3A3A3A] hover:text-[#F5F5F5]"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-[#9CA3AF]">Engine</label>
+              <input
+                type="text"
+                value={engine}
+                onChange={(e) => setEngine(e.target.value)}
+                className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none transition-colors focus:border-[#F59E0B]/50"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-[#9CA3AF]">Genre</label>
+              <input
+                type="text"
+                value={genre}
+                onChange={(e) => setGenre(e.target.value)}
+                className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none transition-colors focus:border-[#F59E0B]/50"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-[#9CA3AF]">Color</label>
+            <div className="flex flex-wrap gap-2">
+              {PRESET_COLORS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCoverColor(c)}
+                  className={`h-8 w-8 rounded-lg transition-all ${
+                    coverColor === c ? "ring-2 ring-[#F59E0B] ring-offset-2 ring-offset-[#1A1A1A]" : "hover:scale-110"
+                  }`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+              <div className="relative">
+                <input
+                  type="color"
+                  value={coverColor}
+                  onChange={(e) => setCoverColor(e.target.value)}
+                  className="absolute inset-0 h-8 w-8 cursor-pointer opacity-0"
+                />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-dashed border-[#2A2A2A] text-[#6B7280] hover:border-[#F59E0B]/50 hover:text-[#F59E0B]">
+                  <Plus className="h-3.5 w-3.5" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-[#2A2A2A] px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-sm text-[#9CA3AF] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!name.trim()}
+            className="rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-[#0F0F0F] transition-colors hover:bg-[#D97706] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -110,6 +276,7 @@ export default function ProjectDetailPage() {
   const [devlog, setDevlog] = useState<DevlogEntry[]>([]);
   const [playtest, setPlaytest] = useState<PlaytestResponse[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -225,8 +392,21 @@ export default function ProjectDetailPage() {
     },
   ];
 
+  const handleProjectSave = (updated: Project) => {
+    setProject(updated);
+  };
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
+      {project && (
+        <EditProjectModal
+          project={project}
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          onSave={handleProjectSave}
+        />
+      )}
+
       {/* Back + Header */}
       <div>
         <Link
@@ -278,6 +458,13 @@ export default function ProjectDetailPage() {
               <BookOpen className="h-3.5 w-3.5" />
               Write Devlog
             </Link>
+            <button
+              onClick={() => setEditOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit Project
+            </button>
           </div>
         </div>
       </div>
@@ -342,7 +529,7 @@ export default function ProjectDetailPage() {
           <Activity className="h-4 w-4" />
           At a Glance
         </h2>
-        <div className="grid gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {glanceCards.map((card) => (
             <div
               key={card.label}

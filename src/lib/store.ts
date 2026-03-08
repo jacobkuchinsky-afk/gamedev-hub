@@ -323,6 +323,15 @@ export function addProject(project: Omit<Project, "id" | "created_at" | "updated
   return newProject;
 }
 
+export function updateProject(id: string, updates: Partial<Omit<Project, "id" | "created_at">>): Project | undefined {
+  const projects = getProjects();
+  const idx = projects.findIndex((p) => p.id === id);
+  if (idx === -1) return undefined;
+  projects[idx] = { ...projects[idx], ...updates, updated_at: new Date().toISOString() };
+  save(PROJECTS_KEY, projects);
+  return projects[idx];
+}
+
 export function getTasks(projectId?: string): Task[] {
   const tasks = getOrSeed(TASKS_KEY, SEED_TASKS);
   return projectId ? tasks.filter((t) => t.projectId === projectId) : tasks;
