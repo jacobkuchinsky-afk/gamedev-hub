@@ -1,0 +1,16 @@
+{
+  "name": "GameForge",
+  "short_name": "GameForge",
+  "description": "The productivity platform built for game developers. 200+ AI features.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0F0F0F",
+  "theme_color": "#F59E0B",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://gamedev-hub.vercel.app/sitemap.xml
