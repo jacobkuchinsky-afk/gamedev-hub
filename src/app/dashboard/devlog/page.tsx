@@ -532,7 +532,7 @@ export default function DevlogPage() {
   const MAX_CHARS = 5000;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6 animate-slide-up">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
