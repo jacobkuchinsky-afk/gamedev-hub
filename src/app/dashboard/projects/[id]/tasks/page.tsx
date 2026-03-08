@@ -1174,6 +1174,69 @@ export default function TaskBoardPage() {
     });
   };
 
+  const handleExportSprintReport = useCallback(() => {
+    if (!currentSprintInfo || !project) return;
+    const sprintTasks = tasks.filter((t) => t.sprint === currentSprintInfo.name);
+    const completed = sprintTasks.filter((t) => t.status === "done");
+    const remaining = sprintTasks.filter((t) => t.status !== "done");
+    const retro = retroNotes[currentSprintInfo.name];
+
+    const lines: string[] = [
+      `# Sprint Report: ${currentSprintInfo.name}`,
+      "",
+      `**Project:** ${project.name}`,
+      `**Status:** ${currentSprintInfo.status}`,
+      ...(currentSprintInfo.goal ? [`**Goal:** ${currentSprintInfo.goal}`] : []),
+      ...(currentSprintInfo.startDate ? [`**Dates:** ${currentSprintInfo.startDate} — ${currentSprintInfo.endDate}`] : []),
+      "",
+      "## Progress",
+      "",
+      `- **Tasks Completed:** ${completed.length} / ${sprintTasks.length}`,
+      `- **Completion:** ${sprintTasks.length ? Math.round((completed.length / sprintTasks.length) * 100) : 0}%`,
+      `- **Velocity:** ${velocity.toFixed(1)} tasks/sprint`,
+    ];
+
+    if (burndownData) {
+      lines.push(
+        "",
+        "## Burndown",
+        "",
+        `- **Elapsed:** ${burndownData.elapsedDays} / ${burndownData.totalDays} days`,
+        `- **Remaining Tasks:** ${burndownData.remaining}`,
+        `- **Ideal Remaining:** ${burndownData.idealRemaining.toFixed(1)}`,
+        `- **Health:** ${burndownData.health}`,
+      );
+    }
+
+    if (completed.length > 0) {
+      lines.push("", "## Completed Tasks", "");
+      completed.forEach((t) => lines.push(`- [x] ${t.title} (${t.priority})`));
+    }
+    if (remaining.length > 0) {
+      lines.push("", "## Remaining Tasks", "");
+      remaining.forEach((t) => lines.push(`- [ ] ${t.title} (${t.priority}, ${t.status})`));
+    }
+
+    if (retro && (retro.wentWell || retro.didntGoWell || retro.improve)) {
+      lines.push("", "## Retrospective", "");
+      if (retro.wentWell) { lines.push("### What Went Well", "", retro.wentWell, ""); }
+      if (retro.didntGoWell) { lines.push("### What Didn't Go Well", "", retro.didntGoWell, ""); }
+      if (retro.improve) { lines.push("### What to Improve", "", retro.improve, ""); }
+    }
+
+    lines.push("", `---`, `*Generated ${new Date().toLocaleDateString()} by GameForge*`);
+
+    const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.name.replace(/\s+/g, "-").toLowerCase()}-sprint-${currentSprintInfo.name.replace(/\s+/g, "-").toLowerCase()}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [currentSprintInfo, project, tasks, retroNotes, velocity, burndownData]);
+
   const handleAiWriteRetro = async () => {
     if (aiRetroLoading || !currentSprintInfo || !retroStats) return;
     setAiRetroLoading(true);
@@ -1697,6 +1760,10 @@ export default function TaskBoardPage() {
                     <button onClick={handleAiTaskSummary} disabled={aiTaskSummaryLoading} className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#10B981] transition-all hover:bg-[#10B981]/10 disabled:opacity-40 disabled:cursor-not-allowed">
                       {aiTaskSummaryLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
                       Summary
+                    </button>
+                    <button onClick={handleExportSprintReport} className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#9CA3AF] transition-all hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]">
+                      <Download className="h-3 w-3" />
+                      Sprint Report
                     </button>
                   </div>
                   {aiSprintTheme && <p className="mt-1 text-xs text-[#F59E0B]/80">{aiSprintTheme}</p>}

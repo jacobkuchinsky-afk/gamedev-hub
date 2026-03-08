@@ -34,6 +34,8 @@ import {
   CheckSquare,
   AlertTriangle,
   Pin,
+  Copy,
+  Check,
 } from "lucide-react";
 import { AuthProvider, useAuthContext } from "@/components/AuthProvider";
 import { getProjects, getStatusColor, getTasks, getBugs, getDevlog, validateStorage, type Project, type Task, type Bug, type DevlogEntry } from "@/lib/store";
@@ -263,6 +265,7 @@ function CommandPalette({ open, onClose, pinnedPages, onTogglePin }: {
   const [allBugs, setAllBugs] = useState<Bug[]>([]);
   const [allDevlogs, setAllDevlogs] = useState<DevlogEntry[]>([]);
   const [recentPages, setRecentPages] = useState<Array<{ href: string; label: string; ts: number }>>([]);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -348,6 +351,21 @@ function CommandPalette({ open, onClose, pinnedPages, onTogglePin }: {
       <Pin className="h-3 w-3" />
     </button>
   );
+
+  const handleCopyResults = useCallback(() => {
+    const lines: string[] = [`Search: "${query}"`];
+    limitedProjects.forEach((p) => lines.push(`- ${p.name} (project)`));
+    Object.entries(sections).forEach(([section, items]) =>
+      items.forEach((item) => lines.push(`- ${item.label} (${section.toLowerCase()})`))
+    );
+    filteredTasks.forEach((t) => lines.push(`- ${t.title} (task)`));
+    filteredBugs.forEach((b) => lines.push(`- ${b.title} (bug)`));
+    filteredDevlogs.forEach((d) => lines.push(`- ${d.title} (devlog)`));
+    navigator.clipboard.writeText(lines.join("\n")).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [query, limitedProjects, sections, filteredTasks, filteredBugs, filteredDevlogs]);
 
   if (!open) return null;
 
@@ -528,9 +546,29 @@ function CommandPalette({ open, onClose, pinnedPages, onTogglePin }: {
             <span className="text-[11px] text-[#6B7280]">
               {totalResults} result{totalResults !== 1 ? "s" : ""}
             </span>
-            <span className="text-[10px] text-[#6B7280]">
-              <kbd className="rounded bg-[#0F0F0F] px-1 py-0.5 text-[10px]">Enter</kbd> to select
-            </span>
+            <div className="flex items-center gap-3">
+              {totalResults > 0 && (
+                <button
+                  onClick={handleCopyResults}
+                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-[#6B7280] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="h-3 w-3 text-[#10B981]" />
+                      <span className="text-[#10B981]">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3 w-3" />
+                      Copy Results
+                    </>
+                  )}
+                </button>
+              )}
+              <span className="text-[10px] text-[#6B7280]">
+                <kbd className="rounded bg-[#0F0F0F] px-1 py-0.5 text-[10px]">Enter</kbd> to select
+              </span>
+            </div>
           </div>
         )}
       </div>
