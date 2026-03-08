@@ -1362,9 +1362,15 @@ export default function DashboardPage() {
           {/* Welcome */}
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-bold">
-                Welcome back,{" "}
-                <span className="text-[#F59E0B]">{user?.username}</span>
+              <h1 className="flex items-center gap-2 text-2xl font-bold">
+                <Clock className="h-6 w-6 text-[#F59E0B]" />
+                {(() => {
+                  const h = new Date().getHours();
+                  if (h >= 6 && h < 12) return <>Good morning, <span className="text-[#F59E0B]">{user?.username}</span></>;
+                  if (h >= 12 && h < 17) return <>Good afternoon, <span className="text-[#F59E0B]">{user?.username}</span></>;
+                  if (h >= 17 && h < 21) return <>Good evening, <span className="text-[#F59E0B]">{user?.username}</span></>;
+                  return <>Burning the midnight oil, <span className="text-[#F59E0B]">{user?.username}</span>?</>;
+                })()}
               </h1>
               <p className="mt-1 text-[#9CA3AF]">
                 Here&apos;s what&apos;s happening with your games.
