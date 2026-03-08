@@ -416,6 +416,18 @@ html {
   outline-offset: 2px;
 }
 
+/* Touch targets - 44x44px minimum on touch devices (accessibility) */
+@media (hover: none) {
+  button,
+  a,
+  [role="button"],
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
