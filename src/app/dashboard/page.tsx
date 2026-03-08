@@ -85,6 +85,45 @@ interface FocusItem {
 const PRIORITY_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 const SEVERITY_RANK: Record<string, number> = { blocker: 0, critical: 1, major: 2, minor: 3, trivial: 4 };
 
+const GAME_DEV_TIPS = [
+  "Playtest early and often — don't wait until it's \"ready.\"",
+  "Your first idea is rarely your best. Iterate ruthlessly.",
+  "Polish the first 5 minutes of your game before anything else.",
+  "Make the controls feel good before adding content.",
+  "Scope down. Then scope down again. Ship something small and complete.",
+  "Juice it up: screen shake, particles, and sound make everything feel better.",
+  "Write your game's store description before you build it. Clarity comes from constraints.",
+  "If a mechanic isn't fun in a gray-box prototype, art won't save it.",
+  "Keep a devlog — future you will thank present you.",
+  "Don't optimize until you know what's actually slow. Profile first.",
+  "Playtesters don't lie. If they're confused, your design is the problem.",
+  "Ship your \"embarrassing\" prototype. The feedback is worth more than your pride.",
+  "Sound design is 50% of the experience. Don't leave it for last.",
+  "Build the game you want to play, not the game you think will sell.",
+  "Deadlines create decisions. Set one, even if it's arbitrary.",
+  "Every feature you add is a feature you have to debug, balance, and support.",
+  "Reward the player constantly. Micro-feedback loops keep people hooked.",
+  "If your tutorial is boring, players will never see the fun parts.",
+  "Learn from games you dislike too — knowing what doesn't work is valuable.",
+  "Accessibility isn't optional. Rebindable keys and subtitles go a long way.",
+  "Version control isn't just for teams. Solo devs need git too.",
+  "Take breaks. Your subconscious solves design problems while you rest.",
+  "Consistent art style beats expensive art. Cohesion is king.",
+  "Test on the lowest-spec machine you can find. Not everyone has a gaming rig.",
+  "Make failing fun. The best games make you want to try again immediately.",
+  "Don't build an engine. Build a game. You can refactor later.",
+  "Watch someone play your game without saying a word. It's painful and invaluable.",
+  "Color palette and lighting set the mood more than detailed textures.",
+  "If you can't explain your game in one sentence, simplify it.",
+  "Back up your project. Right now. Today. Seriously.",
+  "Your game's feel is defined by the first 3 seconds of input response.",
+  "Steal mechanics, not aesthetics. Combine ideas from different genres.",
+  "Finish something. An okay finished game teaches more than a perfect unfinished one.",
+  "Add a screenshot key. You'll need marketing material eventually.",
+  "Analytics are your friend — track where players quit to find your weak spots.",
+];
+
+
 const LAUNCH_ITEMS = [
   { id: "sp_title", label: "Finalize game title" },
   { id: "sp_desc", label: "Write store description" },
@@ -156,6 +195,7 @@ export default function DashboardPage() {
   const [backupLoaded, setBackupLoaded] = useState(false);
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [focusItems, setFocusItems] = useState<FocusItem[]>([]);
+  const [tipOffset, setTipOffset] = useState(0);
 
   const [weeklySummary, setWeeklySummary] = useState<{
     tasksCompleted: Task[];
@@ -1126,6 +1166,34 @@ export default function DashboardPage() {
           )}
         </div>
       )}
+
+      {/* Game Dev Tip of the Day */}
+      {(() => {
+        const dayIndex = Math.floor(Date.now() / 86400000);
+        const tipIndex = (dayIndex + tipOffset) % GAME_DEV_TIPS.length;
+        const tip = GAME_DEV_TIPS[tipIndex < 0 ? tipIndex + GAME_DEV_TIPS.length : tipIndex];
+        return (
+          <div className="flex items-start gap-3 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-5 py-4">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+              <Lightbulb className="h-4 w-4 text-[#F59E0B]" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                Game Dev Tip of the Day
+              </p>
+              <p className="mt-1.5 text-sm leading-relaxed text-[#9CA3AF]">
+                {tip}
+              </p>
+            </div>
+            <button
+              onClick={() => setTipOffset((prev) => prev + 1)}
+              className="shrink-0 rounded-lg border border-[#2A2A2A] px-2.5 py-1 text-xs text-[#6B7280] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+            >
+              Next tip
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Gamepad2, Swords, Puzzle, BookOpen, Sparkles, Calendar } from "lucide-react";
+import { ArrowLeft, Gamepad2, Swords, Puzzle, BookOpen, Sparkles, Calendar, Wand2, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { addProject, type Project } from "@/lib/store";
 import { useToast } from "@/components/Toast";
@@ -90,6 +90,42 @@ export default function NewProjectPage() {
   const [submitting, setSubmitting] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const [activeTemplate, setActiveTemplate] = useState<string | null>(null);
+  const [nameSuggestions, setNameSuggestions] = useState<string[]>([]);
+  const [suggestingNames, setSuggestingNames] = useState(false);
+
+  async function suggestNames() {
+    setSuggestingNames(true);
+    setNameSuggestions([]);
+    try {
+      const desc = description.trim() || "a fun and engaging game";
+      const prompt = `Suggest 5 catchy game titles for a ${genre} game described as: '${desc}'. Just list the names, one per line. Be creative and memorable.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.9,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const names = content
+        .split("\n")
+        .map((line: string) => line.replace(/^\d+[\.\)\-]\s*/, "").replace(/^\*+\s*/, "").replace(/\*+$/, "").trim())
+        .filter((line: string) => line.length > 0 && line.length < 60);
+      setNameSuggestions(names.slice(0, 5));
+    } catch {
+      toast({ title: "Couldn't get suggestions", description: "Check your API key or try again", type: "error" });
+    } finally {
+      setSuggestingNames(false);
+    }
+  }
 
   function applyTemplate(tpl: QuickTemplate) {
     setGenre(tpl.genre);
@@ -182,6 +218,34 @@ export default function NewProjectPage() {
             {attempted && !name.trim() && (
               <p className="mt-1 text-xs text-[#EF4444]">Project name is required</p>
             )}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={suggestNames}
+                disabled={suggestingNames}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-1.5 text-xs font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-50"
+              >
+                {suggestingNames ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Wand2 className="h-3.5 w-3.5" />
+                )}
+                {suggestingNames ? "Thinking..." : "AI Suggest Names"}
+              </button>
+              {nameSuggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => {
+                    setName(suggestion);
+                    setNameSuggestions([]);
+                  }}
+                  className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-xs text-[#D1D5DB] transition-all hover:border-[#F59E0B]/40 hover:bg-[#F59E0B]/5 hover:text-[#F59E0B]"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Description */}
