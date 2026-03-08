@@ -129,6 +129,7 @@ export default function ChangelogPage() {
   const [versionError, setVersionError] = useState("");
   const [formAttempted, setFormAttempted] = useState(false);
   const [aiWriting, setAiWriting] = useState(false);
+  const [aiCodename, setAiCodename] = useState(false);
 
   function getLatestVersion(): string | null {
     if (entries.length === 0) return null;
@@ -154,6 +155,35 @@ export default function ChangelogPage() {
     setFormVersion(suggestVersion(type));
     setVersionError("");
   }
+
+  const handleAiCodename = async () => {
+    if (aiCodename) return;
+    setAiCodename(true);
+    try {
+      const prompt = `Generate a creative codename for game version ${formVersion || "upcoming"} (${formType.toLowerCase()}). Examples: 'Starfall Update', 'Iron Dawn', 'Crystal Shore'. Just the codename, max 3 words.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 128,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim().replace(/^["']|["']$/g, "");
+      if (content) setFormTitle(content);
+    } catch {
+      // silently fail
+    } finally {
+      setAiCodename(false);
+    }
+  };
 
   const handleAiWriteNotes = async () => {
     if (aiWriting) return;
@@ -988,15 +1018,26 @@ Be specific and brief. Only include sections that have items.`;
               </div>
               <div>
                 <label className="mb-1 block text-xs text-[#9CA3AF]">Title</label>
-                <input
-                  type="text"
-                  value={formTitle}
-                  onChange={(e) => setFormTitle(e.target.value)}
-                  placeholder="What's the theme of this release?"
-                  className={`w-full rounded-lg border bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50 ${
-                    formAttempted && !formTitle.trim() ? "border-[#EF4444]" : "border-[#2A2A2A]"
-                  }`}
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={formTitle}
+                    onChange={(e) => setFormTitle(e.target.value)}
+                    placeholder="What's the theme of this release?"
+                    className={`flex-1 rounded-lg border bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50 ${
+                      formAttempted && !formTitle.trim() ? "border-[#EF4444]" : "border-[#2A2A2A]"
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAiCodename}
+                    disabled={aiCodename}
+                    className="flex shrink-0 items-center gap-1 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-2.5 py-2 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50"
+                    title="AI Codename"
+                  >
+                    {aiCodename ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="mb-1 block text-xs text-[#9CA3AF]">Type</label>
