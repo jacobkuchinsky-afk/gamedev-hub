@@ -9,10 +9,13 @@ import {
   List,
   Columns3,
   ChevronDown,
+  ChevronRight,
   User,
   FileText,
   StickyNote,
   ArrowRight,
+  ArrowUp,
+  ArrowDown,
   Search,
   Image as ImageIcon,
   Box,
@@ -22,20 +25,26 @@ import {
   Map,
   Sparkles,
   Loader2,
+  FolderOpen,
 } from "lucide-react";
 import {
   getProject,
   getAssets,
   addAsset,
   updateAsset,
+  swapAssetOrder,
   ASSET_TYPE_LABELS,
   ASSET_TYPE_COLORS,
   ASSET_STATUS_LABELS,
+  ASSET_FOLDERS,
+  ASSET_FOLDER_COLORS,
+  TYPE_TO_DEFAULT_FOLDER,
   getPriorityColor,
   type Project,
   type GameAsset,
   type AssetType,
   type AssetStatus,
+  type AssetFolder,
 } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
 
@@ -60,7 +69,7 @@ const ASSET_TYPE_ICONS: Record<AssetType, React.ElementType> = {
   vfx: Sparkles,
 };
 
-type ViewMode = "kanban" | "list" | "grid";
+type ViewMode = "kanban" | "list" | "grid" | "folders";
 
 export default function AssetPipelinePage() {
   const params = useParams();
@@ -75,6 +84,7 @@ export default function AssetPipelinePage() {
   const [filterStatus, setFilterStatus] = useState<AssetStatus | "all">("all");
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<AssetFolder>>(new Set());
 
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<AssetType>("sprite");
@@ -82,6 +92,7 @@ export default function AssetPipelinePage() {
   const [newPriority, setNewPriority] = useState<GameAsset["priority"]>("medium");
   const [newNotes, setNewNotes] = useState("");
   const [newFileRef, setNewFileRef] = useState("");
+  const [newFolder, setNewFolder] = useState<AssetFolder>(TYPE_TO_DEFAULT_FOLDER["sprite"]);
   const [aiSuggestion, setAiSuggestion] = useState("");
   const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
 
@@ -147,6 +158,7 @@ export default function AssetPipelinePage() {
       priority: newPriority,
       fileRef: newFileRef,
       notes: newNotes,
+      folder: newFolder,
     });
     setNewName("");
     setNewNotes("");
@@ -196,6 +208,30 @@ export default function AssetPipelinePage() {
     }
   };
 
+  const toggleFolder = (folder: AssetFolder) => {
+    setCollapsedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(folder)) next.delete(folder);
+      else next.add(folder);
+      return next;
+    });
+  };
+
+  const handleReorder = (folderAssets: GameAsset[], idx: number, direction: "up" | "down") => {
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= folderAssets.length) return;
+    swapAssetOrder(folderAssets[idx].id, folderAssets[swapIdx].id);
+    reload();
+  };
+
+  const handleMoveToFolder = (assetId: string, folder: AssetFolder) => {
+    updateAsset(assetId, { folder });
+    reload();
+    if (selectedAsset?.id === assetId) {
+      setSelectedAsset({ ...selectedAsset, folder });
+    }
+  };
+
   if (!project) return null;
 
   return (
@@ -219,6 +255,7 @@ export default function AssetPipelinePage() {
                 { key: "kanban" as ViewMode, icon: Columns3, label: "Kanban" },
                 { key: "list" as ViewMode, icon: List, label: "List" },
                 { key: "grid" as ViewMode, icon: LayoutGrid, label: "Grid" },
+                { key: "folders" as ViewMode, icon: FolderOpen, label: "Folders" },
               ]).map((v) => (
                 <button
                   key={v.key}
@@ -586,6 +623,136 @@ export default function AssetPipelinePage() {
         </div>
       )}
 
+      {/* ─── FOLDER VIEW ─── */}
+      {viewMode === "folders" && (
+        <div className="space-y-3">
+          {ASSET_FOLDERS.map((folder) => {
+            const folderAssets = filteredAssets.filter(
+              a => (a.folder || TYPE_TO_DEFAULT_FOLDER[a.type]) === folder
+            );
+            const SIZE_EST: Record<AssetType, number> = {
+              sprite: 2, model: 15, animation: 5, audio: 3, ui: 1, level: 25, vfx: 8,
+            };
+            const totalSize = folderAssets.reduce((sum, a) => sum + (SIZE_EST[a.type] || 5), 0);
+            const isCollapsed = collapsedFolders.has(folder);
+
+            return (
+              <div
+                key={folder}
+                className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden"
+              >
+                <button
+                  onClick={() => toggleFolder(folder)}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#1F1F1F] transition-colors"
+                >
+                  <ChevronRight
+                    className={`h-4 w-4 text-[#6B7280] transition-transform duration-200 ${
+                      !isCollapsed ? "rotate-90" : ""
+                    }`}
+                  />
+                  <FolderOpen
+                    className="h-4 w-4"
+                    style={{ color: ASSET_FOLDER_COLORS[folder] }}
+                  />
+                  <span className="text-sm font-semibold flex-1 text-left">{folder}</span>
+                  <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-xs text-[#9CA3AF]">
+                    {folderAssets.length}
+                  </span>
+                  <span className="text-xs text-[#6B7280]">
+                    ~{totalSize >= 1000
+                      ? `${(totalSize / 1000).toFixed(1)} GB`
+                      : `${totalSize} MB`}
+                  </span>
+                </button>
+
+                {!isCollapsed && (
+                  <div className="border-t border-[#2A2A2A] divide-y divide-[#2A2A2A]/50">
+                    {folderAssets.map((asset, idx) => {
+                      const TypeIcon = ASSET_TYPE_ICONS[asset.type];
+                      const statusCol = PIPELINE_COLUMNS.find(c => c.key === asset.status);
+                      return (
+                        <div
+                          key={asset.id}
+                          className="flex items-center gap-3 px-4 py-2.5 hover:bg-[#1F1F1F] transition-colors"
+                        >
+                          <div className="flex flex-col gap-0.5">
+                            <button
+                              onClick={() => handleReorder(folderAssets, idx, "up")}
+                              disabled={idx === 0}
+                              className="rounded p-0.5 text-[#6B7280] hover:text-[#F59E0B] disabled:opacity-20 disabled:hover:text-[#6B7280]"
+                            >
+                              <ArrowUp className="h-3 w-3" />
+                            </button>
+                            <button
+                              onClick={() => handleReorder(folderAssets, idx, "down")}
+                              disabled={idx === folderAssets.length - 1}
+                              className="rounded p-0.5 text-[#6B7280] hover:text-[#F59E0B] disabled:opacity-20 disabled:hover:text-[#6B7280]"
+                            >
+                              <ArrowDown className="h-3 w-3" />
+                            </button>
+                          </div>
+                          <TypeIcon
+                            className="h-4 w-4 shrink-0"
+                            style={{ color: ASSET_TYPE_COLORS[asset.type] }}
+                          />
+                          <div
+                            className="min-w-0 flex-1 cursor-pointer"
+                            onClick={() => setSelectedAsset(asset)}
+                          >
+                            <p className="text-sm font-medium truncate">{asset.name}</p>
+                            <p className="text-xs text-[#6B7280] font-mono truncate">
+                              {asset.fileRef || "No file reference"}
+                            </p>
+                          </div>
+                          <span
+                            className="hidden sm:inline rounded px-1.5 py-0.5 text-[10px] font-medium"
+                            style={{
+                              backgroundColor: `${ASSET_TYPE_COLORS[asset.type]}15`,
+                              color: ASSET_TYPE_COLORS[asset.type],
+                            }}
+                          >
+                            {ASSET_TYPE_LABELS[asset.type]}
+                          </span>
+                          <span
+                            className="rounded px-1.5 py-0.5 text-[10px] font-medium"
+                            style={{
+                              backgroundColor: `${statusCol?.color || "#9CA3AF"}15`,
+                              color: statusCol?.color || "#9CA3AF",
+                            }}
+                          >
+                            {ASSET_STATUS_LABELS[asset.status]}
+                          </span>
+                          <div className="relative hidden sm:block">
+                            <select
+                              value={asset.folder || TYPE_TO_DEFAULT_FOLDER[asset.type]}
+                              onChange={(e) =>
+                                handleMoveToFolder(asset.id, e.target.value as AssetFolder)
+                              }
+                              onClick={(e) => e.stopPropagation()}
+                              className="appearance-none rounded border border-[#2A2A2A] bg-[#0F0F0F] px-2 py-1 pr-6 text-xs text-[#9CA3AF] outline-none focus:border-[#F59E0B]/50"
+                            >
+                              {ASSET_FOLDERS.map(f => (
+                                <option key={f} value={f}>{f}</option>
+                              ))}
+                            </select>
+                            <ChevronDown className="pointer-events-none absolute right-1 top-1/2 h-3 w-3 -translate-y-1/2 text-[#6B7280]" />
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {folderAssets.length === 0 && (
+                      <div className="py-6 text-center text-xs text-[#6B7280]">
+                        No assets in this folder
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* ─── ADD ASSET MODAL ─── */}
       {showAddForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -611,7 +778,11 @@ export default function AssetPipelinePage() {
                   <label className="mb-1 block text-xs text-[#6B7280]">Type</label>
                   <select
                     value={newType}
-                    onChange={(e) => setNewType(e.target.value as AssetType)}
+                    onChange={(e) => {
+                      const t = e.target.value as AssetType;
+                      setNewType(t);
+                      setNewFolder(TYPE_TO_DEFAULT_FOLDER[t]);
+                    }}
                     className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
                   >
                     {ASSET_TYPES.map((t) => (
@@ -631,6 +802,18 @@ export default function AssetPipelinePage() {
                     ))}
                   </select>
                 </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[#6B7280]">Folder</label>
+                <select
+                  value={newFolder}
+                  onChange={(e) => setNewFolder(e.target.value as AssetFolder)}
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+                >
+                  {ASSET_FOLDERS.map((f) => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                </select>
               </div>
               {newName.trim() && (
                 <div className="space-y-2">
@@ -777,7 +960,7 @@ export default function AssetPipelinePage() {
 
               {/* Move buttons */}
               <div>
-                <span className="text-xs text-[#6B7280]">Move to</span>
+                <span className="text-xs text-[#6B7280]">Move to Stage</span>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {PIPELINE_COLUMNS.filter((c) => c.key !== selectedAsset.status).map((c) => (
                     <button
@@ -787,6 +970,27 @@ export default function AssetPipelinePage() {
                     >
                       <ArrowRight className="h-3 w-3" />
                       {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Folder */}
+              <div>
+                <span className="text-xs text-[#6B7280]">Folder</span>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {ASSET_FOLDERS.map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => handleMoveToFolder(selectedAsset.id, f)}
+                      className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+                        (selectedAsset.folder || TYPE_TO_DEFAULT_FOLDER[selectedAsset.type]) === f
+                          ? "border-[#F59E0B]/50 bg-[#F59E0B]/10 text-[#F59E0B]"
+                          : "border-[#2A2A2A] text-[#9CA3AF] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                      }`}
+                    >
+                      <FolderOpen className="h-3 w-3" />
+                      {f}
                     </button>
                   ))}
                 </div>

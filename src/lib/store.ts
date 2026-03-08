@@ -458,6 +458,9 @@ export function deleteProject(id: string): boolean {
   const playtest = getPlaytestResponses();
   save(PLAYTEST_KEY, playtest.filter((p) => p.projectId !== id));
 
+  const sessionData = getSessions();
+  save(SESSIONS_KEY, sessionData.filter((s) => s.projectId !== id));
+
   const refs = getReferences();
   save(REFERENCES_KEY, refs.filter((r) => r.projectId !== id));
 
@@ -608,6 +611,7 @@ export interface GameAsset {
   priority: "critical" | "high" | "medium" | "low";
   fileRef: string;
   notes: string;
+  folder?: AssetFolder;
   created_at: string;
 }
 
@@ -629,6 +633,29 @@ export const ASSET_TYPE_COLORS: Record<AssetType, string> = {
   ui: "#EC4899",
   level: "#F97316",
   vfx: "#06B6D4",
+};
+
+export type AssetFolder = "Sprites" | "Audio" | "UI" | "Textures" | "Animations" | "Other";
+
+export const ASSET_FOLDERS: AssetFolder[] = ["Sprites", "Audio", "UI", "Textures", "Animations", "Other"];
+
+export const TYPE_TO_DEFAULT_FOLDER: Record<AssetType, AssetFolder> = {
+  sprite: "Sprites",
+  model: "Other",
+  animation: "Animations",
+  audio: "Audio",
+  ui: "UI",
+  level: "Other",
+  vfx: "Other",
+};
+
+export const ASSET_FOLDER_COLORS: Record<AssetFolder, string> = {
+  Sprites: "#F59E0B",
+  Audio: "#10B981",
+  UI: "#EC4899",
+  Textures: "#8B5CF6",
+  Animations: "#3B82F6",
+  Other: "#9CA3AF",
 };
 
 export const ASSET_STATUS_LABELS: Record<AssetStatus, string> = {
@@ -766,7 +793,11 @@ const SEED_ASSETS: GameAsset[] = [
 
 export function getAssets(projectId?: string): GameAsset[] {
   const assets = getOrSeed(ASSETS_KEY, SEED_ASSETS);
-  return projectId ? assets.filter((a) => a.projectId === projectId) : assets;
+  const enriched = assets.map(a => ({
+    ...a,
+    folder: a.folder || TYPE_TO_DEFAULT_FOLDER[a.type],
+  }));
+  return projectId ? enriched.filter((a) => a.projectId === projectId) : enriched;
 }
 
 export function addAsset(asset: Omit<GameAsset, "id" | "created_at">): GameAsset {
@@ -790,12 +821,24 @@ export function updateAsset(id: string, updates: Partial<GameAsset>): GameAsset 
   return assets[idx];
 }
 
+export function swapAssetOrder(id1: string, id2: string): void {
+  if (typeof window === "undefined") return;
+  const raw = localStorage.getItem(ASSETS_KEY);
+  const all: GameAsset[] = raw ? JSON.parse(raw) : [];
+  const idx1 = all.findIndex(a => a.id === id1);
+  const idx2 = all.findIndex(a => a.id === id2);
+  if (idx1 === -1 || idx2 === -1) return;
+  [all[idx1], all[idx2]] = [all[idx2], all[idx1]];
+  save(ASSETS_KEY, all);
+}
+
 // ─── Playtesting Feedback ─────────────────────────────────────────────────────
 
 export interface PlaytestResponse {
   id: string;
   projectId: string;
   testerName: string;
+  sessionId?: string;
   overallRating: number;
   difficulty: "too-easy" | "just-right" | "too-hard";
   favoriteMoment: string;
@@ -815,6 +858,7 @@ const SEED_PLAYTEST: PlaytestResponse[] = [
     id: "pt_001",
     projectId: "proj_001",
     testerName: "Alex Chen",
+    sessionId: "session_001",
     overallRating: 4,
     difficulty: "just-right",
     favoriteMoment: "The first time I jumped to hyperspace and saw the star map unfold. Absolutely stunning visual.",
@@ -845,6 +889,7 @@ const SEED_PLAYTEST: PlaytestResponse[] = [
     id: "pt_003",
     projectId: "proj_001",
     testerName: "Sam Wilson",
+    sessionId: "session_002",
     overallRating: 3,
     difficulty: "too-hard",
     favoriteMoment: "Combat feels really satisfying when you land a perfect shield-dodge-fire combo.",
@@ -860,6 +905,7 @@ const SEED_PLAYTEST: PlaytestResponse[] = [
     id: "pt_004",
     projectId: "proj_001",
     testerName: "Jordan Lee",
+    sessionId: "session_003",
     overallRating: 4,
     difficulty: "too-easy",
     favoriteMoment: "Finding the hidden alien artifact in sector 7. The lore text was really cool.",
@@ -903,6 +949,75 @@ export function addPlaytestResponse(response: Omit<PlaytestResponse, "id" | "sub
   responses.push(newResponse);
   save(PLAYTEST_KEY, responses);
   return newResponse;
+}
+
+// ─── Playtest Sessions ────────────────────────────────────────────────────────
+
+export interface PlaytestSession {
+  id: string;
+  projectId: string;
+  date: string;
+  testerName: string;
+  durationMinutes: number;
+  platform: string;
+  buildVersion: string;
+  notes: string;
+  created_at: string;
+}
+
+const SESSIONS_KEY = "gameforge_sessions";
+
+const SEED_SESSIONS: PlaytestSession[] = [
+  {
+    id: "session_001",
+    projectId: "proj_001",
+    date: "2026-03-06",
+    testerName: "Alex Chen",
+    durationMinutes: 45,
+    platform: "PC",
+    buildVersion: "0.9.1-beta",
+    notes: "First external playtest. Focus on core loop and trading system.",
+    created_at: "2026-03-06T17:00:00Z",
+  },
+  {
+    id: "session_002",
+    projectId: "proj_001",
+    date: "2026-03-07",
+    testerName: "Sam Wilson",
+    durationMinutes: 60,
+    platform: "PC",
+    buildVersion: "0.9.2-beta",
+    notes: "Testing new LOD system and combat balance after patch.",
+    created_at: "2026-03-07T09:00:00Z",
+  },
+  {
+    id: "session_003",
+    projectId: "proj_001",
+    date: "2026-03-07",
+    testerName: "Jordan Lee",
+    durationMinutes: 90,
+    platform: "Mac",
+    buildVersion: "0.9.2-beta",
+    notes: "Extended session for exploration content and artifact discovery.",
+    created_at: "2026-03-07T11:00:00Z",
+  },
+];
+
+export function getSessions(projectId?: string): PlaytestSession[] {
+  const sessions = getOrSeed(SESSIONS_KEY, SEED_SESSIONS);
+  return projectId ? sessions.filter((s) => s.projectId === projectId) : sessions;
+}
+
+export function addSession(session: Omit<PlaytestSession, "id" | "created_at">): PlaytestSession {
+  const sessions = getSessions();
+  const newSession: PlaytestSession = {
+    ...session,
+    id: `session_${Date.now()}`,
+    created_at: new Date().toISOString(),
+  };
+  sessions.push(newSession);
+  save(SESSIONS_KEY, sessions);
+  return newSession;
 }
 
 // ─── Reference Board ──────────────────────────────────────────────────────────
@@ -1375,6 +1490,7 @@ export function validateStorage(): void {
   filterOrphans(DEVLOG_KEY, () => getDevlog(), "devlog entries");
   filterOrphans(ASSETS_KEY, () => getAssets(), "assets");
   filterOrphans(PLAYTEST_KEY, () => getPlaytestResponses(), "playtest responses");
+  filterOrphans(SESSIONS_KEY, () => getSessions(), "sessions");
   filterOrphans(REFERENCES_KEY, () => getReferences(), "references");
   filterOrphans(CHANGELOG_KEY, () => getChangelog(), "changelog entries");
   filterOrphans(SPRINTS_KEY, () => getSprints(), "sprints");

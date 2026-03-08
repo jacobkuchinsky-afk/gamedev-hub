@@ -21,13 +21,19 @@ import {
   Tag,
   Sparkles,
   Loader2,
+  Plus,
+  Clock,
+  Calendar,
 } from "lucide-react";
 import {
   getProject,
   getPlaytestResponses,
   addPlaytestResponse,
+  getSessions,
+  addSession,
   type Project,
   type PlaytestResponse,
+  type PlaytestSession,
 } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
 
@@ -112,6 +118,16 @@ export default function PlaytestPage() {
   const [aiSummary, setAiSummary] = useState("");
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
 
+  const [sessions, setSessions] = useState<PlaytestSession[]>([]);
+  const [showSessionForm, setShowSessionForm] = useState(false);
+  const [filterSessionId, setFilterSessionId] = useState<string | "all">("all");
+  const [newSessionDate, setNewSessionDate] = useState(new Date().toISOString().split("T")[0]);
+  const [newSessionTester, setNewSessionTester] = useState("");
+  const [newSessionDuration, setNewSessionDuration] = useState(30);
+  const [newSessionPlatform, setNewSessionPlatform] = useState("PC");
+  const [newSessionBuild, setNewSessionBuild] = useState("");
+  const [newSessionNotes, setNewSessionNotes] = useState("");
+
   const handleAiSummary = async () => {
     if (responses.length === 0) return;
     setAiSummaryLoading(true);
@@ -159,11 +175,13 @@ export default function PlaytestPage() {
   const [ptPlayAgain, setPtPlayAgain] = useState<PlaytestResponse["playAgain"]>("yes");
   const [ptSuggestions, setPtSuggestions] = useState("");
   const [ptPlatform, setPtPlatform] = useState<PlaytestResponse["platform"]>("PC");
+  const [ptSessionId, setPtSessionId] = useState("");
   const [ptSubmitted, setPtSubmitted] = useState(false);
 
   const reload = useCallback(() => {
     console.log("[PlaytestPage] reloading responses for", projectId);
     setResponses(getPlaytestResponses(projectId));
+    setSessions(getSessions(projectId));
   }, [projectId]);
 
   useEffect(() => {
@@ -200,9 +218,15 @@ export default function PlaytestPage() {
   }, [responses]);
 
   const filteredResponses = useMemo(() => {
-    if (filterCategory === "all") return responses;
-    return responses.filter((r) => responseCategories.get(r.id)?.includes(filterCategory));
-  }, [responses, filterCategory, responseCategories]);
+    let result = responses;
+    if (filterCategory !== "all") {
+      result = result.filter((r) => responseCategories.get(r.id)?.includes(filterCategory));
+    }
+    if (filterSessionId !== "all") {
+      result = result.filter((r) => r.sessionId === filterSessionId);
+    }
+    return result;
+  }, [responses, filterCategory, filterSessionId, responseCategories]);
 
   const handleSubmitPlaytest = (e: React.FormEvent) => {
     e.preventDefault();
@@ -211,6 +235,7 @@ export default function PlaytestPage() {
     addPlaytestResponse({
       projectId,
       testerName: ptName.trim(),
+      sessionId: ptSessionId || undefined,
       overallRating: ptRating,
       difficulty: ptDifficulty,
       favoriteMoment: ptFavorite,
@@ -236,7 +261,28 @@ export default function PlaytestPage() {
     setPtPlayAgain("yes");
     setPtSuggestions("");
     setPtPlatform("PC");
+    setPtSessionId("");
     setPtSubmitted(false);
+  };
+
+  const handleAddSession = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSessionTester.trim() || !newSessionBuild.trim()) return;
+    addSession({
+      projectId,
+      date: newSessionDate,
+      testerName: newSessionTester.trim(),
+      durationMinutes: newSessionDuration,
+      platform: newSessionPlatform,
+      buildVersion: newSessionBuild.trim(),
+      notes: newSessionNotes,
+    });
+    setShowSessionForm(false);
+    setNewSessionTester("");
+    setNewSessionDuration(30);
+    setNewSessionBuild("");
+    setNewSessionNotes("");
+    reload();
   };
 
   const exportCSV = () => {
@@ -540,6 +586,114 @@ export default function PlaytestPage() {
                   <div className="text-sm leading-relaxed text-[#D1D5DB] whitespace-pre-wrap">{aiSummary}</div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Playtest Sessions */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-4">
+              <h2 className="font-semibold">Playtest Sessions ({sessions.length})</h2>
+              <button
+                onClick={() => setShowSessionForm(true)}
+                className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-3 py-1.5 text-xs font-medium text-black transition-colors hover:bg-[#F59E0B]/90"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New Session
+              </button>
+            </div>
+            {sessions.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-[#2A2A2A] text-left text-xs text-[#6B7280]">
+                      <th className="px-4 py-3 font-medium">Date</th>
+                      <th className="px-4 py-3 font-medium">Tester</th>
+                      <th className="px-4 py-3 font-medium">Duration</th>
+                      <th className="px-4 py-3 font-medium">Platform</th>
+                      <th className="px-4 py-3 font-medium">Build</th>
+                      <th className="px-4 py-3 font-medium">Responses</th>
+                      <th className="px-4 py-3 font-medium">Avg Rating</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#2A2A2A]">
+                    {sessions.map((s) => {
+                      const sessionResponses = responses.filter(r => r.sessionId === s.id);
+                      const avgRating = sessionResponses.length > 0
+                        ? (sessionResponses.reduce((sum, r) => sum + r.overallRating, 0) / sessionResponses.length).toFixed(1)
+                        : "\u2014";
+                      const bugsInSession = sessionResponses.filter(r => r.bugEncountered).length;
+                      return (
+                        <tr
+                          key={s.id}
+                          onClick={() => setFilterSessionId(filterSessionId === s.id ? "all" : s.id)}
+                          className={`cursor-pointer transition-colors ${
+                            filterSessionId === s.id
+                              ? "bg-[#F59E0B]/5"
+                              : "hover:bg-[#1F1F1F]"
+                          }`}
+                        >
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5 text-sm">
+                              <Calendar className="h-3.5 w-3.5 text-[#6B7280]" />
+                              {new Date(s.date + "T00:00:00").toLocaleDateString()}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm">{s.testerName}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5 text-sm text-[#9CA3AF]">
+                              <Clock className="h-3.5 w-3.5" />
+                              {s.durationMinutes}m
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="flex items-center gap-1 text-sm text-[#9CA3AF]">
+                              <Monitor className="h-3.5 w-3.5" />
+                              {s.platform}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="rounded bg-[#F59E0B]/10 px-1.5 py-0.5 text-[10px] font-mono font-medium text-[#F59E0B]">
+                              {s.buildVersion}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-sm">
+                              {sessionResponses.length}
+                              {bugsInSession > 0 && (
+                                <span className="ml-1.5 text-[10px] text-[#EF4444]">
+                                  ({bugsInSession} bug{bugsInSession > 1 ? "s" : ""})
+                                </span>
+                              )}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-sm font-medium text-[#F59E0B]">{avgRating}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="py-8 text-center text-sm text-[#6B7280]">
+                No sessions recorded yet. Click &ldquo;New Session&rdquo; to start tracking.
+              </div>
+            )}
+          </div>
+
+          {/* Session Filter Indicator */}
+          {filterSessionId !== "all" && (
+            <div className="flex items-center gap-2 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-4 py-2">
+              <span className="text-xs text-[#F59E0B]">
+                Filtering by session: {sessions.find(s => s.id === filterSessionId)?.testerName} &mdash; {sessions.find(s => s.id === filterSessionId)?.buildVersion}
+              </span>
+              <button
+                onClick={() => setFilterSessionId("all")}
+                className="ml-auto rounded p-0.5 text-[#F59E0B] hover:bg-[#F59E0B]/10"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
           )}
 
@@ -942,6 +1096,26 @@ export default function PlaytestPage() {
                   </div>
                 </div>
 
+                {sessions.length > 0 && (
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-[#D1D5DB]">
+                      Link to Session (optional)
+                    </label>
+                    <select
+                      value={ptSessionId}
+                      onChange={(e) => setPtSessionId(e.target.value)}
+                      className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+                    >
+                      <option value="">No session</option>
+                      {sessions.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.testerName} &mdash; {new Date(s.date + "T00:00:00").toLocaleDateString()} ({s.buildVersion})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <button
                   type="submit"
                   disabled={ptRating === 0}
@@ -979,6 +1153,100 @@ export default function PlaytestPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ─── NEW SESSION MODAL ─── */}
+      {showSessionForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">New Playtest Session</h3>
+              <button
+                onClick={() => setShowSessionForm(false)}
+                className="rounded-lg p-1 text-[#9CA3AF] hover:text-[#F5F5F5]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddSession} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs text-[#6B7280]">Date</label>
+                  <input
+                    type="date"
+                    value={newSessionDate}
+                    onChange={(e) => setNewSessionDate(e.target.value)}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-[#6B7280]">Duration (min)</label>
+                  <input
+                    type="number"
+                    value={newSessionDuration}
+                    onChange={(e) => setNewSessionDuration(Number(e.target.value))}
+                    min={1}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[#6B7280]">Tester Name</label>
+                <input
+                  type="text"
+                  value={newSessionTester}
+                  onChange={(e) => setNewSessionTester(e.target.value)}
+                  placeholder="Who's testing?"
+                  required
+                  autoFocus
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs text-[#6B7280]">Platform</label>
+                  <select
+                    value={newSessionPlatform}
+                    onChange={(e) => setNewSessionPlatform(e.target.value)}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+                  >
+                    <option value="PC">PC</option>
+                    <option value="Mac">Mac</option>
+                    <option value="Mobile">Mobile</option>
+                    <option value="Console">Console</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-[#6B7280]">Build Version</label>
+                  <input
+                    type="text"
+                    value={newSessionBuild}
+                    onChange={(e) => setNewSessionBuild(e.target.value)}
+                    placeholder="e.g. 0.9.2-beta"
+                    required
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50 font-mono text-xs"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[#6B7280]">Notes</label>
+                <textarea
+                  value={newSessionNotes}
+                  onChange={(e) => setNewSessionNotes(e.target.value)}
+                  placeholder="Session goals, focus areas, test plan..."
+                  rows={2}
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50 resize-none"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full rounded-lg bg-[#F59E0B] py-2.5 text-sm font-semibold text-black transition-colors hover:bg-[#F59E0B]/90"
+              >
+                Create Session
+              </button>
+            </form>
+          </div>
         </div>
       )}
 
