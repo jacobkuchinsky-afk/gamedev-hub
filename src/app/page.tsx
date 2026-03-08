@@ -13,6 +13,7 @@ import {
   Calculator,
   MessageSquare,
   ArrowRight,
+  Quote,
   Sparkles,
   Zap,
   Lightbulb,
@@ -51,6 +52,30 @@ const tools = [
   { icon: Swords, name: "Name Generator", desc: "Characters, places, items", color: "#EF4444" },
   { icon: Calculator, name: "Balance Calculator", desc: "Stat & economy tuning", color: "#3B82F6" },
   { icon: MessageSquare, name: "Dialogue Trees", desc: "Branching conversations", color: "#10B981" },
+];
+
+const testimonials = [
+  {
+    quote:
+      "GameForge replaced my entire workflow. Trello for tasks, separate tools for sprites, another app for sound — now it's all in one place.",
+    name: "Alex Chen",
+    role: "Solo Indie Dev",
+    game: "Starbound Drift",
+  },
+  {
+    quote:
+      "The AI features saved me hours. The dialogue tree builder with AI continuation is incredible for writing NPC interactions.",
+    name: "Maya Rivers",
+    role: "Narrative Designer",
+    game: "Whisperwood",
+  },
+  {
+    quote:
+      "Finally, a tool that understands game development. The launch checklist alone was worth signing up.",
+    name: "Sam Torres",
+    role: "2-Person Studio",
+    game: "Pixel Dungeons",
+  },
 ];
 
 const aiFeatures = [
@@ -284,14 +309,33 @@ export default function LandingPage() {
 
       {/* Social Proof */}
       <section className="border-t border-[#2A2A2A] bg-[#0A0A0A] py-20">
-        <div className="mx-auto max-w-6xl px-6 text-center">
-          <div className="mx-auto max-w-lg">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="mx-auto max-w-lg text-center">
             <BookOpen className="mx-auto mb-4 h-8 w-8 text-[#F59E0B]" />
             <p className="text-2xl font-bold">Built by game devs, for game devs</p>
             <p className="mt-3 text-[#9CA3AF]">
               We got tired of using project management tools that don&apos;t understand game
               development. So we built one that does.
             </p>
+          </div>
+
+          <div className="mx-auto mt-14 grid max-w-5xl gap-6 md:grid-cols-3">
+            {testimonials.map((t, i) => (
+              <div
+                key={t.name}
+                className={`animate-fade-in stagger-${i + 1} group relative rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-7 transition-all hover:border-[#F59E0B]/25`}
+              >
+                <Quote className="mb-4 h-8 w-8 text-[#F59E0B]/30" />
+                <p className="text-sm leading-relaxed text-[#D1D5DB]">
+                  &ldquo;{t.quote}&rdquo;
+                </p>
+                <div className="mt-5 border-t border-[#2A2A2A] pt-4">
+                  <p className="text-sm font-semibold text-[#F5F5F5]">{t.name}</p>
+                  <p className="text-xs text-[#9CA3AF]">{t.role}</p>
+                  <p className="mt-1 text-xs text-[#F59E0B]">Working on {t.game}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>

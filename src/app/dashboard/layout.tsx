@@ -504,7 +504,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       <aside
         role="navigation"
         aria-label="Main navigation"
-        className={`fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-[#2A2A2A] bg-[#0F0F0F] transition-transform duration-200 md:relative md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-[#2A2A2A] bg-[#0F0F0F] transition-transform duration-300 ease-out md:relative md:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -530,24 +530,29 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
             {NAV_ITEMS.map((item) => {
               const active = pathname === item.href;
               return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={active ? "page" : undefined}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                    active
-                      ? "bg-[#F59E0B]/10 text-[#F59E0B]"
-                      : "text-[#9CA3AF] hover:bg-[#1A1A1A] hover:text-[#F5F5F5]"
-                  }`}
-                >
-                  <item.icon className="h-4 w-4" />
-                  {item.label}
-                  {item.label === "Dashboard" && pendingCount > 0 && (
-                    <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#F59E0B] px-1 text-[10px] font-bold leading-none text-[#0F0F0F]">
-                      {pendingCount}
-                    </span>
-                  )}
-                </Link>
+                <div key={item.href} className="group/tip relative">
+                  <Link
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                      active
+                        ? "bg-[#F59E0B]/10 text-[#F59E0B]"
+                        : "text-[#9CA3AF] hover:bg-[#1A1A1A] hover:text-[#F5F5F5]"
+                    }`}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                    {item.label === "Dashboard" && pendingCount > 0 && (
+                      <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#F59E0B] px-1 text-[10px] font-bold leading-none text-[#0F0F0F]">
+                        {pendingCount}
+                      </span>
+                    )}
+                  </Link>
+                  <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md bg-[#2A2A2A] px-2.5 py-1.5 text-xs font-medium text-[#F5F5F5] opacity-0 shadow-lg transition-opacity duration-150 group-hover/tip:opacity-100">
+                    {item.label}
+                    <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#2A2A2A]" />
+                  </span>
+                </div>
               );
             })}
           </div>
