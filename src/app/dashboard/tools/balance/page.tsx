@@ -23,6 +23,7 @@ import {
   Shield,
   Zap,
   ArrowRightLeft,
+  GitBranch,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -155,6 +156,70 @@ interface GameItem {
 const ITEM_TYPES: ItemType[] = ["Weapon", "Armor", "Consumable", "Material", "Key Item"];
 const ITEM_RARITIES: ItemRarity[] = ["Common", "Uncommon", "Rare", "Epic", "Legendary"];
 
+// ── Skill Tree Types ──
+
+interface SkillNode {
+  id: string;
+  name: string;
+  description: string;
+  tier: number;
+  cost: number;
+  prerequisite: string;
+  branch: string;
+}
+
+interface SkillBranch {
+  name: string;
+  color: string;
+  skills: SkillNode[];
+}
+
+const SKILL_BRANCH_COLORS: Record<string, string> = {
+  Combat: "#EF4444",
+  Utility: "#3B82F6",
+  Passive: "#10B981",
+};
+
+const SKILL_TIER_SIZES: Record<number, number> = {
+  1: 40,
+  2: 48,
+  3: 56,
+  4: 64,
+};
+
+const SKILL_DEFAULT_BRANCHES: SkillBranch[] = [
+  {
+    name: "Combat",
+    color: "#EF4444",
+    skills: [
+      { id: uid(), name: "Power Strike", description: "A basic heavy attack", tier: 1, cost: 1, prerequisite: "none", branch: "Combat" },
+      { id: uid(), name: "Blade Fury", description: "Rapid multi-hit combo", tier: 2, cost: 2, prerequisite: "Power Strike", branch: "Combat" },
+      { id: uid(), name: "Armor Break", description: "Ignores enemy defense", tier: 3, cost: 2, prerequisite: "Blade Fury", branch: "Combat" },
+      { id: uid(), name: "Devastation", description: "Ultimate finishing blow", tier: 4, cost: 3, prerequisite: "Armor Break", branch: "Combat" },
+    ],
+  },
+  {
+    name: "Utility",
+    color: "#3B82F6",
+    skills: [
+      { id: uid(), name: "Quick Step", description: "Short dash in any direction", tier: 1, cost: 1, prerequisite: "none", branch: "Utility" },
+      { id: uid(), name: "Eagle Eye", description: "Reveals hidden items nearby", tier: 2, cost: 1, prerequisite: "Quick Step", branch: "Utility" },
+      { id: uid(), name: "Trap Mastery", description: "Place traps that stun foes", tier: 3, cost: 2, prerequisite: "Eagle Eye", branch: "Utility" },
+      { id: uid(), name: "Time Warp", description: "Slows time temporarily", tier: 4, cost: 3, prerequisite: "Trap Mastery", branch: "Utility" },
+    ],
+  },
+  {
+    name: "Passive",
+    color: "#10B981",
+    skills: [
+      { id: uid(), name: "Thick Skin", description: "Reduces all damage taken", tier: 1, cost: 1, prerequisite: "none", branch: "Passive" },
+      { id: uid(), name: "Vitality", description: "Increases max health", tier: 2, cost: 1, prerequisite: "Thick Skin", branch: "Passive" },
+      { id: uid(), name: "Regeneration", description: "Slowly recover health over time", tier: 3, cost: 2, prerequisite: "Vitality", branch: "Passive" },
+      { id: uid(), name: "Undying Will", description: "Survive a lethal blow once", tier: 4, cost: 3, prerequisite: "Regeneration", branch: "Passive" },
+    ],
+  },
+];
+
 const RARITY_COLORS: Record<ItemRarity, string> = {
   Common: "#9CA3AF",
   Uncommon: "#10B981",
@@ -182,6 +247,7 @@ const TABS = [
   { id: "difficulty", label: "Difficulty", icon: Activity },
   { id: "loot", label: "Loot Tables", icon: Package },
   { id: "items", label: "Items", icon: Shield },
+  { id: "skills", label: "Skill Tree", icon: GitBranch },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -3703,6 +3769,527 @@ function ItemDesigner() {
   );
 }
 
+// ── Skill Tree Designer ──
+
+function SkillTreeDesigner() {
+  const [skillBranches, setSkillBranches] = useState<SkillBranch[]>(SKILL_DEFAULT_BRANCHES);
+  const [skillSelectedNode, setSkillSelectedNode] = useState<SkillNode | null>(null);
+  const [skillAiLoading, setSkillAiLoading] = useState(false);
+  const [skillGenre, setSkillGenre] = useState("RPG");
+  const [skillHoveredNode, setSkillHoveredNode] = useState<string | null>(null);
+
+  const skillAllNodes = useMemo(() => skillBranches.flatMap((b) => b.skills), [skillBranches]);
+
+  const skillTotalPoints = useMemo(() => skillAllNodes.reduce((s, n) => s + n.cost, 0), [skillAllNodes]);
+
+  const skillUpdateNode = useCallback(
+    (nodeId: string, field: keyof SkillNode, value: string | number) => {
+      setSkillBranches((prev) =>
+        prev.map((b) => ({
+          ...b,
+          skills: b.skills.map((s) =>
+            s.id === nodeId ? { ...s, [field]: value } : s
+          ),
+        }))
+      );
+      if (skillSelectedNode?.id === nodeId) {
+        setSkillSelectedNode((prev) => (prev ? { ...prev, [field]: value } : null));
+      }
+    },
+    [skillSelectedNode]
+  );
+
+  const skillAddNode = useCallback(
+    (branchName: string) => {
+      const branch = skillBranches.find((b) => b.name === branchName);
+      if (!branch) return;
+      const maxTier = branch.skills.length > 0 ? Math.max(...branch.skills.map((s) => s.tier)) : 0;
+      const lastSkill = branch.skills[branch.skills.length - 1];
+      const newNode: SkillNode = {
+        id: uid(),
+        name: `New Skill`,
+        description: "Describe this skill",
+        tier: Math.min(maxTier + 1, 5),
+        cost: 1,
+        prerequisite: lastSkill?.name || "none",
+        branch: branchName,
+      };
+      setSkillBranches((prev) =>
+        prev.map((b) =>
+          b.name === branchName ? { ...b, skills: [...b.skills, newNode] } : b
+        )
+      );
+    },
+    [skillBranches]
+  );
+
+  const skillRemoveNode = useCallback(
+    (nodeId: string) => {
+      setSkillBranches((prev) =>
+        prev.map((b) => ({
+          ...b,
+          skills: b.skills.filter((s) => s.id !== nodeId),
+        }))
+      );
+      if (skillSelectedNode?.id === nodeId) setSkillSelectedNode(null);
+    },
+    [skillSelectedNode]
+  );
+
+  const skillDesignWithAI = async () => {
+    if (skillAiLoading) return;
+    setSkillAiLoading(true);
+    try {
+      const prompt = `Design a skill tree for a ${skillGenre} game with 3 branches (Combat, Utility, Passive). Each branch has 4 skills across 4 tiers. For each: name, description (1 sentence), tier (1-4), cost (1-3 points), and prerequisite (skill name or "none"). Format as JSON: {"branches": [{"name": "Combat", "color": "#EF4444", "skills": [{"name": "...", "description": "...", "tier": 1, "cost": 1, "prerequisite": "none"}]}, {"name": "Utility", "color": "#3B82F6", "skills": [...]}, {"name": "Passive", "color": "#10B981", "skills": [...]}]}. Return ONLY valid JSON, no markdown.`;
+
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.8,
+        }),
+      });
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.branches && Array.isArray(parsed.branches)) {
+          const newBranches: SkillBranch[] = parsed.branches.map((b: { name: string; color?: string; skills: Array<{ name: string; description: string; tier: number; cost: number; prerequisite: string }> }) => ({
+            name: b.name || "Unknown",
+            color: SKILL_BRANCH_COLORS[b.name] || b.color || "#F59E0B",
+            skills: (b.skills || []).map((s) => ({
+              id: uid(),
+              name: s.name || "Unnamed",
+              description: s.description || "",
+              tier: Math.min(Math.max(s.tier || 1, 1), 5),
+              cost: Math.min(Math.max(s.cost || 1, 1), 5),
+              prerequisite: s.prerequisite || "none",
+              branch: b.name || "Unknown",
+            })),
+          }));
+          setSkillBranches(newBranches);
+          setSkillSelectedNode(null);
+        }
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setSkillAiLoading(false);
+    }
+  };
+
+  const skillExportJSON = () => {
+    const exportData = { branches: skillBranches };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "skill-tree.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const skillGetNodeColor = (node: SkillNode) => {
+    const branch = skillBranches.find((b) => b.name === node.branch);
+    return branch?.color || "#F59E0B";
+  };
+
+  const skillFindPrereqNode = (node: SkillNode): SkillNode | undefined => {
+    if (!node.prerequisite || node.prerequisite === "none") return undefined;
+    return skillAllNodes.find((n) => n.name === node.prerequisite);
+  };
+
+  const SKILL_TREE_COL_WIDTH = 220;
+  const SKILL_TREE_ROW_HEIGHT = 110;
+  const SKILL_TREE_TOP_PAD = 60;
+
+  const skillNodePositions = useMemo(() => {
+    const positions: Record<string, { x: number; y: number }> = {};
+    skillBranches.forEach((branch, branchIdx) => {
+      const sortedSkills = [...branch.skills].sort((a, b) => a.tier - b.tier);
+      sortedSkills.forEach((skill, skillIdx) => {
+        positions[skill.id] = {
+          x: branchIdx * SKILL_TREE_COL_WIDTH + SKILL_TREE_COL_WIDTH / 2,
+          y: skillIdx * SKILL_TREE_ROW_HEIGHT + SKILL_TREE_TOP_PAD + SKILL_TREE_ROW_HEIGHT / 2,
+        };
+      });
+    });
+    return positions;
+  }, [skillBranches]);
+
+  const skillTreeSvgHeight = useMemo(() => {
+    const maxSkills = Math.max(...skillBranches.map((b) => b.skills.length), 1);
+    return maxSkills * SKILL_TREE_ROW_HEIGHT + SKILL_TREE_TOP_PAD + 40;
+  }, [skillBranches]);
+
+  const skillTreeSvgWidth = skillBranches.length * SKILL_TREE_COL_WIDTH;
+
+  return (
+    <div className="space-y-6">
+      {/* AI Generate Bar */}
+      <div className="flex flex-wrap items-end gap-4 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+        <TextInput label="Game Genre" value={skillGenre} onChange={setSkillGenre} placeholder="RPG, MOBA, Roguelike..." />
+        <button
+          onClick={skillDesignWithAI}
+          disabled={skillAiLoading}
+          className="flex items-center gap-2 rounded-lg bg-amber-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-400 disabled:opacity-50"
+        >
+          {skillAiLoading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+          Design Skill Tree
+        </button>
+        <button
+          onClick={skillExportJSON}
+          className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] px-4 py-2.5 text-sm text-neutral-300 transition hover:border-amber-500/30 hover:text-white"
+        >
+          <Download size={16} />
+          Export JSON
+        </button>
+        <div className="ml-auto flex items-center gap-3">
+          <div className="text-right">
+            <p className="text-[10px] uppercase tracking-wider text-neutral-500">Total Skills</p>
+            <p className="font-mono text-lg text-white">{skillAllNodes.length}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] uppercase tracking-wider text-neutral-500">Total Points</p>
+            <p className="font-mono text-lg text-amber-400">{skillTotalPoints}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-[1fr_320px] gap-6">
+        {/* Visual Tree */}
+        <div className="overflow-auto rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+          <div className="mb-3 flex items-center gap-4">
+            {skillBranches.map((b) => (
+              <div key={b.name} className="flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: b.color }} />
+                <span className="text-xs font-medium" style={{ color: b.color }}>{b.name}</span>
+              </div>
+            ))}
+          </div>
+
+          <svg
+            width={skillTreeSvgWidth}
+            height={skillTreeSvgHeight}
+            className="mx-auto"
+          >
+            {/* Branch headers */}
+            {skillBranches.map((branch, bIdx) => (
+              <text
+                key={branch.name}
+                x={bIdx * SKILL_TREE_COL_WIDTH + SKILL_TREE_COL_WIDTH / 2}
+                y={24}
+                textAnchor="middle"
+                fill={branch.color}
+                fontSize={13}
+                fontWeight={700}
+                fontFamily="sans-serif"
+              >
+                {branch.name}
+              </text>
+            ))}
+
+            {/* Connection lines */}
+            {skillAllNodes.map((node) => {
+              const prereq = skillFindPrereqNode(node);
+              if (!prereq) return null;
+              const from = skillNodePositions[prereq.id];
+              const to = skillNodePositions[node.id];
+              if (!from || !to) return null;
+              const isHovered = skillHoveredNode === node.id || skillHoveredNode === prereq.id;
+              const color = skillGetNodeColor(node);
+              return (
+                <line
+                  key={`line-${prereq.id}-${node.id}`}
+                  x1={from.x}
+                  y1={from.y}
+                  x2={to.x}
+                  y2={to.y}
+                  stroke={isHovered ? color : color + "40"}
+                  strokeWidth={isHovered ? 3 : 2}
+                  strokeDasharray={from.x !== to.x ? "6 4" : undefined}
+                  className="transition-all duration-200"
+                />
+              );
+            })}
+
+            {/* Nodes */}
+            {skillAllNodes.map((node) => {
+              const pos = skillNodePositions[node.id];
+              if (!pos) return null;
+              const size = SKILL_TIER_SIZES[node.tier] || 40;
+              const r = size / 2;
+              const color = skillGetNodeColor(node);
+              const isSelected = skillSelectedNode?.id === node.id;
+              const isHovered = skillHoveredNode === node.id;
+
+              return (
+                <g
+                  key={node.id}
+                  onClick={() => setSkillSelectedNode(node)}
+                  onMouseEnter={() => setSkillHoveredNode(node.id)}
+                  onMouseLeave={() => setSkillHoveredNode(null)}
+                  className="cursor-pointer"
+                >
+                  {/* Glow ring */}
+                  {(isSelected || isHovered) && (
+                    <circle
+                      cx={pos.x}
+                      cy={pos.y}
+                      r={r + 6}
+                      fill="none"
+                      stroke={color}
+                      strokeWidth={2}
+                      opacity={0.4}
+                    />
+                  )}
+                  {/* Node circle */}
+                  <circle
+                    cx={pos.x}
+                    cy={pos.y}
+                    r={r}
+                    fill={color + "20"}
+                    stroke={isSelected ? color : color + "80"}
+                    strokeWidth={isSelected ? 3 : 2}
+                    className="transition-all duration-200"
+                  />
+                  {/* Tier label */}
+                  <text
+                    x={pos.x}
+                    y={pos.y - 4}
+                    textAnchor="middle"
+                    fill={color}
+                    fontSize={size > 48 ? 14 : 12}
+                    fontWeight={700}
+                    fontFamily="sans-serif"
+                  >
+                    T{node.tier}
+                  </text>
+                  {/* Cost label */}
+                  <text
+                    x={pos.x}
+                    y={pos.y + 10}
+                    textAnchor="middle"
+                    fill="#9CA3AF"
+                    fontSize={10}
+                    fontFamily="sans-serif"
+                  >
+                    {node.cost}pt
+                  </text>
+                  {/* Name below node */}
+                  <text
+                    x={pos.x}
+                    y={pos.y + r + 16}
+                    textAnchor="middle"
+                    fill="#E5E5E5"
+                    fontSize={11}
+                    fontWeight={500}
+                    fontFamily="sans-serif"
+                  >
+                    {node.name.length > 16 ? node.name.slice(0, 14) + "..." : node.name}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+
+          {/* Add skill buttons */}
+          <div className="mt-4 flex justify-center gap-4">
+            {skillBranches.map((b) => (
+              <button
+                key={b.name}
+                onClick={() => skillAddNode(b.name)}
+                className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs transition hover:border-amber-500/30"
+                style={{ color: b.color }}
+              >
+                <Plus size={12} />
+                Add to {b.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Sidebar: Node Editor */}
+        <div className="space-y-4">
+          {skillSelectedNode ? (
+            <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-white">Edit Skill</h3>
+                <button
+                  onClick={() => skillRemoveNode(skillSelectedNode.id)}
+                  className="rounded-md p-1.5 text-neutral-500 transition hover:bg-red-500/10 hover:text-red-400"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+              <div className="space-y-3">
+                <TextInput
+                  label="Name"
+                  value={skillSelectedNode.name}
+                  onChange={(v) => skillUpdateNode(skillSelectedNode.id, "name", v)}
+                />
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-neutral-400">Description</label>
+                  <textarea
+                    value={skillSelectedNode.description}
+                    onChange={(e) => skillUpdateNode(skillSelectedNode.id, "description", e.target.value)}
+                    rows={2}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-white outline-none focus:border-amber-500/50"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <NumInput
+                    label="Tier"
+                    value={skillSelectedNode.tier}
+                    onChange={(v) => skillUpdateNode(skillSelectedNode.id, "tier", v)}
+                    min={1}
+                    max={5}
+                  />
+                  <NumInput
+                    label="Cost (pts)"
+                    value={skillSelectedNode.cost}
+                    onChange={(v) => skillUpdateNode(skillSelectedNode.id, "cost", v)}
+                    min={1}
+                    max={10}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-neutral-400">Prerequisite</label>
+                  <select
+                    value={skillSelectedNode.prerequisite}
+                    onChange={(e) => skillUpdateNode(skillSelectedNode.id, "prerequisite", e.target.value)}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-white outline-none focus:border-amber-500/50"
+                  >
+                    <option value="none">None</option>
+                    {skillAllNodes
+                      .filter((n) => n.id !== skillSelectedNode.id)
+                      .map((n) => (
+                        <option key={n.id} value={n.name}>
+                          {n.name} (T{n.tier})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-neutral-400">Branch</label>
+                  <select
+                    value={skillSelectedNode.branch}
+                    onChange={(e) => skillUpdateNode(skillSelectedNode.id, "branch", e.target.value)}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-white outline-none focus:border-amber-500/50"
+                  >
+                    {skillBranches.map((b) => (
+                      <option key={b.name} value={b.name}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="mt-4 rounded-lg bg-[#111] p-3">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="inline-block h-3 w-3 rounded-full"
+                    style={{ backgroundColor: skillGetNodeColor(skillSelectedNode) }}
+                  />
+                  <span className="text-xs text-neutral-500">
+                    {skillSelectedNode.branch} &middot; Tier {skillSelectedNode.tier} &middot; {skillSelectedNode.cost} pts
+                  </span>
+                </div>
+                {skillFindPrereqNode(skillSelectedNode) && (
+                  <p className="mt-1 text-[11px] text-neutral-600">
+                    Requires: {skillSelectedNode.prerequisite}
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[#2A2A2A] bg-[#1A1A1A]/50 py-16 text-center">
+              <GitBranch size={32} className="mb-3 text-neutral-600" />
+              <p className="text-sm text-neutral-500">Click a node to edit</p>
+              <p className="mt-1 text-xs text-neutral-600">Or use AI to generate a tree</p>
+            </div>
+          )}
+
+          {/* Branch breakdown */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">Branch Summary</h3>
+            <div className="space-y-3">
+              {skillBranches.map((b) => {
+                const branchPoints = b.skills.reduce((s, n) => s + n.cost, 0);
+                const maxTier = b.skills.length > 0 ? Math.max(...b.skills.map((s) => s.tier)) : 0;
+                return (
+                  <div key={b.name} className="rounded-lg bg-[#111] p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: b.color }} />
+                        <span className="text-sm font-medium" style={{ color: b.color }}>{b.name}</span>
+                      </div>
+                      <span className="text-xs text-neutral-500">{b.skills.length} skills</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-neutral-400">
+                      <span>{branchPoints} total points</span>
+                      <span>Max tier {maxTier}</span>
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#0F0F0F]">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${skillTotalPoints > 0 ? (branchPoints / skillTotalPoints) * 100 : 0}%`,
+                          backgroundColor: b.color,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Balance warnings */}
+          {(() => {
+            const warnings: string[] = [];
+            const branchCounts = skillBranches.map((b) => b.skills.length);
+            const maxCount = Math.max(...branchCounts);
+            const minCount = Math.min(...branchCounts);
+            if (maxCount - minCount >= 3) warnings.push("Branches are very uneven in skill count");
+            skillBranches.forEach((b) => {
+              const costs = b.skills.map((s) => s.cost);
+              if (costs.length > 1 && costs.every((c) => c === costs[0])) warnings.push(`${b.name}: all skills cost the same — consider varying costs`);
+            });
+            skillAllNodes.forEach((node) => {
+              if (node.prerequisite !== "none" && !skillAllNodes.find((n) => n.name === node.prerequisite)) {
+                warnings.push(`"${node.name}" requires "${node.prerequisite}" which doesn't exist`);
+              }
+            });
+            if (warnings.length === 0) return null;
+            return (
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                <div className="mb-2 flex items-center gap-2">
+                  <AlertTriangle size={14} className="text-amber-400" />
+                  <span className="text-xs font-semibold text-amber-400">Balance Warnings</span>
+                </div>
+                <ul className="space-y-1">
+                  {warnings.map((w, i) => (
+                    <li key={i} className="text-xs text-amber-300/70">• {w}</li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ──
 
 export default function BalanceCalculatorPage() {
@@ -3758,6 +4345,7 @@ export default function BalanceCalculatorPage() {
         {activeTab === "difficulty" && <DifficultyAnalyzer />}
         {activeTab === "loot" && <LootTableDesigner />}
         {activeTab === "items" && <ItemDesigner />}
+        {activeTab === "skills" && <SkillTreeDesigner />}
       </div>
     </div>
   );
