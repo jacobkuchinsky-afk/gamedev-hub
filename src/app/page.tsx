@@ -25,6 +25,7 @@ import {
   Heart,
   ChevronDown,
   Check,
+  Menu,
 } from "lucide-react";
 
 const features = [
@@ -138,8 +139,10 @@ export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [scrollOpacity, setScrollOpacity] = useState(1);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [visibleSections, setVisibleSections] = useState<Record<number, boolean>>({});
   const sectionRefs = useRef<(HTMLElement | null)[]>([]);
+  const navRef = useRef<HTMLElement | null>(null);
   const setSectionRef = (i: number) => (el: HTMLElement | null) => {
     sectionRefs.current[i] = el;
   };
@@ -153,6 +156,18 @@ export default function LandingPage() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (navRef.current && !navRef.current.contains(e.target as Node)) {
+        setMobileMenuOpen(false);
+      }
+    };
+    if (mobileMenuOpen) {
+      document.addEventListener("click", handleClickOutside);
+    }
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, [mobileMenuOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -205,6 +220,7 @@ export default function LandingPage() {
       `}} />
       {/* Nav */}
       <nav
+        ref={navRef}
         className={`sticky top-0 z-50 transition-all duration-300 ease-out ${
           isScrolled
             ? "border-b border-[#2A2A2A] bg-[#0F0F0F]/80 backdrop-blur-xl"
@@ -218,7 +234,8 @@ export default function LandingPage() {
             </div>
             <span className="text-lg font-bold tracking-tight">GameForge</span>
           </Link>
-          <div className="flex items-center gap-3">
+          {/* Desktop nav links */}
+          <div className="hidden items-center gap-3 md:flex">
             <Link
               href="/login"
               className="rounded-lg px-4 py-2 text-sm font-medium text-[#9CA3AF] transition-colors hover:text-[#F5F5F5]"
@@ -228,6 +245,42 @@ export default function LandingPage() {
             <Link
               href="/signup"
               className="rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-bold text-[#0F0F0F] transition-colors hover:bg-[#D97706]"
+            >
+              Get Started
+            </Link>
+          </div>
+          {/* Mobile hamburger */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMobileMenuOpen((o) => !o);
+            }}
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-[#F5F5F5] transition-colors hover:bg-[#1A1A1A] md:hidden"
+            aria-label="Toggle menu"
+            aria-expanded={mobileMenuOpen}
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </div>
+        {/* Mobile dropdown */}
+        <div
+          className={`overflow-hidden transition-all duration-200 ease-out md:hidden ${
+            mobileMenuOpen ? "max-h-32 opacity-100" : "max-h-0 opacity-0"
+          }`}
+        >
+          <div className="border-t border-[#2A2A2A] bg-[#0F0F0F] px-6 py-3">
+            <Link
+              href="/login"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block rounded-lg px-4 py-3 text-sm font-medium text-[#9CA3AF] transition-colors hover:bg-[#1A1A1A] hover:text-[#F5F5F5]"
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/signup"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block rounded-lg bg-[#F59E0B] px-4 py-3 text-sm font-bold text-[#0F0F0F] transition-colors hover:bg-[#D97706]"
             >
               Get Started
             </Link>
