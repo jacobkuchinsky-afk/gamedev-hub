@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Gamepad2 } from "lucide-react";
+import { ArrowLeft, Gamepad2, Swords, Puzzle, BookOpen, Sparkles, Calendar } from "lucide-react";
 import Link from "next/link";
 import { addProject, type Project } from "@/lib/store";
 import { useToast } from "@/components/Toast";
@@ -32,6 +32,52 @@ const COVER_COLORS = [
   "#84CC16",
 ];
 
+const DESCRIPTION_MAX = 500;
+
+interface QuickTemplate {
+  label: string;
+  icon: React.ReactNode;
+  genre: string;
+  engine: string;
+  description: string;
+  color: string;
+}
+
+const QUICK_TEMPLATES: QuickTemplate[] = [
+  {
+    label: "2D Platformer",
+    icon: <Gamepad2 className="h-5 w-5" />,
+    genre: "Platformer",
+    engine: "Godot",
+    description: "A side-scrolling 2D platformer with tight controls, collectibles, and challenging level design.",
+    color: "#10B981",
+  },
+  {
+    label: "RPG",
+    icon: <Swords className="h-5 w-5" />,
+    genre: "RPG",
+    engine: "Unity",
+    description: "An immersive RPG with character progression, quests, inventory management, and turn-based combat.",
+    color: "#6366F1",
+  },
+  {
+    label: "Puzzle Game",
+    icon: <Puzzle className="h-5 w-5" />,
+    genre: "Puzzle",
+    engine: "Godot",
+    description: "A brain-teasing puzzle game with progressively harder levels, hints, and satisfying solve mechanics.",
+    color: "#F59E0B",
+  },
+  {
+    label: "Visual Novel",
+    icon: <BookOpen className="h-5 w-5" />,
+    genre: "Other",
+    engine: "Custom",
+    description: "A story-driven visual novel with branching narratives, character dialogue, and multiple endings.",
+    color: "#EC4899",
+  },
+];
+
 export default function NewProjectPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -40,12 +86,22 @@ export default function NewProjectPage() {
   const [engine, setEngine] = useState("Godot");
   const [genre, setGenre] = useState("RPG");
   const [coverColor, setCoverColor] = useState("#6366F1");
+  const [targetDate, setTargetDate] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [attempted, setAttempted] = useState(false);
+  const [activeTemplate, setActiveTemplate] = useState<string | null>(null);
 
-  console.log("[NewProjectPage] rendered");
+  function applyTemplate(tpl: QuickTemplate) {
+    setGenre(tpl.genre);
+    setEngine(tpl.engine);
+    setDescription(tpl.description);
+    setCoverColor(tpl.color);
+    setActiveTemplate(tpl.label);
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setAttempted(true);
     if (!name.trim()) return;
 
     setSubmitting(true);
@@ -57,7 +113,6 @@ export default function NewProjectPage() {
       status: "concept" as Project["status"],
       coverColor,
     });
-    console.log("[NewProjectPage] created project:", project.id);
     toast({ title: "Project created!", description: `${name.trim()} is ready to go`, type: "success" });
     router.push(`/dashboard/projects/${project.id}`);
   };
@@ -78,31 +133,72 @@ export default function NewProjectPage() {
         </p>
       </div>
 
+      {/* Quick Templates */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+        <div className="mb-3 flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+          <h2 className="text-sm font-medium text-[#D1D5DB]">Quick Templates</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {QUICK_TEMPLATES.map((tpl) => (
+            <button
+              key={tpl.label}
+              type="button"
+              onClick={() => applyTemplate(tpl)}
+              className={`flex flex-col items-center gap-2 rounded-lg border p-3 text-center transition-all hover:scale-[1.02] ${
+                activeTemplate === tpl.label
+                  ? "border-[#F59E0B] bg-[#F59E0B]/5"
+                  : "border-[#2A2A2A] hover:border-[#3A3A3A]"
+              }`}
+            >
+              <div
+                className="flex h-9 w-9 items-center justify-center rounded-lg"
+                style={{ backgroundColor: `${tpl.color}20`, color: tpl.color }}
+              >
+                {tpl.icon}
+              </div>
+              <span className="text-xs font-medium text-[#D1D5DB]">{tpl.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6 space-y-5">
           {/* Name */}
           <div>
             <label className="block text-sm font-medium text-[#D1D5DB] mb-1.5">
-              Project Name
+              Project Name <span className="text-[#EF4444]">*</span>
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="My Awesome Game"
-              required
-              className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none transition-colors focus:border-[#F59E0B]/50"
+              className={`w-full rounded-lg border bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none transition-colors focus:border-[#F59E0B]/50 ${
+                attempted && !name.trim() ? "border-[#EF4444]" : "border-[#2A2A2A]"
+              }`}
             />
+            {attempted && !name.trim() && (
+              <p className="mt-1 text-xs text-[#EF4444]">Project name is required</p>
+            )}
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-[#D1D5DB] mb-1.5">
-              Description
-            </label>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="text-sm font-medium text-[#D1D5DB]">Description</label>
+              <span className={`text-xs ${description.length > DESCRIPTION_MAX ? "text-[#EF4444]" : "text-[#6B7280]"}`}>
+                {description.length}/{DESCRIPTION_MAX}
+              </span>
+            </div>
             <textarea
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => {
+                if (e.target.value.length <= DESCRIPTION_MAX) {
+                  setDescription(e.target.value);
+                }
+              }}
               placeholder="What's this game about?"
               rows={3}
               className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none transition-colors focus:border-[#F59E0B]/50 resize-none"
@@ -176,6 +272,34 @@ export default function NewProjectPage() {
               ))}
             </div>
           </div>
+
+          {/* Target Launch Date */}
+          <div>
+            <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-[#D1D5DB]">
+              <Calendar className="h-4 w-4 text-[#F59E0B]" />
+              Target Launch Date
+            </label>
+            <input
+              type="date"
+              value={targetDate}
+              onChange={(e) => setTargetDate(e.target.value)}
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] outline-none transition-colors focus:border-[#F59E0B]/50 [color-scheme:dark]"
+            />
+            {targetDate && (
+              <p className="mt-1.5 text-xs text-[#6B7280]">
+                {(() => {
+                  const diff = Math.ceil((new Date(targetDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                  if (diff < 0) return "This date is in the past";
+                  if (diff === 0) return "That's today!";
+                  const weeks = Math.floor(diff / 7);
+                  const months = Math.floor(diff / 30);
+                  if (months > 0) return `~${months} month${months > 1 ? "s" : ""} from now`;
+                  if (weeks > 0) return `~${weeks} week${weeks > 1 ? "s" : ""} from now`;
+                  return `${diff} day${diff > 1 ? "s" : ""} from now`;
+                })()}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Preview */}
@@ -195,6 +319,7 @@ export default function NewProjectPage() {
                 </p>
                 <p className="text-xs text-[#6B7280]">
                   {engine} &middot; {genre} &middot; Concept
+                  {targetDate && ` \u00B7 Launch: ${targetDate}`}
                 </p>
               </div>
             </div>

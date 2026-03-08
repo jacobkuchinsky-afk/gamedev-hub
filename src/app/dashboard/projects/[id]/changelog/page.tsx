@@ -12,6 +12,11 @@ import {
   ChevronDown,
   ChevronUp,
   Trash2,
+  Search,
+  Copy,
+  Check,
+  Clock,
+  AlertCircle,
 } from "lucide-react";
 import {
   getProject,
@@ -29,6 +34,25 @@ import {
 const VERSION_TYPES: VersionType[] = ["Major", "Minor", "Patch", "Hotfix"];
 const CHANGE_CATEGORIES: ChangeCategory[] = ["Added", "Changed", "Fixed", "Removed", "Known Issues"];
 
+const SEMVER_REGEX = /^\d+\.\d+\.\d+(-[a-zA-Z0-9._-]+)?(\+[a-zA-Z0-9._-]+)?$/;
+
+function formatVersionMarkdown(entry: ChangelogEntry): string {
+  const lines: string[] = [];
+  lines.push(`## [${entry.version}] — ${entry.date}`);
+  lines.push(`**${entry.title}** (${entry.type})\n`);
+  for (const cat of CHANGE_CATEGORIES) {
+    const items = entry.changes[cat];
+    if (items && items.length > 0) {
+      lines.push(`### ${cat}`);
+      for (const item of items) {
+        lines.push(`- ${item}`);
+      }
+      lines.push("");
+    }
+  }
+  return lines.join("\n");
+}
+
 export default function ChangelogPage() {
   const params = useParams();
   const projectId = params.id as string;
@@ -37,6 +61,8 @@ export default function ChangelogPage() {
   const [entries, setEntries] = useState<ChangelogEntry[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [showForm, setShowForm] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const [formVersion, setFormVersion] = useState("");
   const [formTitle, setFormTitle] = useState("");
@@ -49,6 +75,8 @@ export default function ChangelogPage() {
     Removed: "",
     "Known Issues": "",
   });
+  const [versionError, setVersionError] = useState("");
+  const [formAttempted, setFormAttempted] = useState(false);
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -62,12 +90,44 @@ export default function ChangelogPage() {
 
   if (!project) return null;
 
+  const filteredEntries = searchQuery.trim()
+    ? entries.filter((entry) => {
+        const q = searchQuery.toLowerCase();
+        if (entry.version.toLowerCase().includes(q)) return true;
+        if (entry.title.toLowerCase().includes(q)) return true;
+        if (entry.type.toLowerCase().includes(q)) return true;
+        for (const cat of CHANGE_CATEGORIES) {
+          if (entry.changes[cat]?.some((item) => item.toLowerCase().includes(q))) return true;
+        }
+        return false;
+      })
+    : entries;
+
+  const lastUpdated = entries.length > 0 ? entries[0].date : null;
+
   function toggleExpanded(id: string) {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
+  function validateVersion(v: string) {
+    if (!v.trim()) {
+      setVersionError("");
+      return;
+    }
+    if (!SEMVER_REGEX.test(v.trim())) {
+      setVersionError("Must follow semver (e.g. 1.2.3 or 1.0.0-beta)");
+    } else {
+      setVersionError("");
+    }
+  }
+
   function handleAdd() {
+    setFormAttempted(true);
     if (!formVersion.trim() || !formTitle.trim()) return;
+    if (!SEMVER_REGEX.test(formVersion.trim())) {
+      setVersionError("Must follow semver (e.g. 1.2.3 or 1.0.0-beta)");
+      return;
+    }
 
     const changes: Record<ChangeCategory, string[]> = {
       Added: [],
@@ -100,12 +160,22 @@ export default function ChangelogPage() {
     setFormDate(new Date().toISOString().split("T")[0]);
     setFormType("Patch");
     setFormChanges({ Added: "", Changed: "", Fixed: "", Removed: "", "Known Issues": "" });
+    setVersionError("");
+    setFormAttempted(false);
     setShowForm(false);
   }
 
   function handleDelete(id: string) {
     deleteChangelogEntry(id);
     setEntries((prev) => prev.filter((e) => e.id !== id));
+  }
+
+  function copyVersionNotes(entry: ChangelogEntry) {
+    const md = formatVersionMarkdown(entry);
+    navigator.clipboard.writeText(md).then(() => {
+      setCopiedId(entry.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
   }
 
   function exportMarkdown() {
@@ -141,6 +211,13 @@ export default function ChangelogPage() {
     return sum + CHANGE_CATEGORIES.reduce((s, cat) => s + (e.changes[cat]?.length || 0), 0);
   }, 0);
 
+  const DOT_COLORS: Record<VersionType, string> = {
+    Major: "#F59E0B",
+    Minor: "#3B82F6",
+    Patch: "#10B981",
+    Hotfix: "#EF4444",
+  };
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       {/* Header */}
@@ -159,9 +236,20 @@ export default function ChangelogPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold">Changelog</h1>
-              <p className="text-sm text-[#6B7280]">
-                {entries.length} versions &middot; {totalChanges} changes tracked
-              </p>
+              <div className="flex items-center gap-2 text-sm text-[#6B7280]">
+                <span>{entries.length} version{entries.length !== 1 ? "s" : ""}</span>
+                <span>&middot;</span>
+                <span>{totalChanges} changes tracked</span>
+                {lastUpdated && (
+                  <>
+                    <span>&middot;</span>
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      Updated {lastUpdated}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex gap-2">
@@ -183,27 +271,56 @@ export default function ChangelogPage() {
         </div>
       </div>
 
+      {/* Search/Filter */}
+      {entries.length > 0 && (
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search versions, titles, or changes..."
+            className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2.5 pl-10 pr-4 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none transition-colors focus:border-[#F59E0B]/50"
+          />
+          {searchQuery && (
+            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-[#6B7280]">
+              {filteredEntries.length} result{filteredEntries.length !== 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Add Form Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4">
           <div className="w-full max-w-2xl rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">New Version</h2>
-              <button onClick={() => setShowForm(false)} className="text-[#6B7280] hover:text-[#F5F5F5]">
+              <button onClick={() => { setShowForm(false); setFormAttempted(false); setVersionError(""); }} className="text-[#6B7280] hover:text-[#F5F5F5]">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="mt-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1 block text-xs text-[#9CA3AF]">Version</label>
+                  <label className="mb-1 block text-xs text-[#9CA3AF]">Version (semver)</label>
                   <input
                     type="text"
                     value={formVersion}
-                    onChange={(e) => setFormVersion(e.target.value)}
-                    placeholder="0.9.3-beta"
-                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+                    onChange={(e) => { setFormVersion(e.target.value); validateVersion(e.target.value); }}
+                    placeholder="1.0.0 or 1.2.3-beta"
+                    className={`w-full rounded-lg border bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50 ${
+                      versionError || (formAttempted && !formVersion.trim())
+                        ? "border-[#EF4444]"
+                        : "border-[#2A2A2A]"
+                    }`}
                   />
+                  {versionError && (
+                    <p className="mt-1 flex items-center gap-1 text-xs text-[#EF4444]">
+                      <AlertCircle className="h-3 w-3" />
+                      {versionError}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-[#9CA3AF]">Date</label>
@@ -222,7 +339,9 @@ export default function ChangelogPage() {
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
                   placeholder="What's the theme of this release?"
-                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+                  className={`w-full rounded-lg border bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50 ${
+                    formAttempted && !formTitle.trim() ? "border-[#EF4444]" : "border-[#2A2A2A]"
+                  }`}
                 />
               </div>
               <div>
@@ -266,7 +385,7 @@ export default function ChangelogPage() {
 
               <button
                 onClick={handleAdd}
-                disabled={!formVersion.trim() || !formTitle.trim()}
+                disabled={!formVersion.trim() || !formTitle.trim() || !!versionError}
                 className="w-full rounded-lg bg-[#F59E0B] py-2.5 text-sm font-medium text-[#0F0F0F] transition-colors hover:bg-[#F59E0B]/90 disabled:opacity-40"
               >
                 Publish Version
@@ -277,7 +396,7 @@ export default function ChangelogPage() {
       )}
 
       {/* Changelog Timeline */}
-      {entries.length === 0 ? (
+      {filteredEntries.length === 0 && !searchQuery ? (
         <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-16 text-center">
           <FileText className="mx-auto h-10 w-10 text-[#6B7280]" />
           <p className="mt-3 text-sm text-[#6B7280]">No changelog entries yet</p>
@@ -289,26 +408,45 @@ export default function ChangelogPage() {
             Create your first version
           </button>
         </div>
+      ) : filteredEntries.length === 0 && searchQuery ? (
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-12 text-center">
+          <Search className="mx-auto h-8 w-8 text-[#6B7280]" />
+          <p className="mt-3 text-sm text-[#6B7280]">No results for &ldquo;{searchQuery}&rdquo;</p>
+        </div>
       ) : (
-        <div className="relative space-y-4">
-          {/* Timeline line */}
-          <div className="absolute bottom-0 left-[19px] top-0 w-px bg-[#2A2A2A]" />
-
-          {entries.map((entry) => {
+        <div className="relative space-y-0">
+          {filteredEntries.map((entry, idx) => {
             const isOpen = expanded[entry.id];
+            const isLast = idx === filteredEntries.length - 1;
             const nonEmptyCategories = CHANGE_CATEGORIES.filter(
               (cat) => entry.changes[cat] && entry.changes[cat].length > 0
             );
             const changeCount = nonEmptyCategories.reduce(
               (s, cat) => s + entry.changes[cat].length, 0
             );
+            const dotColor = DOT_COLORS[entry.type];
 
             return (
-              <div key={entry.id} className="relative pl-12">
+              <div key={entry.id} className="relative pl-12 pb-4">
+                {/* Timeline connector line */}
+                {!isLast && (
+                  <div
+                    className="absolute left-[18px] top-[28px] w-0.5"
+                    style={{
+                      bottom: 0,
+                      background: `linear-gradient(to bottom, ${dotColor}60, ${DOT_COLORS[filteredEntries[idx + 1]?.type] ?? "#2A2A2A"}60)`,
+                    }}
+                  />
+                )}
+
                 {/* Timeline dot */}
                 <div
-                  className="absolute left-3 top-5 h-3.5 w-3.5 rounded-full border-2 border-[#1A1A1A]"
-                  style={{ backgroundColor: VERSION_TYPE_COLORS[entry.type] }}
+                  className="absolute left-[11px] top-[14px] h-4 w-4 rounded-full"
+                  style={{
+                    backgroundColor: dotColor,
+                    boxShadow: `0 0 8px ${dotColor}50`,
+                    border: "3px solid #1A1A1A",
+                  }}
                 />
 
                 <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] transition-colors hover:border-[#3A3A3A]">
@@ -338,6 +476,17 @@ export default function ChangelogPage() {
                       <span className="text-xs text-[#6B7280]">{entry.date}</span>
                       <span className="text-xs text-[#6B7280]">{changeCount} changes</span>
                       <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); copyVersionNotes(entry); }}
+                          className="rounded p-1 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F59E0B]"
+                          title="Copy version notes as markdown"
+                        >
+                          {copiedId === entry.id ? (
+                            <Check className="h-3.5 w-3.5 text-[#10B981]" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
+                        </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDelete(entry.id); }}
                           className="rounded p-1 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#EF4444]"
