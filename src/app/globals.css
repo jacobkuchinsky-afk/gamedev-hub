@@ -306,6 +306,8 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 }
 
 html {
+  color-scheme: dark;
+  background-color: #0F0F0F;
   scroll-behavior: smooth;
 }
 
