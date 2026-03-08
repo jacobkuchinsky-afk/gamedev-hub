@@ -764,14 +764,14 @@ export default function ParticlesPage() {
             </button>
             <button
               onClick={copyJSON}
-              className="flex items-center justify-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-xs font-medium text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-2.5 py-1.5 text-[11px] font-medium text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
             >
               {copied ? (
-                <Check className="h-3.5 w-3.5 text-green-400" />
+                <Check className="h-3 w-3 text-[#10B981]" />
               ) : (
-                <Copy className="h-3.5 w-3.5" />
+                <Copy className="h-3 w-3" />
               )}
-              {copied ? "Copied" : "Copy"}
+              {copied ? "Copied!" : "Copy Settings"}
             </button>
             <button
               onClick={handleAIName}

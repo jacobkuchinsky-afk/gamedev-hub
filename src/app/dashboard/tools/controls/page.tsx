@@ -301,6 +301,7 @@ export default function ControlsPage() {
   const [assignCategory, setAssignCategory] = useState<ActionCategory>("Action");
   const [pressAnyKeyMode, setPressAnyKeyMode] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [markdownCopied, setMarkdownCopied] = useState(false);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"keyboard" | "gamepad">("keyboard");
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -581,6 +582,31 @@ export default function ControlsPage() {
     setTimeout(() => setCopied(false), 1500);
   }, [keyMappings, gamepadMappings]);
 
+  const copyAsMarkdown = useCallback(() => {
+    const lines: string[] = [];
+    if (keyMappings.length > 0) {
+      lines.push("| Key | Action | Category |");
+      lines.push("|-----|--------|----------|");
+      keyMappings.forEach((m) => {
+        lines.push(`| ${m.key} | ${m.action} | ${m.category} |`);
+      });
+      if (gamepadMappings.length > 0) lines.push("");
+    }
+    if (gamepadMappings.length > 0) {
+      lines.push("| Button | Action | Category |");
+      lines.push("|--------|--------|----------|");
+      gamepadMappings.forEach((m) => {
+        lines.push(`| ${m.button} | ${m.action} | ${m.category} |`);
+      });
+    }
+    const text = lines.join("\n");
+    if (text) {
+      navigator.clipboard.writeText(text);
+      setMarkdownCopied(true);
+      setTimeout(() => setMarkdownCopied(false), 1500);
+    }
+  }, [keyMappings, gamepadMappings]);
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-center justify-between">
@@ -604,7 +630,15 @@ export default function ControlsPage() {
             className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-xs font-medium text-[#9CA3AF] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
           >
             {copied ? <Check className="h-3.5 w-3.5 text-[#10B981]" /> : <Copy className="h-3.5 w-3.5" />}
-            {copied ? "Copied" : "Copy JSON"}
+            {copied ? "Copied!" : "Copy JSON"}
+          </button>
+          <button
+            onClick={copyAsMarkdown}
+            disabled={keyMappings.length === 0 && gamepadMappings.length === 0}
+            className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-xs font-medium text-[#9CA3AF] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {markdownCopied ? <Check className="h-3.5 w-3.5 text-[#10B981]" /> : <Copy className="h-3.5 w-3.5" />}
+            {markdownCopied ? "Copied!" : "Copy as Markdown"}
           </button>
           <button
             onClick={exportJSON}
