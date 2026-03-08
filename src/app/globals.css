@@ -315,6 +315,31 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
 }
 
+/* Checkbox styling */
+input[type="checkbox"] {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #2A2A2A;
+  border-radius: 4px;
+  background: #0F0F0F;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+input[type="checkbox"]:checked {
+  background: #F59E0B;
+  border-color: #F59E0B;
+}
+input[type="checkbox"]:checked::after {
+  content: "✓";
+  display: block;
+  color: #0F0F0F;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 12px;
+}
+
 /* Input utilities */
 .input {
   background: #0F0F0F;
