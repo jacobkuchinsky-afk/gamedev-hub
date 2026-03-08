@@ -84,6 +84,15 @@ const TYPE_META: Record<
   action: { label: "Action", Icon: Zap },
 };
 
+const VOICE_OPTIONS = [
+  "Wise Elder",
+  "Grumpy Merchant",
+  "Nervous Guard",
+  "Cheerful Innkeeper",
+  "Mysterious Stranger",
+  "Custom...",
+];
+
 // ── Helpers ──────────────────────────────────────────────────
 
 function nodeHeight(n: DialogueNode): number {
@@ -262,6 +271,9 @@ export default function DialoguePage() {
 
   const [aiWriteLoading, setAiWriteLoading] = useState(false);
   const [aiWriteNotice, setAiWriteNotice] = useState("");
+  const [voiceSelection, setVoiceSelection] = useState("Wise Elder");
+  const [customVoice, setCustomVoice] = useState("");
+  const [aiRewriteLoading, setAiRewriteLoading] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const interRef = useRef<Interaction>({ type: "idle" });
@@ -742,6 +754,37 @@ export default function DialoguePage() {
     setConnections((prev) => [...prev, ...newConns]);
     setAiWriteLoading(false);
   }, [nodes, treeName]);
+
+  const aiRewriteVoice = useCallback(async () => {
+    if (!selectedNode || selectedNode.type !== "npc" || !selectedNode.text.trim()) return;
+    setAiRewriteLoading(true);
+    const voice = voiceSelection === "Custom..." ? customVoice : voiceSelection;
+    if (!voice.trim()) { setAiRewriteLoading(false); return; }
+    const prompt = `Rewrite this game dialogue line in the voice of a ${voice}: '${selectedNode.text}'. Keep the same meaning but change the tone, vocabulary, and personality. Return only the rewritten line.`;
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const cleaned = content.replace(/^["']|["']$/g, "").trim();
+      if (cleaned) updateNode(selectedNode.id, { text: cleaned });
+    } catch {
+      setAiWriteNotice("AI rewrite failed -- try again");
+    }
+    setAiRewriteLoading(false);
+  }, [selectedNode, voiceSelection, customVoice, updateNode]);
 
   // ── Simulator ───────────────────────────────────────────
 
@@ -1385,6 +1428,42 @@ export default function DialoguePage() {
                       })
                     }
                   />
+                </div>
+              )}
+
+              {/* Character Voice */}
+              {selectedNode.type === "npc" && (
+                <div>
+                  <label className="text-[11px] text-gray-500 uppercase tracking-wider font-semibold block mb-1">
+                    Character Voice
+                  </label>
+                  <div className="space-y-2">
+                    <select
+                      className="w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
+                      value={voiceSelection}
+                      onChange={(e) => setVoiceSelection(e.target.value)}
+                    >
+                      {VOICE_OPTIONS.map((v) => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
+                    {voiceSelection === "Custom..." && (
+                      <input
+                        className="w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
+                        value={customVoice}
+                        onChange={(e) => setCustomVoice(e.target.value)}
+                        placeholder="e.g. Sarcastic Pirate"
+                      />
+                    )}
+                    <button
+                      onClick={aiRewriteVoice}
+                      disabled={aiRewriteLoading || !selectedNode.text.trim()}
+                      className="w-full flex items-center justify-center gap-1.5 py-2 bg-amber-500/15 border border-amber-500/30 text-amber-400 rounded-lg text-sm hover:bg-amber-500/25 transition-colors disabled:opacity-40"
+                    >
+                      {aiRewriteLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                      {aiRewriteLoading ? "Rewriting..." : "AI Rewrite"}
+                    </button>
+                  </div>
                 </div>
               )}
 

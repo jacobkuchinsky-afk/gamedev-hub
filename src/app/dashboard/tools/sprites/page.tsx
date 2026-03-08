@@ -187,6 +187,9 @@ export default function SpriteEditorPage() {
   const [aiPaletteTheme, setAiPaletteTheme] = useState("");
   const [aiPaletteLoading, setAiPaletteLoading] = useState(false);
   const [showAiPaletteInput, setShowAiPaletteInput] = useState(false);
+  const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 });
+  const [canvasAreaMousePos, setCanvasAreaMousePos] = useState<{ x: number; y: number } | null>(null);
+  const [isSpaceDown, setIsSpaceDown] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const minimapRef = useRef<HTMLCanvasElement>(null);
@@ -194,6 +197,11 @@ export default function SpriteEditorPage() {
   const lastPos = useRef<{ x: number; y: number } | null>(null);
   const drawStart = useRef({ x: 0, y: 0 });
   const snapshotRef = useRef<(string | null)[][] | null>(null);
+  const isPanning = useRef(false);
+  const panStart = useRef({ x: 0, y: 0 });
+  const panStartOffset = useRef({ x: 0, y: 0 });
+  const canvasAreaRef = useRef<HTMLDivElement>(null);
+  const spaceDown = useRef(false);
 
   const canvasSizeRef = useRef(canvasSize);
   canvasSizeRef.current = canvasSize;
@@ -205,6 +213,8 @@ export default function SpriteEditorPage() {
   undoStackRef.current = undoStack;
   const redoStackRef = useRef(redoStack);
   redoStackRef.current = redoStack;
+  const canvasPanRef = useRef(canvasPan);
+  canvasPanRef.current = canvasPan;
 
   const compositeData = useMemo(() => {
     const result = createEmptyGrid(canvasSize);
@@ -510,8 +520,23 @@ export default function SpriteEditorPage() {
   }, [compositeData, canvasSize, zoom, showGrid, displaySize, mirrorMode, minimapScale, minimapPx]);
 
   useEffect(() => {
-    const onMove = (e: MouseEvent) => pointerMoveRef.current(e.clientX, e.clientY);
-    const onUp = () => pointerUpRef.current();
+    const onMove = (e: MouseEvent) => {
+      if (isPanning.current) {
+        setCanvasPan({
+          x: panStartOffset.current.x + (e.clientX - panStart.current.x),
+          y: panStartOffset.current.y + (e.clientY - panStart.current.y),
+        });
+        return;
+      }
+      pointerMoveRef.current(e.clientX, e.clientY);
+    };
+    const onUp = () => {
+      if (isPanning.current) {
+        isPanning.current = false;
+        return;
+      }
+      pointerUpRef.current();
+    };
     const onTouchMove = (e: TouchEvent) => {
       if (isDrawing.current) e.preventDefault();
       const t = e.touches[0];
@@ -533,6 +558,12 @@ export default function SpriteEditorPage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === " ") {
+        e.preventDefault();
+        spaceDown.current = true;
+        setIsSpaceDown(true);
+        return;
+      }
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
 
       if ((e.ctrlKey || e.metaKey) && e.key === "z") {
@@ -557,8 +588,32 @@ export default function SpriteEditorPage() {
         case "m": setMirrorMode((v) => !v); break;
       }
     };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === " ") {
+        spaceDown.current = false;
+        setIsSpaceDown(false);
+      }
+    };
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, []);
+
+  useEffect(() => {
+    const el = canvasAreaRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setZoom((prev) => {
+        const delta = e.deltaY > 0 ? -1 : 1;
+        return Math.max(1, Math.min(32, prev + delta));
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
   useEffect(() => {
@@ -792,11 +847,22 @@ export default function SpriteEditorPage() {
         </div>
 
         {/* Canvas area */}
-        <div className="relative flex flex-1 items-center justify-center overflow-auto bg-[#0F0F0F]">
-          <div className="p-8">
+        <div
+          ref={canvasAreaRef}
+          className={`relative flex flex-1 items-center justify-center overflow-hidden bg-[#0F0F0F] ${isSpaceDown ? "cursor-grab" : ""}`}
+          onMouseMove={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            setCanvasAreaMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+          }}
+          onMouseLeave={() => {
+            setCanvasAreaMousePos(null);
+            setCursorPos(null);
+          }}
+        >
+          <div className="p-8" style={{ transform: `translate(${canvasPan.x}px, ${canvasPan.y}px)` }}>
             <canvas
               ref={canvasRef}
-              className="cursor-crosshair"
+              className={isSpaceDown ? "cursor-grab" : "cursor-crosshair"}
               style={{
                 width: displaySize,
                 height: displaySize,
@@ -807,6 +873,12 @@ export default function SpriteEditorPage() {
               }}
               onMouseDown={(e) => {
                 e.preventDefault();
+                if (e.button === 1 || spaceDown.current) {
+                  isPanning.current = true;
+                  panStart.current = { x: e.clientX, y: e.clientY };
+                  panStartOffset.current = { ...canvasPanRef.current };
+                  return;
+                }
                 pointerDownRef.current(e.clientX, e.clientY);
               }}
               onMouseLeave={() => setCursorPos(null)}
@@ -817,6 +889,19 @@ export default function SpriteEditorPage() {
               }}
             />
           </div>
+
+          {/* Coordinate overlay */}
+          {cursorPos && canvasAreaMousePos && (
+            <div
+              className="pointer-events-none absolute z-20 rounded bg-[#1A1A1A]/90 border border-[#2A2A2A] px-1.5 py-0.5 font-mono text-[10px] text-[#F59E0B]"
+              style={{
+                left: canvasAreaMousePos.x + 16,
+                top: canvasAreaMousePos.y - 8,
+              }}
+            >
+              {cursorPos.x}, {cursorPos.y}
+            </div>
+          )}
 
           {/* Minimap */}
           <div className="absolute bottom-4 right-4 rounded-lg border border-[#2A2A2A] bg-[#141414] p-2">
