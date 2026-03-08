@@ -1512,7 +1512,8 @@ export default function DashboardPage() {
           <Link
             key={stat.label}
             href={stat.href}
-            className="group rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 transition-all hover:border-[#F59E0B]/20"
+            style={{ "--stat-color": stat.color } as React.CSSProperties}
+            className="group rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 transition-all duration-200 hover:scale-[1.02] hover:border-[var(--stat-color)] hover:shadow-[0_0_12px_var(--stat-color)_40%]"
           >
             <div className="flex items-center justify-between">
               <div
@@ -1524,7 +1525,7 @@ export default function DashboardPage() {
                   style={{ color: stat.color }}
                 />
               </div>
-              <span className="text-2xl font-bold">{stat.value}</span>
+              <span className="text-2xl font-bold transition-all duration-200 group-hover:text-3xl">{stat.value}</span>
             </div>
             <p className="mt-3 text-sm text-[#9CA3AF]">{stat.label}</p>
           </Link>
