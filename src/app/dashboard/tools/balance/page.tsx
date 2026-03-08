@@ -38,7 +38,7 @@ interface WeaponSlot {
   critMultiplier: number;
 }
 
-type GrowthFormula = "linear" | "exponential" | "logarithmic" | "custom";
+type GrowthFormula = "linear" | "exponential" | "logarithmic" | "s-curve" | "custom";
 
 interface ScalingConfig {
   statName: string;
@@ -141,6 +141,16 @@ const SCALING_PRESETS: {
       customExponent: 1.4,
     },
   },
+  {
+    name: "S-Curve Mastery",
+    config: {
+      statName: "Mastery",
+      baseValue: 0,
+      formula: "s-curve" as GrowthFormula,
+      growthRate: 100,
+      customExponent: 1.0,
+    },
+  },
 ];
 
 // ── Utility ──
@@ -164,6 +174,13 @@ function calcStatAtLevel(level: number, cfg: ScalingConfig): number {
       return cfg.baseValue * Math.pow(cfg.growthRate, l);
     case "logarithmic":
       return cfg.baseValue + cfg.growthRate * Math.log(l + 1);
+    case "s-curve": {
+      const range = Math.max(cfg.levelMax - 1, 1);
+      const midpoint = range / 2;
+      const steepness = (cfg.customExponent * 10) / range;
+      const sigmoid = 1 / (1 + Math.exp(-steepness * (l - midpoint)));
+      return cfg.baseValue + cfg.growthRate * sigmoid;
+    }
     case "custom":
       return cfg.baseValue + cfg.growthRate * Math.pow(l, cfg.customExponent);
   }
@@ -302,13 +319,22 @@ function DPSCalculator() {
   );
 
   const results = useMemo(() => {
-    return weapons.map((w) => {
+    const r = weapons.map((w) => {
       const baseDps = w.baseDamage * w.attackSpeed;
       const critRate = Math.min(w.critChance, 100) / 100;
       const effectiveDps =
         baseDps * (1 - critRate + critRate * w.critMultiplier);
-      return { ...w, baseDps, effectiveDps, critRate };
+      const critDpsBonus = effectiveDps - baseDps;
+      const critContribution =
+        effectiveDps > 0 ? (critDpsBonus / effectiveDps) * 100 : 0;
+      return { ...w, baseDps, effectiveDps, critRate, critDpsBonus, critContribution };
     });
+    const maxDps = Math.max(...r.map((x) => x.effectiveDps));
+    return r.map((x) => ({
+      ...x,
+      isBest: x.effectiveDps === maxDps && r.length > 1,
+      relativeStrength: maxDps > 0 ? (x.effectiveDps / maxDps) * 100 : 0,
+    }));
   }, [weapons]);
 
   const chartData = useMemo(() => {
@@ -409,30 +435,52 @@ function DPSCalculator() {
           {results.map((r, i) => (
             <div
               key={r.id}
-              className="flex items-center justify-between rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3"
+              className={`rounded-xl border bg-[#1A1A1A] px-4 py-3 ${r.isBest ? "border-amber-500/40" : "border-[#2A2A2A]"}`}
             >
-              <div className="flex items-center gap-3">
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{
+                      backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
+                    }}
+                  />
+                  <span className="text-sm text-neutral-300">{r.name}</span>
+                  {r.isBest && (
+                    <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-amber-400">
+                      BEST
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-5">
+                  <div className="text-right">
+                    <p className="font-mono text-lg font-semibold text-white">
+                      {fmt(r.baseDps)}
+                    </p>
+                    <p className="text-xs text-neutral-500">Base DPS</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-mono text-lg font-semibold text-amber-400">
+                      {fmt(r.effectiveDps)}
+                    </p>
+                    <p className="text-xs text-neutral-500">Effective DPS</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-mono text-lg font-semibold text-neutral-400">
+                      {r.critContribution.toFixed(0)}%
+                    </p>
+                    <p className="text-xs text-neutral-500">From Crits</p>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#2A2A2A]">
+                <div
+                  className="h-full rounded-full transition-all"
                   style={{
+                    width: `${r.relativeStrength}%`,
                     backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
                   }}
                 />
-                <span className="text-sm text-neutral-300">{r.name}</span>
-              </div>
-              <div className="flex gap-6">
-                <div className="text-right">
-                  <p className="font-mono text-lg font-semibold text-white">
-                    {fmt(r.baseDps)}
-                  </p>
-                  <p className="text-xs text-neutral-500">Base DPS</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-mono text-lg font-semibold text-amber-400">
-                    {fmt(r.effectiveDps)}
-                  </p>
-                  <p className="text-xs text-neutral-500">Effective DPS</p>
-                </div>
               </div>
             </div>
           ))}
@@ -542,7 +590,7 @@ function ScalingCurves() {
             <label className="text-xs text-neutral-400">Growth Formula</label>
             <div className="grid grid-cols-2 gap-2">
               {(
-                ["linear", "exponential", "logarithmic", "custom"] as const
+                ["linear", "exponential", "logarithmic", "s-curve", "custom"] as const
               ).map((f) => (
                 <button
                   key={f}
@@ -568,9 +616,9 @@ function ScalingCurves() {
             onChange={(v) => update("growthRate", v)}
             step={config.formula === "exponential" ? 0.01 : 1}
           />
-          {config.formula === "custom" && (
+          {(config.formula === "custom" || config.formula === "s-curve") && (
             <NumInput
-              label="Exponent"
+              label={config.formula === "s-curve" ? "Steepness" : "Exponent"}
               value={config.customExponent}
               onChange={(v) => update("customExponent", v)}
               min={0.1}
@@ -690,6 +738,8 @@ function ScalingCurves() {
               `${config.statName} multiplied by ${config.growthRate}x each level. Late-game values scale rapidly.`}
             {config.formula === "logarithmic" &&
               `${config.statName} grows quickly early, then tapers off. Good for diminishing returns.`}
+            {config.formula === "s-curve" &&
+              `${config.statName} follows an S-curve: slow early growth, rapid mid-game scaling, then plateaus at ${fmt(config.baseValue + config.growthRate)}. Steepness: ${config.customExponent}.`}
             {config.formula === "custom" &&
               `${config.statName} = ${config.baseValue} + ${config.growthRate} * level^${config.customExponent}.`}
           </p>
@@ -1048,6 +1098,20 @@ function EconomyBalance() {
     });
   }, [config.sinks, config.earnRate, netRate]);
 
+  const sessionRecs = useMemo(() => {
+    const hours = affordability
+      .map((a) => a.hoursToAfford)
+      .filter((h) => isFinite(h));
+    if (hours.length === 0)
+      return { quick: Infinity, sweet: Infinity, full: Infinity };
+    const sorted = [...hours].sort((a, b) => a - b);
+    return {
+      quick: sorted[0],
+      sweet: sorted[Math.floor(sorted.length / 2)],
+      full: sorted[sorted.length - 1],
+    };
+  }, [affordability]);
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
       <div className="space-y-4">
@@ -1274,6 +1338,41 @@ function EconomyBalance() {
               );
             })}
           </div>
+        </div>
+
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+          <p className="mb-3 text-xs text-neutral-400">
+            Recommended Session Length
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-lg bg-[#111] p-3 text-center">
+              <p className="font-mono text-sm font-semibold text-green-400">
+                {isFinite(sessionRecs.quick)
+                  ? sessionRecs.quick.toFixed(1) + "h"
+                  : "--"}
+              </p>
+              <p className="text-[10px] text-neutral-500">Quick Session</p>
+            </div>
+            <div className="rounded-lg bg-[#111] p-3 text-center">
+              <p className="font-mono text-sm font-semibold text-amber-400">
+                {isFinite(sessionRecs.sweet)
+                  ? sessionRecs.sweet.toFixed(1) + "h"
+                  : "--"}
+              </p>
+              <p className="text-[10px] text-neutral-500">Sweet Spot</p>
+            </div>
+            <div className="rounded-lg bg-[#111] p-3 text-center">
+              <p className="font-mono text-sm font-semibold text-red-400">
+                {isFinite(sessionRecs.full)
+                  ? sessionRecs.full.toFixed(1) + "h"
+                  : "--"}
+              </p>
+              <p className="text-[10px] text-neutral-500">Full Grind</p>
+            </div>
+          </div>
+          <p className="mt-2 text-center text-[10px] text-neutral-600">
+            Based on time to afford cheapest / median / most expensive item
+          </p>
         </div>
       </div>
     </div>
