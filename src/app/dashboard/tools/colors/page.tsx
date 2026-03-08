@@ -11,8 +11,8 @@ import {
   Download,
   Trash2,
   Bookmark,
-  Star,
-  Shuffle,
+  Code,
+  Palette,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -48,6 +48,16 @@ const GAME_PRESETS: { name: string; colors: string[] }[] = [
   { name: "Fantasy RPG", colors: ["#8B4513", "#DAA520", "#2E8B57", "#4B0082", "#DC143C"] },
   { name: "Sci-Fi", colors: ["#00F0FF", "#FF00E5", "#0D0D2B", "#1A1A4E", "#4D4DFF"] },
   { name: "Horror", colors: ["#1A0A0A", "#4A0E0E", "#8B0000", "#2D1B1B", "#C0392B"] },
+  { name: "Cyberpunk", colors: ["#FF003C", "#00FFF0", "#120458", "#7B2FBE", "#FF6EC7"] },
+  { name: "Forest", colors: ["#1B4332", "#2D6A4F", "#52B788", "#95D5B2", "#D8F3DC"] },
+  { name: "Ocean", colors: ["#03045E", "#0077B6", "#00B4D8", "#90E0EF", "#CAF0F8"] },
+  { name: "Retro", colors: ["#E07A5F", "#3D405B", "#81B29A", "#F2CC8F", "#F4F1DE"] },
+  { name: "Neon", colors: ["#FF00FF", "#39FF14", "#FF3503", "#00DFFF", "#FFFF00"] },
+  { name: "Pastel", colors: ["#FFB3BA", "#BAFFC9", "#BAE1FF", "#FFFFBA", "#E8BAFF"] },
+  { name: "Autumn", colors: ["#9B2226", "#BB3E03", "#CA6702", "#EE9B00", "#E9D8A6"] },
+  { name: "Sunset", colors: ["#220033", "#8B1E3F", "#DB4C40", "#E9724D", "#FFC857"] },
+  { name: "Arctic", colors: ["#CAE9FF", "#62B6CB", "#1B4965", "#5FA8D3", "#BEE9E8"] },
+  { name: "Volcanic", colors: ["#1A1110", "#4A1A2E", "#B22222", "#FF4500", "#FF8C00"] },
 ];
 
 function hslToHex(h: number, s: number, l: number): string {
@@ -161,10 +171,10 @@ export default function ColorsPage() {
   const [saved, setSaved] = useState<SavedPalette[]>([]);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [paletteName, setPaletteName] = useState("");
+  const [toast, setToast] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    console.log("[ColorsPage] rendered");
     try {
       const data = localStorage.getItem(STORAGE_KEY);
       if (data) setSaved(JSON.parse(data));
@@ -177,8 +187,12 @@ export default function ColorsPage() {
     } catch {}
   }, [saved]);
 
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2000);
+  };
+
   const regenerate = useCallback(() => {
-    console.log("[ColorsPage] regenerate, mode:", mode);
     const newHexes = generateHarmony(mode, colors);
     setColors(newHexes.map((hex, i) => ({
       hex: colors[i]?.locked ? colors[i].hex : hex,
@@ -187,25 +201,22 @@ export default function ColorsPage() {
   }, [mode, colors]);
 
   const toggleLock = (idx: number) => {
-    console.log("[ColorsPage] toggle lock:", idx);
     setColors((prev) => prev.map((c, i) => (i === idx ? { ...c, locked: !c.locked } : c)));
   };
 
   const copyHex = (hex: string, idx: number) => {
-    console.log("[ColorsPage] copy:", hex);
     navigator.clipboard.writeText(hex);
     setCopiedIdx(idx);
+    showToast(`Copied ${hex}`);
     setTimeout(() => setCopiedIdx(null), 1500);
   };
 
   const applyPreset = (preset: { name: string; colors: string[] }) => {
-    console.log("[ColorsPage] apply preset:", preset.name);
     setColors(preset.colors.map((hex) => ({ hex, locked: false })));
   };
 
   const savePalette = () => {
     const name = paletteName.trim() || `Palette ${saved.length + 1}`;
-    console.log("[ColorsPage] save palette:", name);
     setSaved((prev) => [
       ...prev,
       { id: crypto.randomUUID(), colors: colors.map((c) => c.hex), name, timestamp: Date.now() },
@@ -214,17 +225,29 @@ export default function ColorsPage() {
   };
 
   const deleteSaved = (id: string) => {
-    console.log("[ColorsPage] delete saved:", id);
     setSaved((prev) => prev.filter((p) => p.id !== id));
   };
 
   const loadPalette = (palette: SavedPalette) => {
-    console.log("[ColorsPage] load palette:", palette.name);
     setColors(palette.colors.map((hex) => ({ hex, locked: false })));
   };
 
+  const copyAsCSS = () => {
+    const hexes = colors.map((c) => c.hex);
+    const css = `:root {\n${hexes.map((h, i) => `  --palette-${i + 1}: ${h};`).join("\n")}\n}`;
+    navigator.clipboard.writeText(css);
+    showToast("CSS variables copied!");
+  };
+
+  const copyAsTailwind = () => {
+    const hexes = colors.map((c) => c.hex);
+    const shades = [100, 200, 300, 400, 500];
+    const config = `// tailwind.config.ts\ncolors: {\n  palette: {\n${hexes.map((h, i) => `    '${shades[i]}': '${h}',`).join("\n")}\n  },\n}`;
+    navigator.clipboard.writeText(config);
+    showToast("Tailwind config copied!");
+  };
+
   const exportPalette = (format: ExportFormat) => {
-    console.log("[ColorsPage] export as:", format);
     const hexes = colors.map((c) => c.hex);
 
     if (format === "css") {
@@ -256,6 +279,17 @@ export default function ColorsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
+      <style>{`
+        @keyframes toastIn {
+          from { opacity: 0; transform: translate(-50%, 12px); }
+          to { opacity: 1; transform: translate(-50%, 0); }
+        }
+        @keyframes toastOut {
+          from { opacity: 1; }
+          to { opacity: 0; }
+        }
+      `}</style>
+
       <div className="flex items-center gap-3">
         <Link
           href="/dashboard/tools"
@@ -284,10 +318,9 @@ export default function ColorsPage() {
             return (
               <div
                 key={i}
-                className="group relative flex flex-col items-center justify-end pb-4 pt-20 transition-all hover:pt-16"
+                className="group relative flex flex-col items-center justify-end pb-4 pt-20 transition-all hover:pt-14"
                 style={{ backgroundColor: color.hex }}
               >
-                {/* Lock button */}
                 <button
                   onClick={() => toggleLock(i)}
                   className="absolute right-2 top-2 rounded-md p-1.5 opacity-0 transition-opacity group-hover:opacity-100"
@@ -303,7 +336,6 @@ export default function ColorsPage() {
                   />
                 )}
 
-                {/* Color info */}
                 <button
                   onClick={() => copyHex(color.hex, i)}
                   className="flex items-center gap-1 rounded-md px-2 py-1 text-sm font-bold tracking-wide transition-all hover:scale-105"
@@ -312,19 +344,20 @@ export default function ColorsPage() {
                   {copiedIdx === i ? (
                     <><Check className="h-3.5 w-3.5" /> Copied!</>
                   ) : (
-                    <><Copy className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity" /> {color.hex}</>
+                    <><Copy className="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-100" /> {color.hex}</>
                   )}
                 </button>
 
+                {/* Hover tooltip with all color values */}
                 <div
-                  className="mt-1 space-y-0.5 text-center text-[10px] font-medium opacity-0 transition-opacity group-hover:opacity-80"
-                  style={{ color: textColor }}
+                  className="mt-1 rounded-md px-2 py-1.5 text-center text-[10px] font-medium opacity-0 transition-all group-hover:opacity-100"
+                  style={{ color: textColor, backgroundColor: `${textColor}10` }}
                 >
-                  <div>RGB({r}, {g}, {b})</div>
-                  <div>HSL({h}, {s}%, {l}%)</div>
-                  <div className="mt-1.5 flex gap-2">
-                    <span title="Contrast with white">W {whiteContrast}</span>
-                    <span title="Contrast with black">B {blackContrast}</span>
+                  <div className="font-mono">RGB({r}, {g}, {b})</div>
+                  <div className="font-mono">HSL({h}, {s}%, {l}%)</div>
+                  <div className="mt-1 flex justify-center gap-2 text-[9px]">
+                    <span title="Contrast with white">W:{whiteContrast}</span>
+                    <span title="Contrast with black">B:{blackContrast}</span>
                   </div>
                 </div>
               </div>
@@ -335,12 +368,11 @@ export default function ColorsPage() {
 
       {/* Controls row */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Harmony mode */}
         <div className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-1">
           {HARMONY_MODES.map((m) => (
             <button
               key={m.id}
-              onClick={() => { setMode(m.id); console.log("[ColorsPage] mode:", m.id); }}
+              onClick={() => setMode(m.id)}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
                 mode === m.id
                   ? "bg-[#F59E0B] text-[#0F0F0F]"
@@ -374,7 +406,7 @@ export default function ColorsPage() {
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[#9CA3AF]">
               Game Presets
             </h2>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
               {GAME_PRESETS.map((preset) => (
                 <button
                   key={preset.name}
@@ -386,7 +418,7 @@ export default function ColorsPage() {
                       <div key={i} className="h-5 flex-1" style={{ backgroundColor: c }} />
                     ))}
                   </div>
-                  <span className="text-xs font-medium text-[#9CA3AF] group-hover:text-[#F5F5F5] transition-colors">
+                  <span className="text-xs font-medium text-[#9CA3AF] transition-colors group-hover:text-[#F5F5F5]">
                     {preset.name}
                   </span>
                 </button>
@@ -394,10 +426,43 @@ export default function ColorsPage() {
             </div>
           </div>
 
-          {/* Export options */}
+          {/* Copy to Clipboard */}
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[#9CA3AF]">
-              Export
+              Copy to Clipboard
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={copyAsCSS}
+                className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm font-medium text-[#F5F5F5] transition-all hover:border-[#F59E0B]/40 hover:bg-[#F59E0B]/5 active:scale-[0.97]"
+              >
+                <Code className="h-3.5 w-3.5 text-[#F59E0B]" />
+                Copy as CSS
+              </button>
+              <button
+                onClick={copyAsTailwind}
+                className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm font-medium text-[#F5F5F5] transition-all hover:border-[#F59E0B]/40 hover:bg-[#F59E0B]/5 active:scale-[0.97]"
+              >
+                <Palette className="h-3.5 w-3.5 text-[#F59E0B]" />
+                Copy as Tailwind
+              </button>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(colors.map((c) => c.hex).join(", "));
+                  showToast("Hex values copied!");
+                }}
+                className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm font-medium text-[#F5F5F5] transition-all hover:border-[#F59E0B]/40 hover:bg-[#F59E0B]/5 active:scale-[0.97]"
+              >
+                <Copy className="h-3.5 w-3.5 text-[#F59E0B]" />
+                Copy Hex List
+              </button>
+            </div>
+          </div>
+
+          {/* Export / Download */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              Download
             </h2>
             <div className="flex gap-2">
               {(["css", "json", "png"] as ExportFormat[]).map((fmt) => (
@@ -439,7 +504,12 @@ export default function ColorsPage() {
                       <tr key={i} className="border-t border-[#2A2A2A]">
                         <td className="py-2">
                           <div className="flex items-center gap-2">
-                            <div className="h-5 w-5 rounded" style={{ backgroundColor: color.hex }} />
+                            <button
+                              onClick={() => copyHex(color.hex, i)}
+                              className="h-5 w-5 rounded transition-transform hover:scale-110"
+                              style={{ backgroundColor: color.hex }}
+                              title={`Click to copy ${color.hex}`}
+                            />
                             <span className="font-mono text-[#F5F5F5]">{color.hex}</span>
                           </div>
                         </td>
@@ -492,7 +562,7 @@ export default function ColorsPage() {
             {saved.length === 0 ? (
               <p className="text-xs text-[#4B5563]">No saved palettes yet</p>
             ) : (
-              <div className="space-y-2">
+              <div className="max-h-[400px] space-y-2 overflow-y-auto">
                 {saved.map((palette) => (
                   <div
                     key={palette.id}
@@ -527,6 +597,19 @@ export default function ColorsPage() {
           </div>
         </div>
       </div>
+
+      {/* Toast notification */}
+      {toast && (
+        <div
+          className="fixed bottom-6 left-1/2 z-50 rounded-lg bg-[#F59E0B] px-4 py-2.5 text-sm font-bold text-[#0F0F0F] shadow-lg shadow-[#F59E0B]/20"
+          style={{ animation: "toastIn 0.2s ease both" }}
+        >
+          <div className="flex items-center gap-2">
+            <Check className="h-4 w-4" />
+            {toast}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
