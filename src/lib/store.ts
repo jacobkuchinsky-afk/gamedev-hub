@@ -391,6 +391,15 @@ export function addDevlogEntry(entry: Omit<DevlogEntry, "id">): DevlogEntry {
   return newEntry;
 }
 
+export function updateDevlogEntry(id: string, updates: Partial<Omit<DevlogEntry, "id" | "projectId">>): DevlogEntry | null {
+  const entries = getDevlog();
+  const idx = entries.findIndex((e) => e.id === id);
+  if (idx === -1) return null;
+  entries[idx] = { ...entries[idx], ...updates };
+  save(DEVLOG_KEY, entries);
+  return entries[idx];
+}
+
 export function getStatusColor(status: Project["status"]): string {
   const colors: Record<Project["status"], string> = {
     concept: "#9CA3AF",

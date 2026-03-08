@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, Monitor, Smartphone, Gamepad2, Globe, X } from "lucide-react";
+import { ArrowLeft, Monitor, Smartphone, Gamepad2, Globe, X, Star, Zap } from "lucide-react";
 
 interface Resolution {
   label: string;
@@ -73,11 +73,53 @@ const PLATFORMS: PlatformRec[] = [
   },
 ];
 
+interface PopularGame {
+  name: string;
+  res: string;
+  w: number;
+  h: number;
+  genre: string;
+  style: string;
+}
+
+const POPULAR_GAMES: PopularGame[] = [
+  { name: "Celeste", res: "320x180", w: 320, h: 180, genre: "Platformer", style: "Pixel Art" },
+  { name: "Stardew Valley", res: "416x256", w: 416, h: 256, genre: "Farming Sim", style: "Pixel Art" },
+  { name: "Undertale", res: "640x480", w: 640, h: 480, genre: "RPG", style: "Pixel Art" },
+  { name: "Hollow Knight", res: "1920x1080", w: 1920, h: 1080, genre: "Metroidvania", style: "Hand-Drawn" },
+  { name: "Shovel Knight", res: "400x240", w: 400, h: 240, genre: "Platformer", style: "Retro" },
+  { name: "Hyper Light Drifter", res: "480x270", w: 480, h: 270, genre: "Action RPG", style: "Pixel Art" },
+  { name: "Dead Cells", res: "480x270", w: 480, h: 270, genre: "Roguelike", style: "Pixel Art" },
+  { name: "Ori and the Blind Forest", res: "1920x1080", w: 1920, h: 1080, genre: "Platformer", style: "Painted" },
+  { name: "Cuphead", res: "1920x1080", w: 1920, h: 1080, genre: "Run & Gun", style: "Hand-Drawn" },
+  { name: "FTL", res: "1280x720", w: 1280, h: 720, genre: "Strategy", style: "Vector" },
+];
+
+interface DpiInfo {
+  device: string;
+  ppi: number;
+  note: string;
+}
+
+const DPI_TABLE: DpiInfo[] = [
+  { device: "Desktop Monitor (24\" 1080p)", ppi: 92, note: "Standard office/gaming setup" },
+  { device: "Desktop Monitor (27\" 1440p)", ppi: 109, note: "Popular enthusiast display" },
+  { device: "Desktop Monitor (27\" 4K)", ppi: 163, note: "Hi-DPI, consider 2x scaling" },
+  { device: "Laptop (15\" 1080p)", ppi: 147, note: "Common dev laptop" },
+  { device: "iPhone (6.1\" ~1170x2532)", ppi: 460, note: "@3x asset scale" },
+  { device: "iPad (11\" ~1668x2388)", ppi: 264, note: "@2x asset scale" },
+  { device: "Nintendo Switch (6.2\" 720p)", ppi: 237, note: "Handheld mode" },
+  { device: "Steam Deck (7\" 1280x800)", ppi: 215, note: "Similar to Switch" },
+];
+
 const SPRITE_SIZES = [8, 16, 32, 64, 128];
+
+type PlatformKey = "desktop" | "mobile" | "console" | "web";
 
 export default function ResolutionGuidePage() {
   const [calcWidth, setCalcWidth] = useState(1920);
   const [activeRes, setActiveRes] = useState<Resolution | null>(null);
+  const [selectedPlatform, setSelectedPlatform] = useState<PlatformKey | null>(null);
 
   const aspectResults = useMemo(
     () =>
@@ -89,6 +131,40 @@ export default function ResolutionGuidePage() {
   );
 
   const maxW = RESOLUTIONS[RESOLUTIONS.length - 1].w;
+
+  const recommendations = useMemo(() => {
+    if (!selectedPlatform) return null;
+    const recs: Record<PlatformKey, { res: string; pixel: string; reason: string }[]> = {
+      desktop: [
+        { res: "1920x1080", pixel: "HD", reason: "95%+ of Steam users. Safe default." },
+        { res: "2560x1440", pixel: "QHD", reason: "Growing segment of enthusiasts." },
+        { res: "1280x720", pixel: "Min", reason: "Low-end fallback for potato PCs." },
+      ],
+      mobile: [
+        { res: "1080x1920", pixel: "FHD", reason: "Covers 70%+ of iOS/Android devices." },
+        { res: "1440x2560", pixel: "QHD", reason: "Flagship phones. Consider optional." },
+        { res: "720x1280", pixel: "HD", reason: "Budget phones. Keep as min target." },
+      ],
+      console: [
+        { res: "1920x1080", pixel: "FHD", reason: "Required for PS4/Xbox One era." },
+        { res: "3840x2160", pixel: "4K", reason: "PS5/Series X target. Use dynamic scaling." },
+        { res: "1280x720", pixel: "HD", reason: "Nintendo Switch docked falls back to this." },
+      ],
+      web: [
+        { res: "960x540", pixel: "qHD", reason: "Good balance of quality + performance." },
+        { res: "640x360", pixel: "Low", reason: "Fast fallback for mobile browsers." },
+        { res: "1280x720", pixel: "HD", reason: "If targeting desktop browsers only." },
+      ],
+    };
+    return recs[selectedPlatform];
+  }, [selectedPlatform]);
+
+  const platformLabels: Record<PlatformKey, string> = {
+    desktop: "Desktop",
+    mobile: "Mobile",
+    console: "Console",
+    web: "Web / Browser",
+  };
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -184,11 +260,11 @@ export default function ResolutionGuidePage() {
                   key={i}
                   className="absolute rounded-full bg-white"
                   style={{
-                    width: Math.random() * 2 + 1,
-                    height: Math.random() * 2 + 1,
-                    top: `${Math.random() * 50}%`,
-                    left: `${Math.random() * 100}%`,
-                    opacity: Math.random() * 0.7 + 0.3,
+                    width: (i * 7 + 3) % 3 + 1,
+                    height: (i * 7 + 3) % 3 + 1,
+                    top: `${(i * 37 + 5) % 50}%`,
+                    left: `${(i * 53 + 11) % 100}%`,
+                    opacity: ((i * 41 + 7) % 70 + 30) / 100,
                   }}
                 />
               ))}
@@ -206,7 +282,7 @@ export default function ResolutionGuidePage() {
                   borderRadius: "50% 50% 0 0",
                 }}
               />
-              {/* Player */}
+              {/* Player character */}
               <div
                 className="absolute"
                 style={{
@@ -218,13 +294,66 @@ export default function ResolutionGuidePage() {
                   borderRadius: 3,
                 }}
               />
-              {/* HUD */}
-              <div className="absolute left-2 top-2 flex items-center gap-1">
-                <div className="h-1.5 w-12 rounded-full bg-[#EF4444]" />
-                <span className="text-[7px] text-[#EF4444]">HP</span>
+              {/* Player eyes */}
+              <div
+                className="absolute"
+                style={{
+                  bottom: "calc(48% + 16px)",
+                  left: "calc(20% + 3px)",
+                  width: 4,
+                  height: 3,
+                  backgroundColor: "#0F0F0F",
+                  borderRadius: 1,
+                }}
+              />
+              <div
+                className="absolute"
+                style={{
+                  bottom: "calc(48% + 16px)",
+                  left: "calc(20% + 9px)",
+                  width: 4,
+                  height: 3,
+                  backgroundColor: "#0F0F0F",
+                  borderRadius: 1,
+                }}
+              />
+
+              {/* Health Bar */}
+              <div className="absolute left-2.5 top-2.5 flex flex-col gap-0.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[7px] font-bold text-[#F5F5F5]">HERO</span>
+                  <span className="text-[6px] text-[#9CA3AF]">Lv.12</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="h-2 w-16 overflow-hidden rounded-full bg-[#2A2A2A]">
+                    <div className="h-full w-[72%] rounded-full bg-[#EF4444]" />
+                  </div>
+                  <span className="text-[6px] text-[#EF4444]">72/100</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="h-1.5 w-12 overflow-hidden rounded-full bg-[#2A2A2A]">
+                    <div className="h-full w-[45%] rounded-full bg-[#3B82F6]" />
+                  </div>
+                  <span className="text-[6px] text-[#3B82F6]">MP</span>
+                </div>
               </div>
-              <div className="absolute right-2 top-2 text-[7px] text-[#F59E0B]">
-                {activeRes.w}x{activeRes.h}
+
+              {/* Score */}
+              <div className="absolute right-2.5 top-2.5 text-right">
+                <div className="text-[7px] font-bold text-[#F59E0B]">SCORE</div>
+                <div className="text-[9px] font-bold tabular-nums text-[#F5F5F5]">12,450</div>
+              </div>
+
+              {/* Resolution tag */}
+              <div className="absolute bottom-2 right-2.5 rounded bg-black/60 px-1.5 py-0.5 text-[7px] text-[#6B7280]">
+                {activeRes.w}&times;{activeRes.h}
+              </div>
+
+              {/* Mini-map corner */}
+              <div className="absolute bottom-2 left-2.5 h-8 w-10 rounded border border-[#2A2A2A] bg-[#0F0F0F]/80">
+                <div className="absolute left-1 top-1 h-1 w-1 rounded-full bg-[#F59E0B]" />
+                <div className="absolute left-4 top-3 h-0.5 w-3 bg-[#2A2A2A]" />
+                <div className="absolute left-2 top-5 h-0.5 w-5 bg-[#2A2A2A]" />
               </div>
             </div>
           </div>
@@ -234,6 +363,36 @@ export default function ResolutionGuidePage() {
           </p>
         </section>
       )}
+
+      {/* Popular Games Section */}
+      <section className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Star className="h-4 w-4 text-[#F59E0B]" />
+          <h2 className="text-sm font-semibold text-[#F5F5F5]">Popular Games &amp; Their Resolutions</h2>
+        </div>
+        <p className="mb-4 text-xs text-[#6B7280]">
+          See what resolutions successful indie games ship at for reference.
+        </p>
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
+          {POPULAR_GAMES.map((game) => (
+            <div
+              key={game.name}
+              className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3 transition-colors hover:border-[#F59E0B]/20"
+            >
+              <h3 className="text-xs font-semibold text-[#F5F5F5]">{game.name}</h3>
+              <p className="mt-1 text-sm font-bold text-[#F59E0B]">{game.res}</p>
+              <div className="mt-1.5 flex gap-1.5">
+                <span className="rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[9px] text-[#9CA3AF]">
+                  {game.genre}
+                </span>
+                <span className="rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[9px] text-[#9CA3AF]">
+                  {game.style}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Aspect Ratio Calculator */}
@@ -265,42 +424,66 @@ export default function ResolutionGuidePage() {
           </div>
         </section>
 
-        {/* Pixel Density */}
+        {/* Pixel Density / DPI */}
         <section className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6">
           <h2 className="mb-4 text-sm font-semibold text-[#F5F5F5]">
-            Sprite Size at Each Resolution
+            DPI / PPI Reference
           </h2>
           <p className="mb-3 text-xs text-[#6B7280]">
-            How much screen % a sprite of a given size occupies.
+            Pixels per inch across common devices. Determines whether you need @2x or @3x assets.
           </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-[#2A2A2A] text-[#9CA3AF]">
-                  <th className="pb-2 pr-3">Resolution</th>
-                  {SPRITE_SIZES.map((s) => (
-                    <th key={s} className="pb-2 pr-3">{s}px</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {RESOLUTIONS.map((res) => (
-                  <tr key={res.label} className="border-b border-[#2A2A2A]/50">
-                    <td className="py-2 pr-3 font-medium" style={{ color: res.color }}>
-                      {res.label}
-                    </td>
-                    {SPRITE_SIZES.map((s) => (
-                      <td key={s} className="py-2 pr-3 text-[#F5F5F5]">
-                        {((s / res.w) * 100).toFixed(1)}%
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-2">
+            {DPI_TABLE.map((d) => (
+              <div
+                key={d.device}
+                className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium text-[#F5F5F5]">{d.device}</p>
+                  <p className="text-[10px] text-[#6B7280]">{d.note}</p>
+                </div>
+                <span className="ml-3 shrink-0 text-sm font-bold text-[#F59E0B]">{d.ppi} PPI</span>
+              </div>
+            ))}
           </div>
         </section>
       </div>
+
+      {/* Sprite Size Table */}
+      <section className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6">
+        <h2 className="mb-4 text-sm font-semibold text-[#F5F5F5]">
+          Sprite Size at Each Resolution
+        </h2>
+        <p className="mb-3 text-xs text-[#6B7280]">
+          How much screen % a sprite of a given size occupies.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-[#2A2A2A] text-[#9CA3AF]">
+                <th className="pb-2 pr-3">Resolution</th>
+                {SPRITE_SIZES.map((s) => (
+                  <th key={s} className="pb-2 pr-3">{s}px</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {RESOLUTIONS.map((res) => (
+                <tr key={res.label} className="border-b border-[#2A2A2A]/50">
+                  <td className="py-2 pr-3 font-medium" style={{ color: res.color }}>
+                    {res.label}
+                  </td>
+                  {SPRITE_SIZES.map((s) => (
+                    <td key={s} className="py-2 pr-3 text-[#F5F5F5]">
+                      {((s / res.w) * 100).toFixed(1)}%
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       {/* Platform Recommendations */}
       <section className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6">
@@ -308,36 +491,89 @@ export default function ResolutionGuidePage() {
           Platform Recommendations
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {PLATFORMS.map((p) => (
-            <div
-              key={p.platform}
-              className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4"
-            >
-              <div className="mb-3 flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F59E0B]/10">
-                  <p.icon className="h-4.5 w-4.5 text-[#F59E0B]" />
+          {PLATFORMS.map((p) => {
+            const key = p.platform.toLowerCase().replace(/ \/ /g, "").replace(/ /g, "") as string;
+            const platformKey = key === "web/browser" || key === "webbrowser" ? "web" : key as PlatformKey;
+            const isSelected = selectedPlatform === platformKey;
+            return (
+              <button
+                key={p.platform}
+                onClick={() => setSelectedPlatform(isSelected ? null : platformKey)}
+                className={`rounded-lg border p-4 text-left transition-all ${
+                  isSelected
+                    ? "border-[#F59E0B]/40 bg-[#F59E0B]/5"
+                    : "border-[#2A2A2A] bg-[#0F0F0F] hover:border-[#F59E0B]/20"
+                }`}
+              >
+                <div className="mb-3 flex items-center gap-2">
+                  <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+                    isSelected ? "bg-[#F59E0B]/20" : "bg-[#F59E0B]/10"
+                  }`}>
+                    <p.icon className="h-4.5 w-4.5 text-[#F59E0B]" />
+                  </div>
+                  <span className="text-sm font-semibold text-[#F5F5F5]">{p.platform}</span>
                 </div>
-                <span className="text-sm font-semibold text-[#F5F5F5]">{p.platform}</span>
-              </div>
-              <div className="space-y-1.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-[#6B7280]">Recommended</span>
-                  <span className="font-medium text-[#F59E0B]">{p.recommended}</span>
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-[#6B7280]">Recommended</span>
+                    <span className="font-medium text-[#F59E0B]">{p.recommended}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[#6B7280]">Minimum</span>
+                    <span className="text-[#9CA3AF]">{p.min}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[#6B7280]">Aspect</span>
+                    <span className="text-[#9CA3AF]">{p.aspect}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-[#6B7280]">Minimum</span>
-                  <span className="text-[#9CA3AF]">{p.min}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#6B7280]">Aspect</span>
-                  <span className="text-[#9CA3AF]">{p.aspect}</span>
-                </div>
-              </div>
-              <p className="mt-3 text-[11px] leading-relaxed text-[#6B7280]">{p.notes}</p>
-            </div>
-          ))}
+                <p className="mt-3 text-[11px] leading-relaxed text-[#6B7280]">{p.notes}</p>
+              </button>
+            );
+          })}
         </div>
       </section>
+
+      {/* Recommended for your game */}
+      {selectedPlatform && recommendations && (
+        <section className="rounded-xl border border-[#F59E0B]/30 bg-[#1A1A1A] overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#F59E0B]/20 bg-[#F59E0B]/5 px-5 py-3">
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-[#F59E0B]" />
+              <h2 className="text-sm font-semibold text-[#F59E0B]">
+                Recommended for {platformLabels[selectedPlatform]}
+              </h2>
+            </div>
+            <button
+              onClick={() => setSelectedPlatform(null)}
+              className="text-[#6B7280] hover:text-[#F5F5F5]"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="grid gap-3 p-5 sm:grid-cols-3">
+            {recommendations.map((rec, i) => (
+              <div
+                key={rec.res}
+                className={`rounded-lg border p-4 ${
+                  i === 0
+                    ? "border-[#F59E0B]/30 bg-[#F59E0B]/5"
+                    : "border-[#2A2A2A] bg-[#0F0F0F]"
+                }`}
+              >
+                {i === 0 && (
+                  <span className="mb-2 inline-block rounded bg-[#F59E0B]/20 px-2 py-0.5 text-[10px] font-semibold text-[#F59E0B]">
+                    TOP PICK
+                  </span>
+                )}
+                <p className="text-lg font-bold text-[#F5F5F5]">{rec.res}</p>
+                <p className="text-[10px] font-medium text-[#9CA3AF]">{rec.pixel}</p>
+                <p className="mt-2 text-xs leading-relaxed text-[#6B7280]">{rec.reason}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
