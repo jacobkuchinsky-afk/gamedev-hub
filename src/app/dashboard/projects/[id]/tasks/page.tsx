@@ -39,6 +39,7 @@ import {
   List,
   Zap,
   Settings,
+  Printer,
 } from "lucide-react";
 import {
   getProject,
@@ -1606,6 +1607,13 @@ export default function TaskBoardPage() {
               </select>
               <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
             </div>
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Print
+            </button>
             <div className="relative" ref={taskExportRef}>
               <button
                 onClick={() => setTaskExportOpen(!taskExportOpen)}

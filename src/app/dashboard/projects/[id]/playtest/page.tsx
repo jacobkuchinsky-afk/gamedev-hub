@@ -28,6 +28,7 @@ import {
   Check,
   ShieldCheck,
   FileText,
+  Printer,
 } from "lucide-react";
 import {
   getProject,
@@ -820,6 +821,13 @@ export default function PlaytestPage() {
                 <ShieldCheck className="h-4 w-4" />
               )}
               AI Test Plan
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+            >
+              <Printer className="h-4 w-4" />
+              Print
             </button>
             <button
               onClick={handleShareLink}
