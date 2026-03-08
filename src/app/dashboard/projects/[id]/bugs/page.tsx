@@ -20,6 +20,9 @@ import {
   Clock,
   ArrowRight,
   Download,
+  TrendingUp,
+  TrendingDown,
+  BarChart3,
 } from "lucide-react";
 import {
   getProject,
@@ -430,6 +433,55 @@ Be concise and professional. Fill in any missing sections based on the title and
     return Array.from(set);
   }, [bugs]);
 
+  const bugStats = useMemo(() => {
+    if (bugs.length === 0) return null;
+
+    const resolved = bugs.filter((b) => b.status === "fixed" || b.status === "closed").length;
+    const resolutionRate = Math.round((resolved / bugs.length) * 100);
+
+    const fixedBugs = bugs.filter((b) => {
+      if (b.status !== "fixed" && b.status !== "closed") return false;
+      return b.statusHistory?.some((e) => e.status === "fixed" || e.status === "closed");
+    });
+    let avgFixDays = 0;
+    if (fixedBugs.length > 0) {
+      const totalDays = fixedBugs.reduce((acc, bug) => {
+        const fixEntry = [...(bug.statusHistory || [])].reverse().find((e) => e.status === "fixed" || e.status === "closed");
+        if (!fixEntry) return acc;
+        const created = new Date(bug.created_at).getTime();
+        const fixed = new Date(fixEntry.timestamp).getTime();
+        return acc + (fixed - created) / (1000 * 60 * 60 * 24);
+      }, 0);
+      avgFixDays = Math.round((totalDays / fixedBugs.length) * 10) / 10;
+    }
+
+    const words: Record<string, number> = {};
+    const stopWords = new Set(["the", "a", "an", "in", "on", "at", "to", "for", "of", "is", "it", "and", "or", "not", "bug", "when", "with", "does", "doesn", "don", "can", "from", "that", "this", "has", "have", "been", "was", "are", "but", "game"]);
+    bugs.forEach((b) => {
+      b.title.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).forEach((w) => {
+        if (w.length > 2 && !stopWords.has(w)) words[w] = (words[w] || 0) + 1;
+      });
+    });
+    const topKeyword = Object.entries(words).sort((a, b) => b[1] - a[1])[0];
+    const mostBuggyArea = topKeyword ? topKeyword[0].charAt(0).toUpperCase() + topKeyword[0].slice(1) : "N/A";
+    const mostBuggyCount = topKeyword ? topKeyword[1] : 0;
+
+    const severityCounts: Record<string, number> = { blocker: 0, critical: 0, major: 0, minor: 0, trivial: 0 };
+    bugs.forEach((b) => { severityCounts[b.severity] = (severityCounts[b.severity] || 0) + 1; });
+    const maxSeverityCount = Math.max(...Object.values(severityCounts), 1);
+
+    const now = Date.now();
+    const oneWeek = 7 * 24 * 60 * 60 * 1000;
+    const thisWeek = bugs.filter((b) => now - new Date(b.created_at).getTime() < oneWeek).length;
+    const lastWeek = bugs.filter((b) => {
+      const age = now - new Date(b.created_at).getTime();
+      return age >= oneWeek && age < oneWeek * 2;
+    }).length;
+    const trendDiff = thisWeek - lastWeek;
+
+    return { resolutionRate, resolved, avgFixDays, fixedCount: fixedBugs.length, mostBuggyArea, mostBuggyCount, severityCounts, maxSeverityCount, thisWeek, lastWeek, trendDiff };
+  }, [bugs]);
+
   if (!project) return null;
 
   const highlightText = (text: string, query: string): React.ReactNode => {
@@ -732,6 +784,89 @@ Be concise and professional. Fill in any missing sections based on the title and
           </div>
         </div>
       </div>
+
+      {/* Bug Stats */}
+      {bugStats && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+              <div className="flex items-center gap-1.5 mb-2">
+                <CheckCircle2 className="h-3.5 w-3.5 text-[#10B981]" />
+                <span className="text-[10px] font-medium uppercase tracking-wider text-[#6B7280]">Resolution Rate</span>
+              </div>
+              <p className="text-2xl font-bold text-[#F5F5F5]">{bugStats.resolutionRate}%</p>
+              <p className="mt-1 text-[10px] text-[#4B5563]">{bugStats.resolved} of {bugs.length} resolved</p>
+            </div>
+
+            <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Clock className="h-3.5 w-3.5 text-[#F59E0B]" />
+                <span className="text-[10px] font-medium uppercase tracking-wider text-[#6B7280]">Avg Fix Time</span>
+              </div>
+              <p className="text-2xl font-bold text-[#F5F5F5]">
+                {bugStats.fixedCount > 0 ? (
+                  <>{bugStats.avgFixDays}<span className="ml-1 text-sm font-normal text-[#6B7280]">days</span></>
+                ) : (
+                  <span className="text-lg text-[#4B5563]">No data</span>
+                )}
+              </p>
+              <p className="mt-1 text-[10px] text-[#4B5563]">{bugStats.fixedCount} bug{bugStats.fixedCount !== 1 ? "s" : ""} with fix data</p>
+            </div>
+
+            <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+              <div className="flex items-center gap-1.5 mb-2">
+                <BugIcon className="h-3.5 w-3.5 text-[#EF4444]" />
+                <span className="text-[10px] font-medium uppercase tracking-wider text-[#6B7280]">Hotspot</span>
+              </div>
+              <p className="truncate text-2xl font-bold text-[#F5F5F5]">{bugStats.mostBuggyArea}</p>
+              <p className="mt-1 text-[10px] text-[#4B5563]">{bugStats.mostBuggyCount} mention{bugStats.mostBuggyCount !== 1 ? "s" : ""} in bug titles</p>
+            </div>
+
+            <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+              <div className="flex items-center gap-1.5 mb-2">
+                {bugStats.trendDiff <= 0 ? (
+                  <TrendingDown className="h-3.5 w-3.5 text-[#10B981]" />
+                ) : (
+                  <TrendingUp className="h-3.5 w-3.5 text-[#EF4444]" />
+                )}
+                <span className="text-[10px] font-medium uppercase tracking-wider text-[#6B7280]">Weekly Trend</span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <p className="text-2xl font-bold text-[#F5F5F5]">{bugStats.thisWeek}</p>
+                <span className={`text-xs font-medium ${bugStats.trendDiff > 0 ? "text-[#EF4444]" : bugStats.trendDiff < 0 ? "text-[#10B981]" : "text-[#6B7280]"}`}>
+                  {bugStats.trendDiff > 0 ? `+${bugStats.trendDiff}` : bugStats.trendDiff < 0 ? `${bugStats.trendDiff}` : "same"}
+                </span>
+              </div>
+              <p className="mt-1 text-[10px] text-[#4B5563]">this week vs {bugStats.lastWeek} last week</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            <div className="flex items-center gap-1.5 mb-3">
+              <BarChart3 className="h-3.5 w-3.5 text-[#F59E0B]" />
+              <span className="text-[10px] font-medium uppercase tracking-wider text-[#6B7280]">Severity Distribution</span>
+            </div>
+            <div className="space-y-2">
+              {(["blocker", "critical", "major", "minor", "trivial"] as Bug["severity"][]).map((sev) => (
+                <div key={sev} className="flex items-center gap-3">
+                  <span className="w-14 text-right text-[11px] font-medium capitalize text-[#9CA3AF]">{sev}</span>
+                  <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-[#2A2A2A]">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: bugStats.maxSeverityCount > 0 ? `${(bugStats.severityCounts[sev] / bugStats.maxSeverityCount) * 100}%` : "0%",
+                        backgroundColor: getSeverityColor(sev),
+                        minWidth: bugStats.severityCounts[sev] > 0 ? "8px" : "0px",
+                      }}
+                    />
+                  </div>
+                  <span className="w-6 text-right text-[11px] font-semibold tabular-nums text-[#6B7280]">{bugStats.severityCounts[sev]}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quick File Bug */}
       {showQuickForm && (

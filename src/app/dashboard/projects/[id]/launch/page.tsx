@@ -25,6 +25,7 @@ import {
   Loader2,
   Copy,
   Mic,
+  Film,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -215,6 +216,9 @@ export default function LaunchChecklistPage() {
   const [aiPitch, setAiPitch] = useState<string>("");
   const [aiPitchLoading, setAiPitchLoading] = useState(false);
   const [aiPitchOpen, setAiPitchOpen] = useState(false);
+  const [aiTrailer, setAiTrailer] = useState<string>("");
+  const [aiTrailerLoading, setAiTrailerLoading] = useState(false);
+  const [aiTrailerOpen, setAiTrailerOpen] = useState(false);
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -347,6 +351,46 @@ export default function LaunchChecklistPage() {
       setAiPitchLoading(false);
     }
   }, [project, aiPitchLoading, projectId]);
+
+  const generateTrailerScript = useCallback(async () => {
+    if (!project || aiTrailerLoading) return;
+    setAiTrailerLoading(true);
+    setAiTrailerOpen(true);
+    setAiTrailer("");
+    try {
+      const gddRaw = localStorage.getItem(`gameforge_gdd_${projectId}`);
+      const gddData: Record<string, string> | null = gddRaw ? JSON.parse(gddRaw) : null;
+      const features = gddData
+        ? [gddData.coreVerbs, gddData.gameplayLoop, gddData.visualStyle]
+            .filter(Boolean)
+            .map((v) => v!.slice(0, 100))
+            .join(", ")
+        : project.description || "unique mechanics and engaging gameplay";
+      const visualStyle = gddData?.visualStyle || "stylized";
+      const prompt = `Write a 60-second game trailer script for '${project.name}', a ${project.genre || "unknown genre"} game. Key features: ${features}. Visual style: ${visualStyle}. Include: opening hook (5 seconds), gameplay montage directions (20 seconds), feature highlights with text overlays (20 seconds), closing with logo and release info (15 seconds). Format as a shot-by-shot script with timecodes.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "Could not generate a trailer script. Please try again.";
+      setAiTrailer(content);
+    } catch {
+      setAiTrailer("Failed to generate trailer script. Check your API key and try again.");
+    } finally {
+      setAiTrailerLoading(false);
+    }
+  }, [project, aiTrailerLoading, projectId]);
 
   const copyToClipboard = useCallback((text: string, sectionTitle: string) => {
     navigator.clipboard.writeText(text);
@@ -498,6 +542,18 @@ export default function LaunchChecklistPage() {
                 <Megaphone className="h-3.5 w-3.5" />
               )}
               {aiMarketingLoading ? "Generating..." : "AI Marketing"}
+            </button>
+            <button
+              onClick={generateTrailerScript}
+              disabled={aiTrailerLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#10B981]/40 bg-[#10B981]/10 px-3 py-2 text-sm font-medium text-[#10B981] transition-colors hover:bg-[#10B981]/20 disabled:opacity-50"
+            >
+              {aiTrailerLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Film className="h-3.5 w-3.5" />
+              )}
+              {aiTrailerLoading ? "Generating..." : "AI Trailer Script"}
             </button>
             <button
               onClick={handleReset}
@@ -670,6 +726,59 @@ export default function LaunchChecklistPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AI Trailer Script Panel */}
+      {aiTrailerOpen && (
+        <div className="rounded-xl border border-[#10B981]/30 bg-[#1A1A1A] overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3">
+            <div className="flex items-center gap-2">
+              <Film className="h-4 w-4 text-[#10B981]" />
+              <h3 className="text-sm font-semibold text-[#10B981]">AI Trailer Script</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              {!aiTrailerLoading && aiTrailer && (
+                <button
+                  onClick={() => copyToClipboard(aiTrailer, "__trailer_all__")}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#9CA3AF] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                >
+                  {copiedSection === "__trailer_all__" ? (
+                    <Check className="h-3 w-3 text-[#10B981]" />
+                  ) : (
+                    <Copy className="h-3 w-3" />
+                  )}
+                  {copiedSection === "__trailer_all__" ? "Copied!" : "Copy All"}
+                </button>
+              )}
+              <button
+                onClick={() => setAiTrailerOpen(false)}
+                className="rounded-md p-1 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          <div className="px-5 py-4">
+            {aiTrailerLoading ? (
+              <div className="flex items-center gap-3 py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-[#10B981]" />
+                <p className="text-sm text-[#9CA3AF]">Writing a trailer script for {project.name}...</p>
+              </div>
+            ) : (
+              <div className="prose-sm max-w-none whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">
+                {aiTrailer.split(/(\*\*[^*]+\*\*|\[\d{1,2}:\d{2}\s*[-–]\s*\d{1,2}:\d{2}\]|\[0:\d{2}\s*[-–]\s*\d:\d{2}\])/).map((part, i) =>
+                  part.startsWith("**") && part.endsWith("**") ? (
+                    <strong key={i} className="text-[#10B981]">{part.slice(2, -2)}</strong>
+                  ) : part.startsWith("[") && /\d:\d{2}/.test(part) ? (
+                    <span key={i} className="inline-block rounded bg-[#10B981]/10 px-1.5 py-0.5 font-mono text-xs font-semibold text-[#10B981]">{part}</span>
+                  ) : (
+                    <span key={i}>{part}</span>
+                  )
+                )}
               </div>
             )}
           </div>
