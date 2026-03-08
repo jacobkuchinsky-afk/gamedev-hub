@@ -210,6 +210,7 @@ function MiniCard({
   onCompareToggle,
   compareMode,
   ballRef,
+  aiHighlight,
 }: {
   easing: EasingDef;
   selected: boolean;
