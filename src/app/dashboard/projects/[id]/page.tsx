@@ -3366,6 +3366,42 @@ export default function ProjectDetailPage() {
             Milestones
           </h2>
           <div className="flex items-center gap-2">
+            {milestones.length > 0 && (
+              <button
+                onClick={() => {
+                  const name = project?.name || "Game";
+                  let md = `# Milestones: ${name}\n\n`;
+                  md += `**Generated:** ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}\n\n`;
+                  md += `| Milestone | Status | Target Date |\n`;
+                  md += `|-----------|--------|-------------|\n`;
+                  [...milestones]
+                    .sort((a, b) => a.targetDate.localeCompare(b.targetDate))
+                    .forEach((ms) => {
+                      const statusLabel = ms.status === "in-progress" ? "In Progress" : ms.status.charAt(0).toUpperCase() + ms.status.slice(1);
+                      const dateStr = new Date(ms.targetDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                      const overdue = new Date(ms.targetDate) < new Date() && ms.status !== "completed" ? " (overdue)" : "";
+                      md += `| ${ms.name} | ${statusLabel} | ${dateStr}${overdue} |\n`;
+                    });
+                  md += `\n---\n\n`;
+                  const completed = milestones.filter((m) => m.status === "completed").length;
+                  const inProgress = milestones.filter((m) => m.status === "in-progress").length;
+                  const upcoming = milestones.filter((m) => m.status === "upcoming").length;
+                  md += `**Summary:** ${completed} completed, ${inProgress} in progress, ${upcoming} upcoming out of ${milestones.length} total.\n`;
+                  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+                  const blob = new Blob([md], { type: "text/markdown" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${slug}-milestones.md`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              >
+                <Download className="h-3 w-3" />
+                Export
+              </button>
+            )}
             <button
               onClick={suggestMilestones}
               disabled={aiMilestoneLoading}

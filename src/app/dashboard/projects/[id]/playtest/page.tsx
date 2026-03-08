@@ -27,6 +27,7 @@ import {
   ClipboardCopy,
   Check,
   ShieldCheck,
+  FileText,
 } from "lucide-react";
 import {
   getProject,
@@ -642,6 +643,79 @@ export default function PlaytestPage() {
     console.log("[PlaytestPage] CSV downloaded");
   };
 
+  const exportMarkdown = () => {
+    if (responses.length === 0) return;
+    const name = project?.name || "Game";
+    const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    let md = `# Playtest Report: ${name}\n\n`;
+    md += `**Generated:** ${date}\n\n`;
+    md += `---\n\n`;
+
+    if (stats) {
+      md += `## Overview\n\n`;
+      md += `| Metric | Value |\n|--------|-------|\n`;
+      md += `| Total Responses | ${stats.total} |\n`;
+      md += `| Average Rating | ${stats.avgRating.toFixed(1)} / 5 |\n`;
+      md += `| Bugs Reported | ${stats.bugsReported} (${Math.round((stats.bugsReported / stats.total) * 100)}%) |\n`;
+      md += `| Would Play Again | ${Math.round(((stats.playAgainDist.definitely + stats.playAgainDist.yes) / stats.total) * 100)}% |\n\n`;
+
+      md += `### Difficulty Distribution\n\n`;
+      md += `| Difficulty | Count | % |\n|-----------|-------|---|\n`;
+      (Object.keys(stats.difficultyDist) as PlaytestResponse["difficulty"][]).forEach((d) => {
+        md += `| ${DIFFICULTY_LABELS[d]} | ${stats.difficultyDist[d]} | ${Math.round((stats.difficultyDist[d] / stats.total) * 100)}% |\n`;
+      });
+      md += `\n`;
+
+      md += `### Play Again Distribution\n\n`;
+      md += `| Response | Count | % |\n|----------|-------|---|\n`;
+      (["definitely", "yes", "maybe", "no"] as PlaytestResponse["playAgain"][]).forEach((pa) => {
+        md += `| ${PLAY_AGAIN_LABELS[pa]} | ${stats.playAgainDist[pa]} | ${Math.round((stats.playAgainDist[pa] / stats.total) * 100)}% |\n`;
+      });
+      md += `\n`;
+    }
+
+    if (sessions.length > 0) {
+      md += `## Sessions\n\n`;
+      md += `| Date | Tester | Duration | Platform | Build | Responses |\n`;
+      md += `|------|--------|----------|----------|-------|----------|\n`;
+      sessions.forEach((s) => {
+        const count = responses.filter((r) => r.sessionId === s.id).length;
+        md += `| ${new Date(s.date + "T00:00:00").toLocaleDateString()} | ${s.testerName} | ${s.durationMinutes}m | ${s.platform} | ${s.buildVersion} | ${count} |\n`;
+      });
+      md += `\n`;
+    }
+
+    md += `## Feedback Entries\n\n`;
+    responses.forEach((r, i) => {
+      const cats = responseCategories.get(r.id) || [];
+      md += `### ${i + 1}. ${r.testerName}\n\n`;
+      md += `- **Rating:** ${r.overallRating}/5\n`;
+      md += `- **Difficulty:** ${DIFFICULTY_LABELS[r.difficulty]}\n`;
+      md += `- **Platform:** ${r.platform}\n`;
+      md += `- **Would Play Again:** ${PLAY_AGAIN_LABELS[r.playAgain]}\n`;
+      md += `- **Categories:** ${cats.map((c) => CATEGORY_CONFIG[c].label).join(", ") || "N/A"}\n`;
+      md += `- **Submitted:** ${new Date(r.submitted_at).toLocaleString()}\n`;
+      if (r.favoriteMoment) md += `- **Favorite Moment:** ${r.favoriteMoment}\n`;
+      if (r.frustratingMoment) md += `- **Frustrating Moment:** ${r.frustratingMoment}\n`;
+      if (r.bugEncountered) md += `- **Bug Report:** ${r.bugDescription || "Yes (no details)"}\n`;
+      if (r.suggestions) md += `- **Suggestions:** ${r.suggestions}\n`;
+      md += `\n`;
+    });
+
+    if (aiSummary) {
+      md += `## AI Summary\n\n${aiSummary}\n\n`;
+    }
+
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${slug}-playtest-report.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleShareLink = () => {
     console.log("[PlaytestPage] share link clicked");
     setShowShareModal(true);
@@ -755,13 +829,22 @@ export default function PlaytestPage() {
               Share
             </button>
             {responses.length > 0 && (
-              <button
-                onClick={exportCSV}
-                className="flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-[#F59E0B]/90"
-              >
-                <Download className="h-4 w-4" />
-                Export CSV
-              </button>
+              <>
+                <button
+                  onClick={exportMarkdown}
+                  className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                >
+                  <FileText className="h-4 w-4" />
+                  Export Report
+                </button>
+                <button
+                  onClick={exportCSV}
+                  className="flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-[#F59E0B]/90"
+                >
+                  <Download className="h-4 w-4" />
+                  Export CSV
+                </button>
+              </>
             )}
           </div>
         </div>
