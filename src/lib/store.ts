@@ -10,6 +10,22 @@ export interface Project {
   updated_at: string;
 }
 
+export type TaskTag = "UI" | "Gameplay" | "Art" | "Audio" | "Backend" | "Polish" | "Bugfix" | "Feature" | "Optimization";
+
+export const TASK_TAG_COLORS: Record<TaskTag, string> = {
+  UI: "#3B82F6",
+  Gameplay: "#10B981",
+  Art: "#EC4899",
+  Audio: "#8B5CF6",
+  Backend: "#F97316",
+  Polish: "#F59E0B",
+  Bugfix: "#EF4444",
+  Feature: "#06B6D4",
+  Optimization: "#6B7280",
+};
+
+export const ALL_TASK_TAGS: TaskTag[] = ["UI", "Gameplay", "Art", "Audio", "Backend", "Polish", "Bugfix", "Feature", "Optimization"];
+
 export interface Task {
   id: string;
   projectId: string;
@@ -19,6 +35,7 @@ export interface Task {
   priority: "critical" | "high" | "medium" | "low";
   sprint: string;
   assignee: string;
+  tags?: TaskTag[];
   created_at: string;
 }
 
@@ -97,6 +114,7 @@ const SEED_TASKS: Task[] = [
     priority: "high",
     sprint: "Sprint 14",
     assignee: "JacobK",
+    tags: ["Art", "Bugfix"],
     created_at: "2026-03-05T10:00:00Z",
   },
   {
@@ -108,6 +126,7 @@ const SEED_TASKS: Task[] = [
     priority: "medium",
     sprint: "Sprint 14",
     assignee: "JacobK",
+    tags: ["Gameplay", "Polish"],
     created_at: "2026-03-05T10:30:00Z",
   },
   {
@@ -119,6 +138,7 @@ const SEED_TASKS: Task[] = [
     priority: "critical",
     sprint: "Sprint 13",
     assignee: "JacobK",
+    tags: ["Backend", "Feature"],
     created_at: "2026-02-20T08:00:00Z",
   },
   {
@@ -130,6 +150,7 @@ const SEED_TASKS: Task[] = [
     priority: "high",
     sprint: "Sprint 15",
     assignee: "JacobK",
+    tags: ["UI", "Gameplay", "Feature"],
     created_at: "2026-03-06T09:00:00Z",
   },
   {
@@ -141,6 +162,7 @@ const SEED_TASKS: Task[] = [
     priority: "high",
     sprint: "Sprint 14",
     assignee: "JacobK",
+    tags: ["Optimization"],
     created_at: "2026-03-04T14:00:00Z",
   },
   {
@@ -152,6 +174,7 @@ const SEED_TASKS: Task[] = [
     priority: "medium",
     sprint: "Sprint 12",
     assignee: "JacobK",
+    tags: ["UI", "Art"],
     created_at: "2026-02-10T11:00:00Z",
   },
   {
@@ -163,6 +186,7 @@ const SEED_TASKS: Task[] = [
     priority: "low",
     sprint: "Sprint 15",
     assignee: "JacobK",
+    tags: ["Audio"],
     created_at: "2026-03-06T10:00:00Z",
   },
   {
@@ -174,6 +198,7 @@ const SEED_TASKS: Task[] = [
     priority: "high",
     sprint: "Sprint 14",
     assignee: "JacobK",
+    tags: ["Gameplay", "Feature", "Backend"],
     created_at: "2026-03-03T08:00:00Z",
   },
   {
@@ -361,6 +386,9 @@ export function deleteProject(id: string): boolean {
 
   const sprintData = getSprints();
   save(SPRINTS_KEY, sprintData.filter((s) => s.projectId !== id));
+
+  const milestoneData = getMilestones();
+  save(MILESTONES_KEY, milestoneData.filter((m) => m.projectId !== id));
 
   return true;
 }
@@ -1145,6 +1173,104 @@ export function updateSprint(id: string, updates: Partial<Sprint>): Sprint | und
   return sprints[idx];
 }
 
+// ─── Milestones ───────────────────────────────────────────────────────────────
+
+export interface Milestone {
+  id: string;
+  projectId: string;
+  name: string;
+  targetDate: string;
+  status: "upcoming" | "in-progress" | "completed";
+  created_at: string;
+}
+
+const MILESTONES_KEY = "gameforge_milestones";
+
+const SEED_MILESTONES: Milestone[] = [
+  {
+    id: "ms_001",
+    projectId: "proj_001",
+    name: "Core Gameplay Loop",
+    targetDate: "2026-01-15",
+    status: "completed",
+    created_at: "2025-11-01T10:00:00Z",
+  },
+  {
+    id: "ms_002",
+    projectId: "proj_001",
+    name: "Alpha Release",
+    targetDate: "2026-02-01",
+    status: "completed",
+    created_at: "2025-11-01T10:00:00Z",
+  },
+  {
+    id: "ms_003",
+    projectId: "proj_001",
+    name: "Beta Launch",
+    targetDate: "2026-02-28",
+    status: "completed",
+    created_at: "2025-12-01T10:00:00Z",
+  },
+  {
+    id: "ms_004",
+    projectId: "proj_001",
+    name: "Feature Complete",
+    targetDate: "2026-03-23",
+    status: "in-progress",
+    created_at: "2026-01-15T10:00:00Z",
+  },
+  {
+    id: "ms_005",
+    projectId: "proj_001",
+    name: "Gold Master",
+    targetDate: "2026-04-15",
+    status: "upcoming",
+    created_at: "2026-02-01T10:00:00Z",
+  },
+  {
+    id: "ms_006",
+    projectId: "proj_001",
+    name: "Public Release",
+    targetDate: "2026-05-01",
+    status: "upcoming",
+    created_at: "2026-02-01T10:00:00Z",
+  },
+];
+
+export function getMilestones(projectId?: string): Milestone[] {
+  const milestones = getOrSeed(MILESTONES_KEY, SEED_MILESTONES);
+  return projectId ? milestones.filter((m) => m.projectId === projectId) : milestones;
+}
+
+export function addMilestone(milestone: Omit<Milestone, "id" | "created_at">): Milestone {
+  const milestones = getMilestones();
+  const newMilestone: Milestone = {
+    ...milestone,
+    id: `ms_${Date.now()}`,
+    created_at: new Date().toISOString(),
+  };
+  milestones.push(newMilestone);
+  save(MILESTONES_KEY, milestones);
+  return newMilestone;
+}
+
+export function updateMilestone(id: string, updates: Partial<Milestone>): Milestone | undefined {
+  const milestones = getMilestones();
+  const idx = milestones.findIndex((m) => m.id === id);
+  if (idx === -1) return undefined;
+  milestones[idx] = { ...milestones[idx], ...updates };
+  save(MILESTONES_KEY, milestones);
+  return milestones[idx];
+}
+
+export function deleteMilestone(id: string): boolean {
+  const milestones = getMilestones();
+  const filtered = milestones.filter((m) => m.id !== id);
+  if (filtered.length === milestones.length) return false;
+  save(MILESTONES_KEY, filtered);
+  return true;
+}
+
 // ─── Data Integrity ───────────────────────────────────────────────────────────
 
 export function validateStorage(): void {
@@ -1172,6 +1298,7 @@ export function validateStorage(): void {
   filterOrphans(REFERENCES_KEY, () => getReferences(), "references");
   filterOrphans(CHANGELOG_KEY, () => getChangelog(), "changelog entries");
   filterOrphans(SPRINTS_KEY, () => getSprints(), "sprints");
+  filterOrphans(MILESTONES_KEY, () => getMilestones(), "milestones");
 
   if (cleaned === 0) {
     console.log("[GameForge] Storage integrity check passed — no orphans found");

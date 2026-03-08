@@ -32,6 +32,9 @@ import {
   Copy,
   Download,
   ChevronDown,
+  Flag,
+  CheckCircle2,
+  Circle,
 } from "lucide-react";
 import {
   getProject,
@@ -50,12 +53,17 @@ import {
   getAssets,
   getReferences,
   getChangelog,
+  getMilestones,
+  addMilestone,
+  updateMilestone,
+  deleteMilestone,
   type Project,
   type Task,
   type Bug as BugType,
   type DevlogEntry,
   type PlaytestResponse,
   type Sprint,
+  type Milestone,
 } from "@/lib/store";
 
 const STATUS_BADGE_STYLES: Record<Project["status"], string> = {
@@ -678,6 +686,12 @@ export default function ProjectDetailPage() {
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
 
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [showAddMilestone, setShowAddMilestone] = useState(false);
+  const [msName, setMsName] = useState("");
+  const [msDate, setMsDate] = useState("");
+  const [msStatus, setMsStatus] = useState<Milestone["status"]>("upcoming");
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
@@ -700,6 +714,7 @@ export default function ProjectDetailPage() {
     setDevlog(getDevlog(projectId));
     setPlaytest(getPlaytestResponses(projectId));
     setSprints(getSprints(projectId));
+    setMilestones(getMilestones(projectId));
   }, [projectId, router]);
 
   if (!project) return null;
@@ -1359,6 +1374,206 @@ export default function ProjectDetailPage() {
           <span>{inProgressTasks} in progress</span>
           <span>{tasks.filter((t) => t.status === "testing").length} testing</span>
           <span>{doneTasks} done</span>
+        </div>
+      </div>
+
+      {/* Milestones */}
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-[#9CA3AF]">
+            <Flag className="h-4 w-4" />
+            Milestones
+          </h2>
+          <button
+            onClick={() => setShowAddMilestone(!showAddMilestone)}
+            className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+          >
+            <Plus className="h-3 w-3" />
+            Add Milestone
+          </button>
+        </div>
+
+        {showAddMilestone && (
+          <div className="mb-4 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!msName.trim() || !msDate) return;
+                addMilestone({
+                  projectId,
+                  name: msName.trim(),
+                  targetDate: msDate,
+                  status: msStatus,
+                });
+                setMilestones(getMilestones(projectId));
+                setMsName("");
+                setMsDate("");
+                setMsStatus("upcoming");
+                setShowAddMilestone(false);
+              }}
+              className="flex flex-col gap-3 sm:flex-row sm:items-end"
+            >
+              <div className="flex-1">
+                <label className="mb-1 block text-xs text-[#6B7280]">Milestone Name</label>
+                <input
+                  type="text"
+                  value={msName}
+                  onChange={(e) => setMsName(e.target.value)}
+                  placeholder="e.g. Alpha Release"
+                  required
+                  autoFocus
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+                />
+              </div>
+              <div className="w-40">
+                <label className="mb-1 block text-xs text-[#6B7280]">Target Date</label>
+                <input
+                  type="date"
+                  value={msDate}
+                  onChange={(e) => setMsDate(e.target.value)}
+                  required
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none [color-scheme:dark] focus:border-[#F59E0B]/50"
+                />
+              </div>
+              <div className="w-36">
+                <label className="mb-1 block text-xs text-[#6B7280]">Status</label>
+                <select
+                  value={msStatus}
+                  onChange={(e) => setMsStatus(e.target.value as Milestone["status"])}
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+                >
+                  <option value="upcoming">Upcoming</option>
+                  <option value="in-progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  className="rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-[#F59E0B]/90"
+                >
+                  Add
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddMilestone(false)}
+                  className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-sm text-[#9CA3AF] transition-colors hover:text-[#F5F5F5]"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+          {milestones.length > 0 ? (
+            <div className="divide-y divide-[#2A2A2A]">
+              {[...milestones]
+                .sort((a, b) => a.targetDate.localeCompare(b.targetDate))
+                .map((ms, idx, arr) => {
+                  const statusColor =
+                    ms.status === "completed"
+                      ? "#10B981"
+                      : ms.status === "in-progress"
+                        ? "#F59E0B"
+                        : "#6B7280";
+                  const isPast = new Date(ms.targetDate) < new Date() && ms.status !== "completed";
+                  const isLast = idx === arr.length - 1;
+
+                  return (
+                    <div
+                      key={ms.id}
+                      className="group flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-[#1F1F1F]"
+                    >
+                      <div className="relative flex flex-col items-center">
+                        {ms.status === "completed" ? (
+                          <CheckCircle2 className="h-5 w-5 text-[#10B981]" />
+                        ) : ms.status === "in-progress" ? (
+                          <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#F59E0B]">
+                            <div className="h-2 w-2 rounded-full bg-[#F59E0B]" />
+                          </div>
+                        ) : (
+                          <Circle className="h-5 w-5 text-[#4B5563]" />
+                        )}
+                        {!isLast && (
+                          <div className="absolute top-6 h-8 w-px bg-[#2A2A2A]" />
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className={`text-sm font-medium ${
+                            ms.status === "completed"
+                              ? "text-[#9CA3AF] line-through"
+                              : "text-[#F5F5F5]"
+                          }`}
+                        >
+                          {ms.name}
+                        </p>
+                        <p className={`text-xs ${isPast ? "text-[#EF4444]" : "text-[#6B7280]"}`}>
+                          {new Date(ms.targetDate).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
+                          {isPast && " (overdue)"}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="rounded-md px-2 py-0.5 text-[10px] font-medium capitalize"
+                          style={{
+                            backgroundColor: `${statusColor}15`,
+                            color: statusColor,
+                          }}
+                        >
+                          {ms.status === "in-progress" ? "In Progress" : ms.status}
+                        </span>
+
+                        <select
+                          value={ms.status}
+                          onChange={(e) => {
+                            updateMilestone(ms.id, {
+                              status: e.target.value as Milestone["status"],
+                            });
+                            setMilestones(getMilestones(projectId));
+                          }}
+                          className="rounded-md border border-[#2A2A2A] bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] text-[#9CA3AF] opacity-0 outline-none transition-opacity focus:border-[#F59E0B]/50 group-hover:opacity-100"
+                        >
+                          <option value="upcoming">Upcoming</option>
+                          <option value="in-progress">In Progress</option>
+                          <option value="completed">Completed</option>
+                        </select>
+
+                        <button
+                          onClick={() => {
+                            deleteMilestone(ms.id);
+                            setMilestones(getMilestones(projectId));
+                          }}
+                          className="rounded p-1 text-[#6B7280] opacity-0 transition-all hover:text-[#EF4444] group-hover:opacity-100"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          ) : (
+            <div className="py-10 text-center">
+              <Flag className="mx-auto h-8 w-8 text-[#6B7280]" />
+              <p className="mt-2 text-sm text-[#6B7280]">No milestones yet</p>
+              <button
+                onClick={() => setShowAddMilestone(true)}
+                className="mt-3 inline-flex items-center gap-1 text-xs text-[#F59E0B] hover:underline"
+              >
+                <Plus className="h-3 w-3" />
+                Add your first milestone
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

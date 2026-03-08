@@ -16,6 +16,7 @@ import {
   TrendingUp,
   Sparkles,
   Loader2,
+  Tag,
 } from "lucide-react";
 import {
   getProject,
@@ -25,8 +26,11 @@ import {
   getPriorityColor,
   getSprints,
   addSprint,
+  TASK_TAG_COLORS,
+  ALL_TASK_TAGS,
   type Project,
   type Task,
+  type TaskTag,
   type Sprint,
 } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -85,6 +89,9 @@ export default function TaskBoardPage() {
   const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
   const [newAssignee, setNewAssignee] = useState("JacobK");
   const [newSprint, setNewSprint] = useState("");
+  const [newTags, setNewTags] = useState<TaskTag[]>([]);
+  const [editTags, setEditTags] = useState<TaskTag[]>([]);
+  const [filterTag, setFilterTag] = useState<TaskTag | "all">("all");
   const [aiDetailLoading, setAiDetailLoading] = useState(false);
 
   const [sprints, setSprints] = useState<Sprint[]>([]);
@@ -167,10 +174,12 @@ export default function TaskBoardPage() {
       priority: newPriority,
       sprint: newSprint || defaultSprint,
       assignee: newAssignee,
+      tags: newTags.length > 0 ? newTags : undefined,
     });
     setNewTitle("");
     setNewDesc("");
     setNewPriority("medium");
+    setNewTags([]);
     setShowAddForm(false);
     reload();
   };
@@ -222,6 +231,7 @@ export default function TaskBoardPage() {
     setEditTitle(task.title);
     setEditDesc(task.description || "");
     setEditPriority(task.priority);
+    setEditTags(task.tags || []);
   };
 
   const saveEdit = () => {
@@ -230,6 +240,7 @@ export default function TaskBoardPage() {
       title: editTitle.trim(),
       description: editDesc.trim(),
       priority: editPriority,
+      tags: editTags.length > 0 ? editTags : undefined,
     });
     setEditingTask(null);
     reload();
@@ -279,6 +290,9 @@ export default function TaskBoardPage() {
     if (filterPriority !== "all") {
       filtered = filtered.filter((t) => t.priority === filterPriority);
     }
+    if (filterTag !== "all") {
+      filtered = filtered.filter((t) => t.tags?.includes(filterTag));
+    }
     return [...filtered].sort((a, b) => {
       switch (sortBy) {
         case "priority":
@@ -291,7 +305,7 @@ export default function TaskBoardPage() {
           return 0;
       }
     });
-  }, [tasks, filterPriority, sortBy, selectedSprint]);
+  }, [tasks, filterPriority, filterTag, sortBy, selectedSprint]);
 
   if (!project) return null;
 
@@ -337,6 +351,26 @@ export default function TaskBoardPage() {
                 {PRIORITIES.map((p) => (
                   <option key={p} value={p}>
                     {p.charAt(0).toUpperCase() + p.slice(1)}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+            </div>
+            <div className="relative">
+              <div className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2">
+                <Tag className="h-3.5 w-3.5 text-[#6B7280]" />
+              </div>
+              <select
+                value={filterTag}
+                onChange={(e) =>
+                  setFilterTag(e.target.value as TaskTag | "all")
+                }
+                className="appearance-none rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2 pl-8 pr-8 text-sm text-[#9CA3AF] outline-none focus:border-[#F59E0B]/50"
+              >
+                <option value="all">All Tags</option>
+                {ALL_TASK_TAGS.map((tag) => (
+                  <option key={tag} value={tag}>
+                    {tag}
                   </option>
                 ))}
               </select>
@@ -688,6 +722,45 @@ export default function TaskBoardPage() {
                   </select>
                 </div>
               </div>
+              <div>
+                <label className="mb-1.5 block text-xs text-[#6B7280]">
+                  Tags (max 3)
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {ALL_TASK_TAGS.map((tag) => {
+                    const selected = newTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          if (selected) {
+                            setNewTags(newTags.filter((t) => t !== tag));
+                          } else if (newTags.length < 3) {
+                            setNewTags([...newTags, tag]);
+                          }
+                        }}
+                        className={`rounded-md border px-2 py-1 text-xs font-medium transition-all ${
+                          selected
+                            ? "border-transparent"
+                            : "border-[#2A2A2A] text-[#6B7280] hover:border-[#3A3A3A] hover:text-[#9CA3AF]"
+                        } ${!selected && newTags.length >= 3 ? "opacity-30 cursor-not-allowed" : ""}`}
+                        style={
+                          selected
+                            ? {
+                                backgroundColor: `${TASK_TAG_COLORS[tag]}20`,
+                                color: TASK_TAG_COLORS[tag],
+                                borderColor: `${TASK_TAG_COLORS[tag]}40`,
+                              }
+                            : undefined
+                        }
+                      >
+                        {tag}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <button
                 type="submit"
                 className="w-full rounded-lg bg-[#F59E0B] py-2.5 text-sm font-semibold text-black transition-colors hover:bg-[#F59E0B]/90"
@@ -810,7 +883,7 @@ export default function TaskBoardPage() {
                             <p className="text-sm font-medium leading-tight">
                               {task.title}
                             </p>
-                            <div className="mt-2 flex items-center gap-2">
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
                               <span
                                 className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs font-medium"
                                 style={{
@@ -828,6 +901,18 @@ export default function TaskBoardPage() {
                                 />
                                 {task.priority}
                               </span>
+                              {task.tags?.map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="rounded px-1.5 py-0.5 text-[10px] font-medium"
+                                  style={{
+                                    backgroundColor: `${TASK_TAG_COLORS[tag]}18`,
+                                    color: TASK_TAG_COLORS[tag],
+                                  }}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
                               {task.assignee && (
                                 <span className="flex items-center gap-1 text-xs text-[#6B7280]">
                                   <User className="h-3 w-3" />
@@ -894,6 +979,45 @@ export default function TaskBoardPage() {
                                     </option>
                                   ))}
                                 </select>
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-xs text-[#6B7280]">
+                                  Tags (max 3)
+                                </label>
+                                <div className="flex flex-wrap gap-1">
+                                  {ALL_TASK_TAGS.map((tag) => {
+                                    const selected = editTags.includes(tag);
+                                    return (
+                                      <button
+                                        key={tag}
+                                        type="button"
+                                        onClick={() => {
+                                          if (selected) {
+                                            setEditTags(editTags.filter((t) => t !== tag));
+                                          } else if (editTags.length < 3) {
+                                            setEditTags([...editTags, tag]);
+                                          }
+                                        }}
+                                        className={`rounded border px-1.5 py-0.5 text-[10px] font-medium transition-all ${
+                                          selected
+                                            ? "border-transparent"
+                                            : "border-[#2A2A2A] text-[#6B7280] hover:border-[#3A3A3A]"
+                                        } ${!selected && editTags.length >= 3 ? "opacity-30 cursor-not-allowed" : ""}`}
+                                        style={
+                                          selected
+                                            ? {
+                                                backgroundColor: `${TASK_TAG_COLORS[tag]}20`,
+                                                color: TASK_TAG_COLORS[tag],
+                                                borderColor: `${TASK_TAG_COLORS[tag]}40`,
+                                              }
+                                            : undefined
+                                        }
+                                      >
+                                        {tag}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                               </div>
                               <div className="flex gap-2">
                                 <button
