@@ -18,13 +18,14 @@ import {
   Plus,
   X,
   Download,
+  MessageSquare,
 } from "lucide-react";
 
 const STORAGE_KEY = "gameforge_narratives";
 
 interface Narrative {
   id: string;
-  type: "outline" | "backstory" | "quest";
+  type: "outline" | "backstory" | "quest" | "dialogue";
   title: string;
   content: string;
   createdAt: number;
@@ -129,6 +130,13 @@ export default function NarrativePage() {
   const [outlineOpen, setOutlineOpen] = useState(true);
   const [backstoryOpen, setBackstoryOpen] = useState(true);
   const [questOpen, setQuestOpen] = useState(true);
+  const [dialogueOpen, setDialogueOpen] = useState(true);
+
+  const [dialogueChar1, setDialogueChar1] = useState("");
+  const [dialogueChar2, setDialogueChar2] = useState("");
+  const [dialogueSituation, setDialogueSituation] = useState("");
+  const [dialogueResult, setDialogueResult] = useState("");
+  const [dialogueLoading, setDialogueLoading] = useState(false);
 
   useEffect(() => {
     setSaved(getSaved());
@@ -163,7 +171,7 @@ export default function NarrativePage() {
 
   const exportAllNarratives = useCallback(() => {
     if (saved.length === 0) return;
-    const labels: Record<string, string> = { outline: "Story Outline", backstory: "Character Backstory", quest: "Quest" };
+    const labels: Record<string, string> = { outline: "Story Outline", backstory: "Character Backstory", quest: "Quest", dialogue: "Dialogue" };
     const sections = saved.map((n) =>
       `## ${labels[n.type] || n.type}: ${n.title}\n\n*Created: ${new Date(n.createdAt).toLocaleString()}*\n\n${n.content}`
     );
@@ -290,6 +298,71 @@ TWIST 2: [A moral dilemma or surprise revelation, 2 sentences]`;
     setQuestLoading(false);
   }, [questType]);
 
+  const generateDialogue = useCallback(async () => {
+    if (!dialogueChar1.trim() || !dialogueChar2.trim()) return;
+    setDialogueLoading(true);
+    setDialogueResult("");
+
+    const prompt = `Write a short game dialogue exchange (4-6 lines) between '${dialogueChar1.trim()}' and '${dialogueChar2.trim()}' in this situation: '${dialogueSituation.trim() || "a tense encounter"}'. Include emotional tags [happy], [angry], [sad], [scared], [neutral], [surprised], etc. Format EACH line as: CHARACTER_NAME: dialogue text [emotion]. No other formatting.`;
+
+    const result = await callAI(prompt);
+    if (result) {
+      setDialogueResult(result);
+    } else {
+      setDialogueResult(
+        `${dialogueChar1}: I wasn't expecting to see you here. [surprised]\n${dialogueChar2}: Neither was I. But here we are. [neutral]\n${dialogueChar1}: We need to talk about what happened. [serious]\n${dialogueChar2}: There's nothing left to say. You made your choice. [angry]\n${dialogueChar1}: I didn't have a choice. You know that. [sad]\n${dialogueChar2}: ...Maybe. But it still hurts. [sad]`,
+      );
+    }
+    setDialogueLoading(false);
+  }, [dialogueChar1, dialogueChar2, dialogueSituation]);
+
+  function renderDialogue(text: string) {
+    const lines = text.split("\n").filter((l) => l.trim());
+    return (
+      <div className="space-y-3">
+        {lines.map((line, i) => {
+          const match = line.match(/^(.+?):\s*(.+?)(?:\s*\[(\w+)\])?\s*$/);
+          if (!match)
+            return (
+              <div key={i} className="text-xs text-[#6B7280] italic pl-2">
+                {line}
+              </div>
+            );
+          const [, speaker, dialogue, emotion] = match;
+          const isChar1 =
+            speaker.trim().toLowerCase() ===
+            dialogueChar1.trim().toLowerCase();
+          return (
+            <div
+              key={i}
+              className={`flex ${isChar1 ? "justify-start" : "justify-end"}`}
+            >
+              <div
+                className={`max-w-[80%] rounded-xl px-4 py-2.5 ${isChar1 ? "bg-[#F59E0B]/10 border border-[#F59E0B]/20 rounded-bl-sm" : "bg-[#10B981]/10 border border-[#10B981]/20 rounded-br-sm"}`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span
+                    className={`text-[11px] font-bold ${isChar1 ? "text-[#F59E0B]" : "text-[#10B981]"}`}
+                  >
+                    {speaker.trim()}
+                  </span>
+                  {emotion && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#2A2A2A] text-[#9CA3AF]">
+                      {emotion}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-[#D1D5DB] leading-relaxed">
+                  {dialogue.trim()}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   function renderContent(text: string) {
     return text.split("\n").map((line, i) => {
       const trimmed = line.trim();
@@ -366,12 +439,14 @@ TWIST 2: [A moral dilemma or surprise revelation, 2 sentences]`;
     outline: Scroll,
     backstory: Users,
     quest: Swords,
+    dialogue: MessageSquare,
   };
 
   const typeColor = {
     outline: "#F59E0B",
     backstory: "#3B82F6",
     quest: "#EF4444",
+    dialogue: "#10B981",
   };
 
   return (
@@ -695,6 +770,114 @@ TWIST 2: [A moral dilemma or surprise revelation, 2 sentences]`;
                   </button>
                 </div>
                 <div>{renderContent(questResult)}</div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* AI Dialogue Section */}
+      <section className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+        <button
+          onClick={() => setDialogueOpen(!dialogueOpen)}
+          className="flex w-full items-center justify-between px-5 py-4 text-left"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#10B981]/10">
+              <MessageSquare className="h-4.5 w-4.5 text-[#10B981]" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-[#F5F5F5]">
+                AI Dialogue Writer
+              </h2>
+              <p className="text-xs text-[#6B7280]">
+                Generate character dialogue with emotional tags
+              </p>
+            </div>
+          </div>
+          {dialogueOpen ? (
+            <ChevronUp className="h-4 w-4 text-[#6B7280]" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-[#6B7280]" />
+          )}
+        </button>
+
+        {dialogueOpen && (
+          <div className="border-t border-[#2A2A2A] px-5 py-5 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                  Character 1
+                </label>
+                <input
+                  value={dialogueChar1}
+                  onChange={(e) => setDialogueChar1(e.target.value)}
+                  placeholder="Kael the Knight"
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none transition-colors focus:border-[#10B981]/50"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                  Character 2
+                </label>
+                <input
+                  value={dialogueChar2}
+                  onChange={(e) => setDialogueChar2(e.target.value)}
+                  placeholder="Mira the Rogue"
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none transition-colors focus:border-[#10B981]/50"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                Situation
+              </label>
+              <input
+                value={dialogueSituation}
+                onChange={(e) => setDialogueSituation(e.target.value)}
+                placeholder="Meeting for the first time in a dark tavern during a storm..."
+                className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none transition-colors focus:border-[#10B981]/50"
+              />
+            </div>
+
+            <button
+              onClick={generateDialogue}
+              disabled={
+                dialogueLoading ||
+                !dialogueChar1.trim() ||
+                !dialogueChar2.trim()
+              }
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#10B981]/15 border border-[#10B981]/30 px-4 py-2.5 text-sm font-medium text-[#10B981] transition-colors hover:bg-[#10B981]/25 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {dialogueLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MessageSquare className="h-4 w-4" />
+              )}
+              {dialogueLoading ? "Generating..." : "Generate Dialogue"}
+            </button>
+
+            {dialogueResult && (
+              <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider">
+                    Generated Dialogue
+                  </span>
+                  <button
+                    onClick={() =>
+                      saveNarrative(
+                        "dialogue",
+                        `${dialogueChar1} & ${dialogueChar2}`,
+                        dialogueResult,
+                      )
+                    }
+                    className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-[#10B981] hover:bg-[#10B981]/10 transition-colors"
+                  >
+                    <Save className="h-3 w-3" /> Save
+                  </button>
+                </div>
+                {renderDialogue(dialogueResult)}
               </div>
             )}
           </div>

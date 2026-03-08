@@ -15,6 +15,7 @@ import {
   Users,
   X,
   MapPin,
+  Zap,
 } from "lucide-react";
 
 const SETTINGS = ["Fantasy", "Sci-Fi", "Post-Apocalyptic", "Modern", "Historical"] as const;
@@ -228,6 +229,10 @@ export default function WorldBuilderPage() {
   const [placeNamesLoading, setPlaceNamesLoading] = useState(false);
   const [aiHistory, setAiHistory] = useState("");
   const [aiHistoryLoading, setAiHistoryLoading] = useState(false);
+  const [worldEvents, setWorldEvents] = useState<
+    { name: string; trigger: string; effect: string; duration: string }[]
+  >([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
 
   const generatePlaceNames = useCallback(async () => {
     setPlaceNamesLoading(true);
@@ -304,6 +309,90 @@ export default function WorldBuilderPage() {
       setAiHistory("Failed to generate history. Check your connection and try again.");
     } finally {
       setAiHistoryLoading(false);
+    }
+  }, [setting, tone]);
+
+  const generateEvents = useCallback(async () => {
+    setEventsLoading(true);
+    setWorldEvents([]);
+    try {
+      const prompt = `Generate 3 random world events for a ${setting} game with ${tone} tone. These are dynamic events that could happen during gameplay. For each event, respond in this EXACT JSON format (no markdown fences): [{"name":"event name","trigger":"trigger condition","effect":"effect on the world","duration":"duration"}]. Keep each field brief (1-2 sentences max).`;
+      const response = await fetch(
+        "https://llm.chutes.ai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization:
+              "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "moonshotai/Kimi-K2.5-TEE",
+            messages: [{ role: "user", content: prompt }],
+            stream: false,
+            max_tokens: 512,
+            temperature: 0.8,
+          }),
+        },
+      );
+      const data = await response.json();
+      let content =
+        data.choices?.[0]?.message?.content ||
+        data.choices?.[0]?.message?.reasoning ||
+        "";
+      content = content
+        .replace(/```json\s*/g, "")
+        .replace(/```\s*/g, "")
+        .trim();
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setWorldEvents(
+            parsed.map(
+              (e: {
+                name?: string;
+                trigger?: string;
+                effect?: string;
+                duration?: string;
+              }) => ({
+                name: e.name || "Unknown Event",
+                trigger: e.trigger || "Unknown trigger",
+                effect: e.effect || "Unknown effect",
+                duration: e.duration || "Unknown duration",
+              }),
+            ),
+          );
+          return;
+        }
+      }
+      throw new Error("parse failed");
+    } catch {
+      setWorldEvents([
+        {
+          name: "The Blood Moon Rises",
+          trigger: "Every 7th night cycle",
+          effect:
+            "Monsters become twice as aggressive. New rare enemies spawn. NPC shops close early.",
+          duration: "One full night cycle",
+        },
+        {
+          name: "Merchant Caravan Arrival",
+          trigger: "Player reaches a new settlement",
+          effect:
+            "Rare items become available for purchase. Trade prices drop by 20%.",
+          duration: "3 in-game days",
+        },
+        {
+          name: "Tremors of the Deep",
+          trigger: "Player disturbs an ancient ruin",
+          effect:
+            "Earthquakes reshape terrain. Hidden passages open. Some routes become blocked.",
+          duration: "Until the ancient guardian is defeated",
+        },
+      ]);
+    } finally {
+      setEventsLoading(false);
     }
   }, [setting, tone]);
 
@@ -915,6 +1004,24 @@ export default function WorldBuilderPage() {
               )}
             </button>
 
+            <button
+              onClick={generateEvents}
+              disabled={eventsLoading}
+              className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-4 py-2.5 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {eventsLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Generating Events...
+                </>
+              ) : (
+                <>
+                  <Zap className="h-4 w-4" />
+                  AI Events
+                </>
+              )}
+            </button>
+
             {placeNames.length > 0 && (
               <div className="space-y-1.5">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
@@ -1076,6 +1183,62 @@ export default function WorldBuilderPage() {
                       </div>
                     ) : (
                       <p className="whitespace-pre-wrap text-xs leading-relaxed text-[#D1D5DB]">{aiHistory}</p>
+                    )}
+                  </div>
+                )}
+                {(worldEvents.length > 0 || eventsLoading) && (
+                  <div className="mt-5 space-y-3">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-[#F59E0B]">
+                      <Zap className="h-3 w-3" />
+                      World Events
+                    </div>
+                    {eventsLoading ? (
+                      <div className="flex items-center justify-center gap-2 py-6 text-xs text-[#6B7280]">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F59E0B]" />
+                        Generating world events...
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {worldEvents.map((event, i) => (
+                          <div
+                            key={i}
+                            className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4 space-y-2.5"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Zap className="h-3.5 w-3.5 text-[#F59E0B] shrink-0" />
+                              <h4 className="text-sm font-semibold text-[#F5F5F5]">
+                                {event.name}
+                              </h4>
+                            </div>
+                            <div className="grid grid-cols-1 gap-2 pl-6">
+                              <div>
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-[#F59E0B]">
+                                  Trigger
+                                </span>
+                                <p className="text-xs text-[#9CA3AF] mt-0.5 leading-relaxed">
+                                  {event.trigger}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-[#F59E0B]">
+                                  Effect
+                                </span>
+                                <p className="text-xs text-[#9CA3AF] mt-0.5 leading-relaxed">
+                                  {event.effect}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-[#F59E0B]">
+                                  Duration
+                                </span>
+                                <p className="text-xs text-[#9CA3AF] mt-0.5 leading-relaxed">
+                                  {event.duration}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 )}
