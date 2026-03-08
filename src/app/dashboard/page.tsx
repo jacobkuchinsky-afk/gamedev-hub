@@ -61,6 +61,7 @@ import {
   getBugs,
   getDevlog,
   getSprints,
+  getReferences,
   getStatusColor,
   getPriorityColor,
   getSeverityColor,
@@ -73,6 +74,7 @@ import {
   type Bug as BugType,
   type DevlogEntry,
   type Sprint,
+  type Reference,
 } from "@/lib/store";
 
 const RECENT_PAGE_ICONS: Record<string, typeof LayoutDashboard> = {
@@ -499,6 +501,8 @@ export default function DashboardPage() {
   }>({ totalHours: 0, avgDailyHours: 0, perProject: [] });
 
   const [recentlyVisited, setRecentlyVisited] = useState<Array<{ href: string; label: string; ts: number }>>([]);
+  const [allRefs, setAllRefs] = useState<Reference[]>([]);
+  const [linksCopied, setLinksCopied] = useState(false);
 
   useEffect(() => {
     const dismissed = localStorage.getItem("gameforge_welcome_dismissed") === "true";
@@ -801,6 +805,8 @@ export default function DashboardPage() {
     const tasks = getTasks();
     const bugs = getBugs();
     const devlog = getDevlog();
+
+    setAllRefs(getReferences());
 
     setTotalProjects(projects.length);
     if (projects.length > 0 && !quickTaskProjectId) {
@@ -2986,6 +2992,53 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
+
+      {/* Check Links */}
+      {allRefs.length > 0 && (
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3">
+            <div className="flex items-center gap-2">
+              <ExternalLink className="h-3.5 w-3.5 text-[#F59E0B]" />
+              <h2 className="text-sm font-semibold">Check Links</h2>
+              <span className="rounded-full bg-[#F59E0B]/10 px-2 py-0.5 text-[10px] font-medium tabular-nums text-[#F59E0B]">
+                {allRefs.length}
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                const urls = allRefs.filter((r) => r.url).map((r) => r.url).join("\n");
+                navigator.clipboard.writeText(urls);
+                setLinksCopied(true);
+                setTimeout(() => setLinksCopied(false), 2000);
+              }}
+              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-colors ${linksCopied ? "border-[#22C55E]/30 text-[#22C55E]" : "border-[#2A2A2A] text-[#6B7280] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"}`}
+            >
+              {linksCopied ? <CheckCircle2 className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              {linksCopied ? "Copied!" : "Copy All URLs"}
+            </button>
+          </div>
+          <div className="max-h-40 overflow-y-auto px-5 py-2">
+            {allRefs.filter((r) => r.url).map((ref) => (
+              <div key={ref.id} className="flex items-center gap-2 py-1">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#F59E0B]/40" />
+                <a
+                  href={ref.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="min-w-0 flex-1 truncate text-xs text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
+                  title={ref.title}
+                >
+                  {ref.url}
+                </a>
+                <span className="shrink-0 text-[10px] text-[#4B5563]">{ref.category}</span>
+              </div>
+            ))}
+            {allRefs.filter((r) => r.url).length === 0 && (
+              <p className="py-2 text-center text-xs text-[#6B7280]">No URLs in references</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

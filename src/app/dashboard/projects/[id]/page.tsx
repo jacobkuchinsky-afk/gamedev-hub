@@ -3724,8 +3724,65 @@ export default function ProjectDetailPage() {
 
           {/* Recent Activity */}
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
-            <div className="border-b border-[#2A2A2A] px-5 py-4">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-4">
               <h2 className="font-semibold">Recent Activity</h2>
+              <button
+                onClick={() => {
+                  const allActivity = [
+                    ...tasks.map((t) => ({
+                      type: "Task",
+                      title: t.title,
+                      detail: t.status === "done" ? "Completed" : t.status === "in-progress" ? "In progress" : t.status === "testing" ? "Testing" : "Created",
+                      ts: t.created_at,
+                    })),
+                    ...bugs.map((b) => ({
+                      type: "Bug",
+                      title: b.title,
+                      detail: `${b.severity} — ${b.status}`,
+                      ts: b.created_at,
+                    })),
+                    ...devlog.map((d) => ({
+                      type: "Devlog",
+                      title: d.title,
+                      detail: `Mood: ${d.mood}`,
+                      ts: d.date,
+                    })),
+                    ...sprints.map((s) => ({
+                      type: "Sprint",
+                      title: s.name,
+                      detail: s.status === "completed" ? "Completed" : s.status === "active" ? "Started" : "Planned",
+                      ts: s.startDate || s.created_at,
+                    })),
+                  ].sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+
+                  const lines = [
+                    `# ${project.name} — Activity Log`,
+                    ``,
+                    `Exported ${new Date().toLocaleDateString()} · ${allActivity.length} events`,
+                    ``,
+                    `---`,
+                    ``,
+                    ...allActivity.map((a) => {
+                      const d = new Date(a.ts);
+                      const date = `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+                      return `- **[${a.type}]** ${a.title} — _${a.detail}_ (${date})`;
+                    }),
+                  ];
+
+                  const slug = project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+                  const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${slug}-activity-log.md`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-2.5 py-1 text-xs text-[#6B7280] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              >
+                <Download className="h-3 w-3" />
+                Export Activity
+              </button>
             </div>
             <div className="divide-y divide-[#2A2A2A]">
               {activityFeed.map((item) => {
