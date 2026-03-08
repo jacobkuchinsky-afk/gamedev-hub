@@ -353,6 +353,22 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   display: none;
 }
 
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.aspect-square {
+  aspect-ratio: 1 / 1;
+}
+
+.amber-ring {
+  box-shadow: 0 0 0 2px #F59E0B;
+}
+
 /* Screen-reader only - accessible labels visible only to assistive tech */
 .sr-only {
   position: absolute;
