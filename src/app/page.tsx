@@ -153,25 +153,41 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    const elToIndex = new Map<Element, number>();
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          const index = elToIndex.get(entry.target);
-          if (index !== undefined && entry.isIntersecting) {
-            setVisibleSections((prev) => ({ ...prev, [index]: true }));
-          }
-        });
-      },
-      { threshold: 0.1 }
-    );
-    sectionRefs.current.forEach((el, i) => {
-      if (el) {
-        elToIndex.set(el, i);
-        observer.observe(el);
-      }
-    });
-    return () => observer.disconnect();
+    if (typeof window === "undefined") return;
+
+    let observer: IntersectionObserver | null = null;
+
+    try {
+      const elToIndex = new Map<Element, number>();
+      const elements: HTMLElement[] = [];
+      sectionRefs.current.forEach((el, i) => {
+        if (el) {
+          elToIndex.set(el, i);
+          elements.push(el);
+        }
+      });
+      if (elements.length === 0) return;
+
+      observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            const index = elToIndex.get(entry.target);
+            if (index !== undefined && entry.isIntersecting) {
+              setVisibleSections((prev) => ({ ...prev, [index]: true }));
+            }
+          });
+        },
+        { threshold: 0.1 }
+      );
+
+      elements.forEach((el) => observer?.observe(el));
+    } catch {
+      // IntersectionObserver not available or module resolution error
+    }
+
+    return () => {
+      observer?.disconnect();
+    };
   }, []);
 
   return (
