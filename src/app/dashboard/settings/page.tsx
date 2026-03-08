@@ -16,6 +16,8 @@ import {
   Eye,
   EyeOff,
   Sparkles,
+  Clock,
+  HardDrive,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
 import { getProjects, getTasks, getDevlog } from "@/lib/store";
@@ -23,6 +25,9 @@ import { changePassword } from "@/lib/auth";
 
 const SETTINGS_KEY = "gameforge_user_settings";
 const VERSION = "1.0.0";
+const FIRST_LOGIN_KEY = "gameforge_first_login";
+const LOGIN_COUNT_KEY = "gameforge_login_count";
+const LIFETIME_PROJECTS_KEY = "gameforge_lifetime_projects";
 
 interface UserSettings {
   username: string;
@@ -100,6 +105,14 @@ export default function SettingsPage() {
   const [showCurrentPw, setShowCurrentPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
   const [aiPrefs, setAiPrefs] = useState<AIPrefs>({ writingStyle: "Professional", responseLength: "Standard" });
+  const [aboutStats, setAboutStats] = useState({
+    firstLoginDate: "",
+    timeSinceFirstLogin: "",
+    loginCount: 0,
+    lifetimeProjects: 0,
+    storageMB: 0,
+    storagePercent: 0,
+  });
 
   useEffect(() => {
     console.log("[SettingsPage] rendered");
@@ -132,18 +145,49 @@ export default function SettingsPage() {
     const projects = getProjects();
     const tasks = getTasks();
     const devlogs = getDevlog();
-    let totalBytes = 0;
+    let gfBytes = 0;
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key?.startsWith("gameforge_")) {
-        totalBytes += (localStorage.getItem(key) || "").length * 2;
+        gfBytes += (localStorage.getItem(key) || "").length * 2;
       }
     }
     setStats({
       projects: projects.length,
       tasks: tasks.length,
       devlogs: devlogs.length,
-      storageKB: Math.round((totalBytes / 1024) * 10) / 10,
+      storageKB: Math.round((gfBytes / 1024) * 10) / 10,
+    });
+
+    let firstLogin = localStorage.getItem(FIRST_LOGIN_KEY);
+    if (!firstLogin) {
+      firstLogin = new Date().toISOString();
+      localStorage.setItem(FIRST_LOGIN_KEY, firstLogin);
+    }
+    const msSince = Date.now() - new Date(firstLogin).getTime();
+    const days = Math.floor(msSince / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((msSince % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const loginCount = parseInt(localStorage.getItem(LOGIN_COUNT_KEY) || "1", 10);
+    const stored = parseInt(localStorage.getItem(LIFETIME_PROJECTS_KEY) || "0", 10);
+    const lifetime = Math.max(projects.length, stored);
+    localStorage.setItem(LIFETIME_PROJECTS_KEY, String(lifetime));
+
+    let totalBytes = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        totalBytes += (key.length + (localStorage.getItem(key) || "").length) * 2;
+      }
+    }
+    const storageMB = Math.round((totalBytes / (1024 * 1024)) * 100) / 100;
+
+    setAboutStats({
+      firstLoginDate: new Date(firstLogin).toLocaleDateString(),
+      timeSinceFirstLogin: days > 0 ? `${days}d ${hours}h` : `${hours}h`,
+      loginCount,
+      lifetimeProjects: lifetime,
+      storageMB,
+      storagePercent: Math.min((storageMB / 5) * 100, 100),
     });
   }, []);
 
@@ -717,9 +761,38 @@ export default function SettingsPage() {
               <ExternalLink className="h-3 w-3" />
             </a>
           </div>
+
           <div className="my-3 h-px bg-[#2A2A2A]" />
+
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#F59E0B]">
+            <Clock className="h-3.5 w-3.5" />
+            Usage Stats
+          </div>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-[#9CA3AF]">Total Projects</span>
+            <span className="text-sm text-[#9CA3AF]">Member Since</span>
+            <span className="text-sm tabular-nums text-[#F5F5F5]">{aboutStats.firstLoginDate}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[#9CA3AF]">Time on Platform</span>
+            <span className="text-sm tabular-nums text-[#F59E0B]">{aboutStats.timeSinceFirstLogin}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[#9CA3AF]">Total Logins</span>
+            <span className="text-sm tabular-nums text-[#F5F5F5]">{aboutStats.loginCount}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[#9CA3AF]">Lifetime Projects</span>
+            <span className="text-sm tabular-nums text-[#F5F5F5]">{aboutStats.lifetimeProjects}</span>
+          </div>
+
+          <div className="my-3 h-px bg-[#2A2A2A]" />
+
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#F59E0B]">
+            <HardDrive className="h-3.5 w-3.5" />
+            Current Data
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[#9CA3AF]">Active Projects</span>
             <span className="text-sm tabular-nums text-[#F5F5F5]">{stats.projects}</span>
           </div>
           <div className="flex items-center justify-between">
@@ -730,10 +803,32 @@ export default function SettingsPage() {
             <span className="text-sm text-[#9CA3AF]">Devlog Entries</span>
             <span className="text-sm tabular-nums text-[#F5F5F5]">{stats.devlogs}</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-[#9CA3AF]">Storage Used</span>
-            <span className="text-sm tabular-nums text-[#F5F5F5]">{stats.storageKB} KB</span>
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-sm text-[#9CA3AF]">Storage Used</span>
+              <span className="text-sm tabular-nums text-[#F5F5F5]">
+                {aboutStats.storageMB} MB <span className="text-[#6B7280]">/ 5 MB</span>
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-[#2A2A2A]">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${aboutStats.storagePercent}%`,
+                  backgroundColor:
+                    aboutStats.storagePercent > 80
+                      ? "#EF4444"
+                      : aboutStats.storagePercent > 50
+                        ? "#F59E0B"
+                        : "#10B981",
+                }}
+              />
+            </div>
+            <p className="mt-1 text-xs text-[#6B7280]">
+              {aboutStats.storagePercent < 1 ? "<1" : Math.round(aboutStats.storagePercent)}% of browser storage limit
+            </p>
           </div>
+
           <div className="mt-2 rounded-lg bg-[#0F0F0F] p-3">
             <p className="text-xs leading-relaxed text-[#6B7280]">
               GameForge is a game development productivity platform built to help indie devs

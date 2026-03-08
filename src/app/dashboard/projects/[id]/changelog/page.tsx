@@ -90,6 +90,7 @@ export default function ChangelogPage() {
   const [showForm, setShowForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedAll, setCopiedAll] = useState(false);
 
   const [formVersion, setFormVersion] = useState("");
   const [formTitle, setFormTitle] = useState("");
@@ -291,6 +292,27 @@ Be specific and brief. Only include sections that have items.`;
     });
   }
 
+  function copyAllAsMarkdown() {
+    const lines: string[] = ["# Changelog\n"];
+    for (const entry of entries) {
+      lines.push(`## v${entry.version} (${entry.type}) \u2014 ${entry.date}`);
+      for (const cat of CHANGE_CATEGORIES) {
+        const items = entry.changes[cat];
+        if (items && items.length > 0) {
+          lines.push(`### ${cat}`);
+          for (const item of items) {
+            lines.push(`- ${item}`);
+          }
+        }
+      }
+      lines.push("");
+    }
+    navigator.clipboard.writeText(lines.join("\n")).then(() => {
+      setCopiedAll(true);
+      setTimeout(() => setCopiedAll(false), 2000);
+    });
+  }
+
   function exportMarkdown() {
     const lines: string[] = [`# ${project!.name} — Changelog\n`];
 
@@ -367,6 +389,17 @@ Be specific and brief. Only include sections that have items.`;
             </div>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={copyAllAsMarkdown}
+              className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                copiedAll
+                  ? "border-[#10B981]/30 text-[#10B981]"
+                  : "border-[#2A2A2A] text-[#9CA3AF] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+              }`}
+            >
+              {copiedAll ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copiedAll ? "Copied!" : "Copy All"}
+            </button>
             <button
               onClick={exportMarkdown}
               className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"

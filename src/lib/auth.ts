@@ -20,6 +20,16 @@ export interface User {
 
 const SESSION_KEY = "gameforge_session";
 const PROFILE_KEY = "gameforge_profile";
+const FIRST_LOGIN_KEY = "gameforge_first_login";
+const LOGIN_COUNT_KEY = "gameforge_login_count";
+
+function trackLogin() {
+  if (!localStorage.getItem(FIRST_LOGIN_KEY)) {
+    localStorage.setItem(FIRST_LOGIN_KEY, new Date().toISOString());
+  }
+  const count = parseInt(localStorage.getItem(LOGIN_COUNT_KEY) || "0", 10);
+  localStorage.setItem(LOGIN_COUNT_KEY, String(count + 1));
+}
 
 function saveProfile(uid: string, data: { username: string; gameType: string }) {
   const profiles = JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}");
@@ -56,6 +66,7 @@ export async function signup(
     saveProfile(cred.user.uid, { username, gameType });
     const user = firebaseUserToUser(cred.user);
     localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    trackLogin();
     return { success: true, user };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Signup failed";
@@ -80,6 +91,7 @@ export async function login(
     const cred = await signInWithEmailAndPassword(auth, email, password);
     const user = firebaseUserToUser(cred.user);
     localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    trackLogin();
     return { success: true, user };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Login failed";
@@ -208,6 +220,7 @@ function fallbackSignup(
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
   const { password: _, ...u } = newUser;
   localStorage.setItem(SESSION_KEY, JSON.stringify(u));
+  trackLogin();
   return { success: true, user: u };
 }
 
@@ -223,5 +236,6 @@ function fallbackLogin(
   if (!found) return { success: false, error: "Invalid email or password." };
   const { password: _, ...u } = found;
   localStorage.setItem(SESSION_KEY, JSON.stringify(u));
+  trackLogin();
   return { success: true, user: u };
 }
