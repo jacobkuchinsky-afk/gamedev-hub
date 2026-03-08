@@ -194,6 +194,15 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-[#0F0F0F] text-[#F5F5F5]">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes hero-cta-pulse {
+          0%, 100% { box-shadow: 0 10px 15px -3px rgba(245,158,11,0.2); }
+          50% { box-shadow: 0 10px 30px -3px rgba(245,158,11,0.4), 0 0 40px rgba(245,158,11,0.15); }
+        }
+        .hero-cta-pulse {
+          animation: hero-cta-pulse 3s ease-in-out infinite;
+        }
+      `}} />
       {/* Nav */}
       <nav
         className={`sticky top-0 z-50 transition-all duration-300 ease-out ${
@@ -275,7 +284,7 @@ export default function LandingPage() {
           <div className="animate-fade-in stagger-3 mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Link
               href="/signup"
-              className="group flex items-center gap-2 rounded-xl bg-[#F59E0B] px-8 py-3.5 text-base font-bold text-[#0F0F0F] shadow-lg shadow-[#F59E0B]/20 transition-all hover:bg-[#D97706] hover:shadow-[#F59E0B]/30"
+              className="hero-cta-pulse group flex items-center gap-2 rounded-xl bg-[#F59E0B] px-8 py-3.5 text-base font-bold text-[#0F0F0F] transition-all hover:bg-[#D97706]"
             >
               Get Started Free
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
