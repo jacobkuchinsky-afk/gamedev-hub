@@ -74,6 +74,15 @@ body {
   line-height: 1.6;
 }
 
+/* Subtle page transition on navigation */
+main {
+  animation: pageFadeIn 150ms ease;
+}
+@keyframes pageFadeIn {
+  from { opacity: 0.95; }
+  to { opacity: 1; }
+}
+
 /* Subtle noise texture overlay for visual depth */
 .noise-bg::before {
   content: "";
