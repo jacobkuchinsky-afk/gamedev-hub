@@ -634,6 +634,10 @@ const VIM_NAV: Record<string, string> = {
   t: "/dashboard/tools",
   l: "/dashboard/devlog",
   s: "/dashboard/settings",
+  b: "/dashboard/tools/balance",
+  c: "/dashboard/tools/code",
+  n: "/dashboard/tools/narrative",
+  m: "/dashboard/tools/math",
 };
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
