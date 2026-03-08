@@ -469,6 +469,145 @@ function HealthReportModal({
   );
 }
 
+function TimelineSection({
+  milestones,
+  sprints,
+}: {
+  milestones: Milestone[];
+  sprints: Sprint[];
+}) {
+  if (milestones.length === 0 && sprints.length === 0) return null;
+
+  const allTs: number[] = [];
+  milestones.forEach((ms) => allTs.push(new Date(ms.targetDate).getTime()));
+  sprints.forEach((s) => {
+    allTs.push(new Date(s.startDate).getTime());
+    allTs.push(new Date(s.endDate).getTime());
+  });
+  const today = Date.now();
+  allTs.push(today);
+
+  const pad = 86400000 * 7;
+  const minT = Math.min(...allTs) - pad;
+  const maxT = Math.max(...allTs) + pad;
+  const rangeT = maxT - minT || 1;
+  const pct = (t: number) => ((t - minT) / rangeT) * 100;
+
+  const todayPct = pct(today);
+  const sortedMs = [...milestones].sort((a, b) => a.targetDate.localeCompare(b.targetDate));
+  const sortedSp = [...sprints].sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const hasSprints = sortedSp.length > 0;
+
+  return (
+    <div>
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#9CA3AF]">
+        <Clock className="h-4 w-4" />
+        Timeline
+      </h2>
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+        <div className="overflow-x-auto">
+          <div className="min-w-[500px]">
+            {hasSprints && (
+              <div className="relative mb-3" style={{ height: Math.min(sortedSp.length, 3) * 20 + 8 }}>
+                {sortedSp.map((s, i) => {
+                  const left = pct(new Date(s.startDate).getTime());
+                  const right = pct(new Date(s.endDate).getTime());
+                  const w = Math.max(right - left, 2);
+                  const c = s.status === "completed" ? "#10B981" : s.status === "active" ? "#F59E0B" : "#3B82F6";
+                  return (
+                    <div
+                      key={s.id}
+                      className="absolute flex items-center rounded px-1.5 text-[10px] font-medium text-white/80 truncate"
+                      style={{
+                        left: `${left}%`,
+                        width: `${w}%`,
+                        height: 18,
+                        top: (i % 3) * 20,
+                        backgroundColor: c,
+                        opacity: 0.7,
+                        minWidth: 20,
+                      }}
+                      title={`${s.name} (${s.status})\n${new Date(s.startDate).toLocaleDateString()} - ${new Date(s.endDate).toLocaleDateString()}`}
+                    >
+                      {s.name}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="relative" style={{ height: 80 }}>
+              <div className="absolute left-0 right-0 top-5 h-[2px] bg-[#2A2A2A]" />
+
+              <div
+                className="absolute z-10 flex flex-col items-center"
+                style={{ left: `${todayPct}%`, transform: "translateX(-50%)", top: 0 }}
+              >
+                <span className="mb-0.5 whitespace-nowrap rounded-full bg-[#F59E0B]/15 px-1.5 py-0.5 text-[9px] font-semibold text-[#F59E0B]">
+                  Today
+                </span>
+                <div className="h-6 w-[2px] rounded-full bg-[#F59E0B]" />
+              </div>
+
+              {sortedMs.map((ms) => {
+                const pos = pct(new Date(ms.targetDate).getTime());
+                const done = ms.status === "completed";
+                const active = ms.status === "in-progress";
+                const color = done ? "#10B981" : active ? "#F59E0B" : "#6B7280";
+                return (
+                  <button
+                    key={ms.id}
+                    className="group absolute z-20 flex flex-col items-center"
+                    style={{ left: `${pos}%`, transform: "translateX(-50%)", top: 10 }}
+                    onClick={() => document.getElementById("milestones-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                    title={`${ms.name} (${ms.status})`}
+                  >
+                    <div
+                      className="h-[14px] w-[14px] rounded-full border-[2.5px] transition-transform group-hover:scale-[1.3]"
+                      style={{ borderColor: color, backgroundColor: done ? color : "#1A1A1A" }}
+                    />
+                    <span className="mt-1 max-w-[72px] truncate text-[10px] font-medium leading-tight" style={{ color }}>
+                      {ms.name}
+                    </span>
+                    <span className="text-[9px] leading-tight text-[#6B7280]">
+                      {new Date(ms.targetDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center gap-4 border-t border-[#2A2A2A]/50 pt-3 text-[10px]">
+              <div className="flex items-center gap-1.5">
+                <div className="h-2.5 w-2.5 rounded-full border-2 border-[#10B981] bg-[#10B981]" />
+                <span className="text-[#6B7280]">Completed</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="h-2.5 w-2.5 rounded-full border-2 border-[#F59E0B] bg-[#1A1A1A]" />
+                <span className="text-[#6B7280]">In Progress</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="h-2.5 w-2.5 rounded-full border-2 border-[#6B7280] bg-[#1A1A1A]" />
+                <span className="text-[#6B7280]">Upcoming</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="h-[2px] w-3 rounded-full bg-[#F59E0B]" />
+                <span className="text-[#6B7280]">Today</span>
+              </div>
+              {hasSprints && (
+                <div className="flex items-center gap-1.5">
+                  <div className="h-2.5 w-4 rounded-sm bg-[#3B82F6] opacity-70" />
+                  <span className="text-[#6B7280]">Sprint</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProductivitySection({
   tasks,
   bugs,
@@ -1451,7 +1590,7 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Milestones */}
-      <div>
+      <div id="milestones-section">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-[#9CA3AF]">
             <Flag className="h-4 w-4" />
@@ -1649,6 +1788,9 @@ export default function ProjectDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Project Timeline */}
+      <TimelineSection milestones={milestones} sprints={sprints} />
 
       {/* Productivity Analytics */}
       <ProductivitySection tasks={tasks} bugs={bugs} devlog={devlog} sprints={sprints} />

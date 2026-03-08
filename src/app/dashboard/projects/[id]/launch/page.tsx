@@ -23,6 +23,7 @@ import {
   Check,
   Sparkles,
   Loader2,
+  Copy,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -161,6 +162,36 @@ function getScoreLabel(pct: number): string {
   return "No Items Checked";
 }
 
+function parseMarketingSections(text: string): { title: string; content: string }[] {
+  const sections: { title: string; content: string }[] = [];
+  const lines = text.split("\n");
+  let currentTitle = "";
+  let currentContent: string[] = [];
+
+  for (const line of lines) {
+    const headerMatch = line.match(/^\*\*(.+?)\*\*:?\s*$/);
+    if (headerMatch) {
+      if (currentTitle && currentContent.length > 0) {
+        sections.push({ title: currentTitle, content: currentContent.join("\n").trim() });
+      }
+      currentTitle = headerMatch[1].trim();
+      currentContent = [];
+    } else {
+      currentContent.push(line);
+    }
+  }
+
+  if (currentTitle && currentContent.length > 0) {
+    sections.push({ title: currentTitle, content: currentContent.join("\n").trim() });
+  }
+
+  if (sections.length === 0 && text.trim()) {
+    sections.push({ title: "Marketing Copy", content: text.trim() });
+  }
+
+  return sections;
+}
+
 export default function LaunchChecklistPage() {
   const params = useParams();
   const router = useRouter();
@@ -176,6 +207,10 @@ export default function LaunchChecklistPage() {
   const [aiPlan, setAiPlan] = useState<string>("");
   const [aiPlanLoading, setAiPlanLoading] = useState(false);
   const [aiPlanOpen, setAiPlanOpen] = useState(false);
+  const [aiMarketing, setAiMarketing] = useState<string>("");
+  const [aiMarketingLoading, setAiMarketingLoading] = useState(false);
+  const [aiMarketingOpen, setAiMarketingOpen] = useState(false);
+  const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -237,6 +272,43 @@ export default function LaunchChecklistPage() {
       setAiPlanLoading(false);
     }
   }, [project, aiPlanLoading, overallPct]);
+
+  const generateMarketingCopy = useCallback(async () => {
+    if (!project || aiMarketingLoading) return;
+    setAiMarketingLoading(true);
+    setAiMarketingOpen(true);
+    setAiMarketing("");
+    try {
+      const prompt = `Write marketing copy for an indie game called '${project.name}'. Genre: ${project.genre || "unknown"}. Description: ${project.description || "An indie game in development."}. Include: 1) A store page description (2 paragraphs), 2) Three catchy taglines, 3) Five feature bullet points, 4) A press kit summary (1 paragraph). Format with bold headers.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "Could not generate marketing copy. Please try again.";
+      setAiMarketing(content);
+    } catch {
+      setAiMarketing("Failed to generate marketing copy. Check your API key and try again.");
+    } finally {
+      setAiMarketingLoading(false);
+    }
+  }, [project, aiMarketingLoading]);
+
+  const copyToClipboard = useCallback((text: string, sectionTitle: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedSection(sectionTitle);
+    setTimeout(() => setCopiedSection(null), 2000);
+  }, []);
 
   const toggleItem = useCallback(
     (itemId: string) => {
@@ -360,6 +432,18 @@ export default function LaunchChecklistPage() {
               {aiPlanLoading ? "Generating..." : "AI Launch Plan"}
             </button>
             <button
+              onClick={generateMarketingCopy}
+              disabled={aiMarketingLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#EC4899]/40 bg-[#EC4899]/10 px-3 py-2 text-sm font-medium text-[#EC4899] transition-colors hover:bg-[#EC4899]/20 disabled:opacity-50"
+            >
+              {aiMarketingLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Megaphone className="h-3.5 w-3.5" />
+              )}
+              {aiMarketingLoading ? "Generating..." : "AI Marketing"}
+            </button>
+            <button
               onClick={handleReset}
               className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-red-500/30 hover:text-red-400"
             >
@@ -400,6 +484,71 @@ export default function LaunchChecklistPage() {
                     <span key={i}>{part}</span>
                   )
                 )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AI Marketing Copy Panel */}
+      {aiMarketingOpen && (
+        <div className="rounded-xl border border-[#EC4899]/30 bg-[#1A1A1A] overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3">
+            <div className="flex items-center gap-2">
+              <Megaphone className="h-4 w-4 text-[#EC4899]" />
+              <h3 className="text-sm font-semibold text-[#EC4899]">AI Marketing Copy</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              {!aiMarketingLoading && aiMarketing && (
+                <button
+                  onClick={() => copyToClipboard(aiMarketing, "__all__")}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#9CA3AF] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                >
+                  {copiedSection === "__all__" ? (
+                    <Check className="h-3 w-3 text-[#10B981]" />
+                  ) : (
+                    <Copy className="h-3 w-3" />
+                  )}
+                  {copiedSection === "__all__" ? "Copied!" : "Copy All"}
+                </button>
+              )}
+              <button
+                onClick={() => setAiMarketingOpen(false)}
+                className="rounded-md p-1 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          <div className="px-5 py-4">
+            {aiMarketingLoading ? (
+              <div className="flex items-center gap-3 py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-[#EC4899]" />
+                <p className="text-sm text-[#9CA3AF]">Generating marketing copy for {project.name}...</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {parseMarketingSections(aiMarketing).map((section) => (
+                  <div key={section.title} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-[#EC4899]">{section.title}</h4>
+                      <button
+                        onClick={() => copyToClipboard(section.content, section.title)}
+                        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                      >
+                        {copiedSection === section.title ? (
+                          <Check className="h-3 w-3 text-[#10B981]" />
+                        ) : (
+                          <Copy className="h-3 w-3" />
+                        )}
+                        {copiedSection === section.title ? "Copied!" : "Copy"}
+                      </button>
+                    </div>
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">
+                      {section.content}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
