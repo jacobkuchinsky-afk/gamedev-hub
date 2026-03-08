@@ -91,6 +91,7 @@ export default function BugTrackerPage() {
   const [newReproSteps, setNewReproSteps] = useState("");
   const [aiSuggestingPriority, setAiSuggestingPriority] = useState(false);
   const [aiSuggestFlash, setAiSuggestFlash] = useState(false);
+  const [aiImprovingDesc, setAiImprovingDesc] = useState(false);
 
   const reload = useCallback(() => {
     setBugsState(getBugs(projectId));
@@ -140,6 +141,35 @@ export default function BugTrackerPage() {
     setQuickPlatform("All");
     setShowQuickForm(false);
     reload();
+  };
+
+  const handleAiImproveDesc = async () => {
+    if (!newTitle.trim() || aiImprovingDesc) return;
+    setAiImprovingDesc(true);
+    try {
+      const prompt = `Improve this game bug report. Title: '${newTitle.trim()}'. Description: '${newDesc.trim() || "none"}'. Rewrite as a clear, professional bug report with: Steps to Reproduce, Expected Behavior, Actual Behavior. Be brief.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      if (content) setNewDesc(content);
+    } catch {
+      // silently fail
+    } finally {
+      setAiImprovingDesc(false);
+    }
   };
 
   const handleAiSuggestPriority = async () => {
@@ -496,13 +526,31 @@ export default function BugTrackerPage() {
                 autoFocus
                 className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
               />
-              <textarea
-                value={newDesc}
-                onChange={(e) => setNewDesc(e.target.value)}
-                placeholder="Description"
-                rows={2}
-                className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50 resize-none"
-              />
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-xs text-[#6B7280]">Description</label>
+                  <button
+                    type="button"
+                    onClick={handleAiImproveDesc}
+                    disabled={!newTitle.trim() || aiImprovingDesc}
+                    className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {aiImprovingDesc ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3 w-3" />
+                    )}
+                    AI Improve
+                  </button>
+                </div>
+                <textarea
+                  value={newDesc}
+                  onChange={(e) => setNewDesc(e.target.value)}
+                  placeholder="Description"
+                  rows={3}
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50 resize-none"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <div className="mb-1 flex items-center justify-between">

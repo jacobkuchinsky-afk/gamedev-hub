@@ -14,6 +14,8 @@ import {
   ArrowUpDown,
   Target,
   TrendingUp,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import {
   getProject,
@@ -82,6 +84,7 @@ export default function TaskBoardPage() {
   const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
   const [newAssignee, setNewAssignee] = useState("JacobK");
   const [newSprint, setNewSprint] = useState("");
+  const [aiDetailLoading, setAiDetailLoading] = useState(false);
 
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [selectedSprint, setSelectedSprint] = useState<string>("all");
@@ -122,6 +125,35 @@ export default function TaskBoardPage() {
       .filter((n) => !isNaN(n));
     return nums.length > 0 ? Math.max(...nums) + 1 : 1;
   }, [sprints]);
+
+  const handleAiDetail = async () => {
+    if (!newTitle.trim() || aiDetailLoading) return;
+    setAiDetailLoading(true);
+    try {
+      const prompt = `Write a brief task description for a game development task: '${newTitle.trim()}'. Include: what needs to be done, acceptance criteria (2-3 bullet points), and estimated complexity (simple/medium/complex). Be practical and specific.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      if (content) setNewDesc(content);
+    } catch {
+      // silently fail
+    } finally {
+      setAiDetailLoading(false);
+    }
+  };
 
   const handleAddTask = (e: React.FormEvent) => {
     e.preventDefault();
@@ -560,13 +592,31 @@ export default function TaskBoardPage() {
                 autoFocus
                 className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
               />
-              <textarea
-                value={newDesc}
-                onChange={(e) => setNewDesc(e.target.value)}
-                placeholder="Description (optional)"
-                rows={2}
-                className="w-full resize-none rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
-              />
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-xs text-[#6B7280]">Description</label>
+                  <button
+                    type="button"
+                    onClick={handleAiDetail}
+                    disabled={!newTitle.trim() || aiDetailLoading}
+                    className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {aiDetailLoading ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3 w-3" />
+                    )}
+                    AI Detail
+                  </button>
+                </div>
+                <textarea
+                  value={newDesc}
+                  onChange={(e) => setNewDesc(e.target.value)}
+                  placeholder="Description (optional)"
+                  rows={3}
+                  className="w-full resize-none rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-xs text-[#6B7280]">
