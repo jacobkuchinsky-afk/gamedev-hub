@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams } from "next/navigation";
 import {
   Plus,
@@ -89,6 +89,8 @@ export default function AssetPipelinePage() {
   const [filterStatus, setFilterStatus] = useState<AssetStatus | "all">("all");
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<AssetFolder>>(new Set());
 
   const [newName, setNewName] = useState("");
@@ -115,6 +117,14 @@ export default function AssetPipelinePage() {
     reload();
   }, [projectId, reload]);
 
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [searchQuery]);
+
   const assignees = useMemo(() => {
     const set = new Set(assets.map((a) => a.assignee));
     return Array.from(set);
@@ -125,14 +135,24 @@ export default function AssetPipelinePage() {
     if (filterType !== "all") result = result.filter((a) => a.type === filterType);
     if (filterStatus !== "all") result = result.filter((a) => a.status === filterStatus);
     if (filterAssignee !== "all") result = result.filter((a) => a.assignee === filterAssignee);
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(
-        (a) => a.name.toLowerCase().includes(q) || a.notes.toLowerCase().includes(q)
-      );
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase();
+      result = result.filter((a) => {
+        const typeLabel = ASSET_TYPE_LABELS[a.type]?.toLowerCase() || "";
+        const statusLabel = ASSET_STATUS_LABELS[a.status]?.toLowerCase() || "";
+        const folder = (a.folder || TYPE_TO_DEFAULT_FOLDER[a.type] || "").toLowerCase();
+        return (
+          a.name.toLowerCase().includes(q) ||
+          a.notes.toLowerCase().includes(q) ||
+          typeLabel.includes(q) ||
+          statusLabel.includes(q) ||
+          folder.includes(q) ||
+          a.assignee.toLowerCase().includes(q)
+        );
+      });
     }
     return result;
-  }, [assets, filterType, filterStatus, filterAssignee, searchQuery]);
+  }, [assets, filterType, filterStatus, filterAssignee, debouncedSearch]);
 
   const stats = useMemo(() => {
     const byStatus: Record<AssetStatus, number> = { concept: 0, wip: 0, review: 0, approved: 0, integrated: 0 };
@@ -248,6 +268,20 @@ export default function AssetPipelinePage() {
     }
     reload();
   };
+
+  const highlightMatch = useCallback((text: string) => {
+    if (!debouncedSearch.trim()) return text;
+    const q = debouncedSearch.trim();
+    const idx = text.toLowerCase().indexOf(q.toLowerCase());
+    if (idx === -1) return text;
+    return (
+      <>
+        {text.slice(0, idx)}
+        <span className="rounded-sm bg-[#F59E0B]/25 text-[#F59E0B]">{text.slice(idx, idx + q.length)}</span>
+        {text.slice(idx + q.length)}
+      </>
+    );
+  }, [debouncedSearch]);
 
   if (!project) return null;
 
@@ -378,9 +412,24 @@ export default function AssetPipelinePage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search assets..."
-            className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2 pl-9 pr-3 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50"
+            placeholder="Search name, type, status, folder..."
+            className={`w-full rounded-lg border bg-[#1A1A1A] py-2 pl-9 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none ${
+              debouncedSearch.trim() ? "border-[#F59E0B]/40 pr-16" : "border-[#2A2A2A] pr-3"
+            } focus:border-[#F59E0B]/50`}
           />
+          {debouncedSearch.trim() && (
+            <>
+              <span className="absolute right-8 top-1/2 -translate-y-1/2 rounded-full bg-[#F59E0B]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B]">
+                {filteredAssets.length}
+              </span>
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-[#6B7280] hover:text-[#F5F5F5]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </>
+          )}
         </div>
         <div className="relative">
           <select
@@ -454,7 +503,7 @@ export default function AssetPipelinePage() {
                         <div className="flex items-start gap-2">
                           <TypeIcon className="mt-0.5 h-4 w-4 shrink-0" style={{ color: ASSET_TYPE_COLORS[asset.type] }} />
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium leading-tight truncate">{asset.name}</p>
+                            <p className="text-sm font-medium leading-tight truncate">{highlightMatch(asset.name)}</p>
                             <div className="mt-2 flex flex-wrap items-center gap-1.5">
                               <span
                                 className="rounded px-1.5 py-0.5 text-[10px] font-medium"
@@ -534,7 +583,7 @@ export default function AssetPipelinePage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <TypeIcon className="h-4 w-4 shrink-0" style={{ color: ASSET_TYPE_COLORS[asset.type] }} />
-                        <span className="text-sm font-medium">{asset.name}</span>
+                        <span className="text-sm font-medium">{highlightMatch(asset.name)}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -620,7 +669,7 @@ export default function AssetPipelinePage() {
                   <TypeIcon className="h-10 w-10" style={{ color: `${ASSET_TYPE_COLORS[asset.type]}60` }} />
                 </div>
                 <div className="p-3 space-y-2">
-                  <p className="text-sm font-medium truncate">{asset.name}</p>
+                  <p className="text-sm font-medium truncate">{highlightMatch(asset.name)}</p>
                   <div className="flex flex-wrap gap-1.5">
                     <span
                       className="rounded px-1.5 py-0.5 text-[10px] font-medium"
@@ -736,7 +785,7 @@ export default function AssetPipelinePage() {
                             className="min-w-0 flex-1 cursor-pointer"
                             onClick={() => setSelectedAsset(asset)}
                           >
-                            <p className="text-sm font-medium truncate">{asset.name}</p>
+                            <p className="text-sm font-medium truncate">{highlightMatch(asset.name)}</p>
                             <p className="text-xs text-[#6B7280] font-mono truncate">
                               {asset.fileRef || "No file reference"}
                             </p>

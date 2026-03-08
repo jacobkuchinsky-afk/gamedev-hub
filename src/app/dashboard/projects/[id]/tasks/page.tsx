@@ -219,6 +219,7 @@ export default function TaskBoardPage() {
   const [aiEstimateLoading, setAiEstimateLoading] = useState<Record<string, boolean>>({});
   const [aiEstimateNote, setAiEstimateNote] = useState<Record<string, string>>({});
 
+  const [aiBreakdownLoading, setAiBreakdownLoading] = useState<Record<string, boolean>>({});
   const [aiSprintLoading, setAiSprintLoading] = useState(false);
   const [aiSprintResult, setAiSprintResult] = useState<string | null>(null);
   const [showAiSprintPanel, setShowAiSprintPanel] = useState(false);
@@ -622,6 +623,49 @@ export default function TaskBoardPage() {
     updateTask(taskId, { subtasks: [...existing, newSubtask] });
     setSubtaskInputs((p) => ({ ...p, [taskId]: "" }));
     reload();
+  };
+
+  const handleAiBreakdown = async (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || aiBreakdownLoading[taskId]) return;
+    setAiBreakdownLoading((p) => ({ ...p, [taskId]: true }));
+    try {
+      const prompt = `Break this game development task into 3-5 specific subtasks: '${task.title}'. Description: '${task.description || "No description provided."}'. Return just a numbered list of subtask titles.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const lines = content
+        .split("\n")
+        .map((l: string) => l.replace(/^\d+[\.\)\-]\s*/, "").trim())
+        .filter((l: string) => l.length > 0 && l.length < 200);
+      if (lines.length > 0) {
+        const existing: Subtask[] = task.subtasks || [];
+        const newSubtasks: Subtask[] = lines.map((title: string, i: number) => ({
+          id: `st_${Date.now()}_${i}`,
+          title,
+          done: false,
+        }));
+        updateTask(taskId, { subtasks: [...existing, ...newSubtasks] });
+        reload();
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setAiBreakdownLoading((p) => ({ ...p, [taskId]: false }));
+    }
   };
 
   const addComment = (taskId: string) => {
@@ -2841,6 +2885,18 @@ export default function TaskBoardPage() {
                                       <Plus className="h-3 w-3" />
                                     </button>
                                   </div>
+                                  <button
+                                    onClick={() => handleAiBreakdown(task.id)}
+                                    disabled={!!aiBreakdownLoading[task.id]}
+                                    className="flex w-full items-center justify-center gap-1.5 rounded-md border border-[#F59E0B]/20 bg-[#F59E0B]/5 py-1.5 text-[11px] font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50"
+                                  >
+                                    {aiBreakdownLoading[task.id] ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <Sparkles className="h-3 w-3" />
+                                    )}
+                                    {aiBreakdownLoading[task.id] ? "Breaking down..." : "AI Break Down"}
+                                  </button>
                                 </div>
                               )}
                               {/* Comments Thread */}
