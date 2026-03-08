@@ -11,6 +11,8 @@ import {
   SlidersHorizontal,
   X,
   Clock,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 
 type EasingFn = (t: number) => number;
@@ -216,6 +218,7 @@ function MiniCard({
   onCompareToggle: () => void;
   compareMode: boolean;
   ballRef?: (el: HTMLDivElement | null) => void;
+  aiHighlight?: boolean;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
@@ -237,7 +240,9 @@ function MiniCard({
   return (
     <div
       className={`group relative cursor-pointer rounded-xl border transition-all ${
-        selected
+        aiHighlight
+          ? "border-[#F59E0B] bg-[#F59E0B]/10 ring-2 ring-[#F59E0B]/40 shadow-[0_0_16px_rgba(245,158,11,0.15)]"
+          : selected
           ? "border-[#F59E0B] bg-[#F59E0B]/5 ring-1 ring-[#F59E0B]/20"
           : comparing
           ? "border-[#3B82F6] bg-[#3B82F6]/5"
@@ -285,6 +290,9 @@ export default function EasingPage() {
   const [animating, setAnimating] = useState(false);
   const [duration, setDuration] = useState(1500);
   const [previewingAll, setPreviewingAll] = useState(false);
+  const [aiDesc, setAiDesc] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<{ name: string; reason: string } | null>(null);
 
   const easings = useMemo(() => makeEasings(paramOverrides), [paramOverrides]);
   const bigRef = useRef<HTMLCanvasElement>(null);
@@ -418,6 +426,63 @@ export default function EasingPage() {
     });
   };
 
+  const EASING_NAME_MAP: Record<string, string> = {
+    linear: "Linear",
+    easeinquad: "Ease In Quad",
+    easeoutquad: "Ease Out Quad",
+    easeinoutquad: "Ease In Out Quad",
+    easeincubic: "Ease In Cubic",
+    easeoutcubic: "Ease Out Cubic",
+    easeinout: "Ease In Out",
+    easeinexpo: "Ease In Expo",
+    easeoutexpo: "Ease Out Expo",
+    bounce: "Bounce",
+    elastic: "Elastic",
+    back: "Back",
+  };
+
+  const aiRecommend = async () => {
+    if (!aiDesc.trim() || aiLoading) return;
+    setAiLoading(true);
+    setAiResult(null);
+    try {
+      const prompt = `For a game animation described as '${aiDesc.trim()}', recommend the best easing function. Choose from: linear, easeInQuad, easeOutQuad, easeInOutQuad, easeInCubic, easeOutCubic, easeInOut, easeInExpo, easeOutExpo, bounce, elastic, back. Respond with ONLY the easing name and a one-line reason why.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const firstLine = content.split("\n").find((l: string) => l.trim()) || content;
+      const match = firstLine.match(/^[*_]*(\w[\w\s]*\w|\w)[*_]*/);
+      const rawName = match ? match[1].trim().toLowerCase().replace(/\s+/g, "") : "";
+      const displayName = EASING_NAME_MAP[rawName];
+      const reason = firstLine.replace(/^[*_]*\w[\w\s]*\w[*_]*[:\-–—]?\s*/, "").trim() || content.split("\n").slice(1).join(" ").trim();
+
+      if (displayName) {
+        const idx = easings.findIndex((e) => e.name === displayName);
+        if (idx >= 0) setSelected(idx);
+        setAiResult({ name: displayName, reason });
+      } else {
+        setAiResult({ name: "Unknown", reason: content.slice(0, 200) });
+      }
+    } catch {
+      setAiResult({ name: "Error", reason: "Failed to get recommendation. Check your API key." });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const keyframesCSS = useMemo(() => {
     if (showCustom) {
       const { x1, y1, x2, y2 } = customBezier;
@@ -436,6 +501,54 @@ export default function EasingPage() {
           <h1 className="text-2xl font-bold">Easing Function Visualizer</h1>
           <p className="text-sm text-[#9CA3AF]">Preview, compare, and copy easing functions for game animations</p>
         </div>
+      </div>
+
+      {/* AI Recommend */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+          <p className="text-sm font-semibold text-[#F5F5F5]">AI Recommend</p>
+          <span className="text-xs text-[#6B7280]">Describe your animation to get an easing suggestion</span>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={aiDesc}
+            onChange={(e) => setAiDesc(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") aiRecommend(); }}
+            placeholder='e.g. "bouncing ball", "menu slide in", "character jump"'
+            className="min-w-0 flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none transition-colors focus:border-[#F59E0B]/50"
+          />
+          <button
+            onClick={aiRecommend}
+            disabled={aiLoading || !aiDesc.trim()}
+            className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/40 bg-[#F59E0B]/10 px-4 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20 disabled:opacity-40"
+          >
+            {aiLoading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" />
+            )}
+            {aiLoading ? "Thinking..." : "Recommend"}
+          </button>
+        </div>
+        {aiResult && (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-2.5">
+            <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#F59E0B]" />
+            <div>
+              <span className="text-sm font-semibold text-[#F59E0B]">{aiResult.name}</span>
+              {aiResult.reason && (
+                <span className="ml-1.5 text-sm text-[#9CA3AF]">— {aiResult.reason}</span>
+              )}
+            </div>
+            <button
+              onClick={() => setAiResult(null)}
+              className="ml-auto shrink-0 rounded p-0.5 text-[#6B7280] hover:text-[#F5F5F5]"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
@@ -481,6 +594,7 @@ export default function EasingPage() {
                         onClick={() => setSelected(globalIdx)}
                         onCompareToggle={() => toggleCompare(globalIdx)}
                         compareMode={compareMode}
+                        aiHighlight={aiResult?.name === e.name}
                         ballRef={(el) => {
                           if (el) ballRefs.current.set(globalIdx, el);
                           else ballRefs.current.delete(globalIdx);

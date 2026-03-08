@@ -21,6 +21,8 @@ import {
   X,
   Target,
   Check,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -171,6 +173,9 @@ export default function LaunchChecklistPage() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [openNotes, setOpenNotes] = useState<Record<string, boolean>>({});
   const [newItemInputs, setNewItemInputs] = useState<Record<string, string>>({});
+  const [aiPlan, setAiPlan] = useState<string>("");
+  const [aiPlanLoading, setAiPlanLoading] = useState(false);
+  const [aiPlanOpen, setAiPlanOpen] = useState(false);
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -201,6 +206,37 @@ export default function LaunchChecklistPage() {
   const overallPct = totalItems > 0 ? Math.round((totalChecked / totalItems) * 100) : 0;
   const allDone = totalChecked === totalItems && totalItems > 0;
   const scoreColor = getScoreColor(overallPct);
+
+  const generateLaunchPlan = useCallback(async () => {
+    if (!project || aiPlanLoading) return;
+    setAiPlanLoading(true);
+    setAiPlanOpen(true);
+    setAiPlan("");
+    try {
+      const prompt = `Create a 7-day launch plan for an indie game called '${project.name}' (${project.genre || "unknown genre"}, currently in ${project.status || "development"} with ${overallPct}% complete). Include: Day 1-2: Pre-launch prep, Day 3-4: Marketing push, Day 5: Launch day tasks, Day 6-7: Post-launch tasks. Be specific and actionable. Format with bold day headers.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "Could not generate a launch plan. Please try again.";
+      setAiPlan(content);
+    } catch {
+      setAiPlan("Failed to generate launch plan. Check your API key and try again.");
+    } finally {
+      setAiPlanLoading(false);
+    }
+  }, [project, aiPlanLoading, overallPct]);
 
   const toggleItem = useCallback(
     (itemId: string) => {
@@ -310,15 +346,65 @@ export default function LaunchChecklistPage() {
               Everything you need to ship {project.name}
             </p>
           </div>
-          <button
-            onClick={handleReset}
-            className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-red-500/30 hover:text-red-400"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            Reset All
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={generateLaunchPlan}
+              disabled={aiPlanLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/40 bg-[#F59E0B]/10 px-3 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20 disabled:opacity-50"
+            >
+              {aiPlanLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              {aiPlanLoading ? "Generating..." : "AI Launch Plan"}
+            </button>
+            <button
+              onClick={handleReset}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-red-500/30 hover:text-red-400"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset All
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* AI Launch Plan Panel */}
+      {aiPlanOpen && (
+        <div className="rounded-xl border border-[#F59E0B]/30 bg-[#1A1A1A] overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+              <h3 className="text-sm font-semibold text-[#F59E0B]">AI Launch Plan</h3>
+            </div>
+            <button
+              onClick={() => setAiPlanOpen(false)}
+              className="rounded-md p-1 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="px-5 py-4">
+            {aiPlanLoading ? (
+              <div className="flex items-center gap-3 py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-[#F59E0B]" />
+                <p className="text-sm text-[#9CA3AF]">Generating a 7-day launch plan for {project.name}...</p>
+              </div>
+            ) : (
+              <div className="prose-sm max-w-none whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">
+                {aiPlan.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
+                  part.startsWith("**") && part.endsWith("**") ? (
+                    <strong key={i} className="text-[#F59E0B]">{part.slice(2, -2)}</strong>
+                  ) : (
+                    <span key={i}>{part}</span>
+                  )
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Launch Readiness Score */}
       <div
