@@ -17,6 +17,7 @@ import {
   Clock,
   Plus,
   X,
+  Download,
 } from "lucide-react";
 
 const STORAGE_KEY = "gameforge_narratives";
@@ -159,6 +160,22 @@ export default function NarrativePage() {
       return next;
     });
   }, []);
+
+  const exportAllNarratives = useCallback(() => {
+    if (saved.length === 0) return;
+    const labels: Record<string, string> = { outline: "Story Outline", backstory: "Character Backstory", quest: "Quest" };
+    const sections = saved.map((n) =>
+      `## ${labels[n.type] || n.type}: ${n.title}\n\n*Created: ${new Date(n.createdAt).toLocaleString()}*\n\n${n.content}`
+    );
+    const md = `# Game Narratives\n\nExported on ${new Date().toLocaleDateString()}\n\n---\n\n${sections.join("\n\n---\n\n")}\n`;
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "game-narratives.md";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [saved]);
 
   const generateOutline = useCallback(async () => {
     if (!setting.trim() && !protagonist.trim()) return;
@@ -712,6 +729,16 @@ TWIST 2: [A moral dilemma or surprise revelation, 2 sentences]`;
 
         {savedOpen && (
           <div className="border-t border-[#2A2A2A]">
+            {saved.length > 0 && (
+              <div className="flex justify-end px-5 pt-3">
+                <button
+                  onClick={exportAllNarratives}
+                  className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-1.5 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10"
+                >
+                  <Download className="h-3.5 w-3.5" /> Export All
+                </button>
+              </div>
+            )}
             {saved.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-10 text-center">
                 <BookOpen className="h-10 w-10 text-[#2A2A2A]" />

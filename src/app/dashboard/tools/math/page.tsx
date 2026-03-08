@@ -11,6 +11,8 @@ import {
   Grid3X3,
   Timer,
   Swords,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 
 function fmt(n: number, decimals = 4): string {
@@ -98,6 +100,60 @@ function CardShell({
   );
 }
 
+async function callMathAI(prompt: string): Promise<string> {
+  try {
+    const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "moonshotai/Kimi-K2.5-TEE",
+        messages: [{ role: "user", content: prompt }],
+        stream: false,
+        max_tokens: 128,
+        temperature: 0.7,
+      }),
+    });
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+  } catch {
+    return "";
+  }
+}
+
+function AiExplainButton({ getPrompt }: { getPrompt: () => string }) {
+  const [loading, setLoading] = useState(false);
+  const [explanation, setExplanation] = useState("");
+
+  const handleClick = async () => {
+    setLoading(true);
+    setExplanation("");
+    const result = await callMathAI(getPrompt());
+    setExplanation(result || "Could not generate explanation.");
+    setLoading(false);
+  };
+
+  return (
+    <div className="mt-3">
+      <button
+        onClick={handleClick}
+        disabled={loading}
+        className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-1.5 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50"
+      >
+        {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+        {loading ? "Explaining..." : "AI Explain"}
+      </button>
+      {explanation && (
+        <div className="mt-2 rounded-lg border border-[#F59E0B]/10 bg-[#F59E0B]/5 px-3 py-2">
+          <p className="text-xs leading-relaxed text-[#D1D5DB]">{explanation}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Distance Calculator ──
 
 function DistanceCalc() {
@@ -128,6 +184,7 @@ function DistanceCalc() {
         <ResultRow label="Angle" value={fmt(result.angleDeg, 2)} unit="°" />
         <ResultRow label="Delta" value={`(${fmt(result.dx, 1)}, ${fmt(result.dy, 1)})`} />
       </div>
+      <AiExplainButton getPrompt={() => `Explain this game math result: Distance & Angle between points (${x1},${y1}) and (${x2},${y2}). Distance: ${fmt(result.dist)}px, Angle: ${fmt(result.angleDeg, 2)} degrees. What does this mean for game design? 1-2 sentences.`} />
     </CardShell>
   );
 }
@@ -181,6 +238,7 @@ function LerpCalc() {
         </div>
         <ResultRow label="Result" value={fmt(result)} />
       </div>
+      <AiExplainButton getPrompt={() => `Explain this game math result: Lerp with start=${start}, end=${end}, t=${t}. Result: ${fmt(result)}. What does this mean for game design? 1-2 sentences.`} />
     </CardShell>
   );
 }
@@ -218,6 +276,7 @@ function ProjectileCalc() {
         <ResultRow label="Range" value={fmt(result.range, 2)} unit="u" />
         <ResultRow label="Flight Time" value={fmt(result.flightTime, 3)} unit="s" />
       </div>
+      <AiExplainButton getPrompt={() => `Explain this game math result: Projectile Motion with velocity=${velocity}u/s, angle=${angle} degrees, gravity=${gravity}u/s2. Max height: ${fmt(result.maxHeight, 2)}u, Range: ${fmt(result.range, 2)}u, Flight time: ${fmt(result.flightTime, 3)}s. What does this mean for game design? 1-2 sentences.`} />
     </CardShell>
   );
 }
@@ -280,6 +339,7 @@ function RandomRangeCalc() {
         <ResultRow label="Min Generated" value={fmt(stats.min, 2)} />
         <ResultRow label="Max Generated" value={fmt(stats.max, 2)} />
       </div>
+      <AiExplainButton getPrompt={() => `Explain this game math result: Random Range with min=${min}, max=${max}, ${count} samples. Avg: ${fmt(stats.avg, 2)}, Min: ${fmt(stats.min, 2)}, Max: ${fmt(stats.max, 2)}. What does this mean for game design? 1-2 sentences.`} />
     </CardShell>
   );
 }
@@ -314,6 +374,7 @@ function GridCalc() {
           unit="px"
         />
       </div>
+      <AiExplainButton getPrompt={() => `Explain this game math result: Grid Position with pixel (${pixelX},${pixelY}) on ${tileW}x${tileH} tiles. Grid cell: (${gridX},${gridY}), Snap: (${snapX},${snapY}). What does this mean for game design? 1-2 sentences.`} />
     </CardShell>
   );
 }
@@ -363,6 +424,7 @@ function FpsCalc() {
           value={ms <= 16.67 ? "Within 60fps" : ms <= 33.33 ? "Within 30fps" : "Below 30fps"}
         />
       </div>
+      <AiExplainButton getPrompt={() => `Explain this game math result: FPS conversion. ${fmt(fps, 2)} FPS = ${fmt(ms, 3)}ms per frame. Budget: ${ms <= 16.67 ? "Within 60fps" : ms <= 33.33 ? "Within 30fps" : "Below 30fps"}. What does this mean for game design? 1-2 sentences.`} />
     </CardShell>
   );
 }
@@ -426,6 +488,7 @@ function DamageCalc() {
         <ResultRow label="TTK (100 HP)" value={fmt(result.ttk100, 2)} unit="s" />
         <ResultRow label="TTK (1000 HP)" value={fmt(result.ttk1000, 2)} unit="s" />
       </div>
+      <AiExplainButton getPrompt={() => `Explain this game math result: Damage Calculator with ${baseDmg} base dmg, ${critChance}% crit, ${critMult}x crit mult, ${armor} armor, ${defense} defense, ${attackSpeed}/s speed. DPS: ${fmt(result.dps, 1)}, TTK(100HP): ${fmt(result.ttk100, 2)}s. What does this mean for game design? 1-2 sentences.`} />
     </CardShell>
   );
 }
