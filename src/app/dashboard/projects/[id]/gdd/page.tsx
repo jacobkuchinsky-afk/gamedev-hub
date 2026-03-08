@@ -79,6 +79,17 @@ interface CompetitorAnalysis {
   usp: string;
 }
 
+interface AIEnemy {
+  name: string;
+  type: string;
+  health: number;
+  attackDamage: number;
+  speed: number;
+  specialAbility: string;
+  behaviorPattern: string;
+  visualDescription: string;
+}
+
 interface DesignPillar {
   id: string;
   name: string;
@@ -611,6 +622,11 @@ export default function GDDPage() {
   const [conceptDocResult, setConceptDocResult] = useState("");
   const [showConceptDoc, setShowConceptDoc] = useState(false);
   const [conceptDocCopied, setConceptDocCopied] = useState(false);
+
+  const [enemies, setEnemies] = useState<AIEnemy[]>([]);
+  const [enemiesLoading, setEnemiesLoading] = useState(false);
+  const [showEnemies, setShowEnemies] = useState(false);
+  const [enemiesCopied, setEnemiesCopied] = useState(false);
 
   const [showWiki, setShowWiki] = useState(false);
   const [wikiTopic, setWikiTopic] = useState("");
@@ -1183,6 +1199,48 @@ export default function GDDPage() {
     URL.revokeObjectURL(url);
   }, [conceptDocResult, data, project]);
 
+  const handleGenerateEnemies = useCallback(async () => {
+    if (!project) return;
+    setEnemiesLoading(true);
+    setShowEnemies(true);
+    setEnemiesCopied(false);
+
+    const genre = data.genre || project.genre || "unspecified";
+    const name = data.gameTitle || project.name || "Untitled";
+
+    const prompt = `Design 5 enemies for a ${genre} game called '${name}'. For each enemy provide: name, type (one of: Minion, Elite, Boss, or NPC), health (number 50-5000), attackDamage (number 5-500), speed (number 1-10), specialAbility (one sentence), behaviorPattern (one sentence), and visualDescription (one sentence). Return as JSON array: [{"name":"...","type":"...","health":N,"attackDamage":N,"speed":N,"specialAbility":"...","behaviorPattern":"...","visualDescription":"..."}]. Include at least 1 Boss, 1 Elite, 1 NPC, and 2 Minions. Return ONLY raw JSON, no markdown.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 1024,
+          temperature: 0.8,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+      const apiData = await response.json();
+      const content = apiData.choices?.[0]?.message?.content || apiData.choices?.[0]?.message?.reasoning || "";
+      const cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      setEnemies(Array.isArray(parsed) ? parsed : []);
+      setToast({ message: `Generated ${Array.isArray(parsed) ? parsed.length : 0} enemies!`, type: "success" });
+    } catch (err) {
+      console.error("[GDD AI Enemies]", err);
+      setToast({ message: "Failed to generate enemies — try again", type: "error" });
+    } finally {
+      setEnemiesLoading(false);
+    }
+  }, [project, data]);
+
   const handleGenerateWikiEntry = useCallback(async () => {
     if (!project || !wikiTopic.trim()) return;
     setWikiLoading(true);
@@ -1412,6 +1470,18 @@ export default function GDDPage() {
                   <Trophy className="h-3.5 w-3.5" />
                 )}
                 AI Achievements
+              </button>
+              <button
+                onClick={handleGenerateEnemies}
+                disabled={enemiesLoading}
+                className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {enemiesLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Swords className="h-3.5 w-3.5" />
+                )}
+                AI Enemies
               </button>
               <button
                 onClick={() => { setShowWiki(true); setCodexView(false); }}
@@ -2354,6 +2424,191 @@ export default function GDDPage() {
                 <button
                   onClick={handleGenerateAchievements}
                   disabled={achievementsLoading}
+                  className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black hover:bg-[#F59E0B]/90 disabled:opacity-50"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Regenerate
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AI Enemies Modal */}
+      {showEnemies && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-4xl rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                  <Swords className="h-4.5 w-4.5 text-[#F59E0B]" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">AI Enemy / NPC Designer</h3>
+                  <p className="text-xs text-[#6B7280]">
+                    {enemies.length} entities designed for {project?.name}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {enemies.length > 0 && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(JSON.stringify(enemies, null, 2));
+                      setEnemiesCopied(true);
+                      setTimeout(() => setEnemiesCopied(false), 2000);
+                    }}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                      enemiesCopied
+                        ? "bg-[#10B981] text-white"
+                        : "border border-[#2A2A2A] text-[#9CA3AF] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                    }`}
+                  >
+                    {enemiesCopied ? (
+                      <><CheckCircle2 className="h-3.5 w-3.5" /> Copied!</>
+                    ) : (
+                      <><Copy className="h-3.5 w-3.5" /> Copy JSON</>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowEnemies(false)}
+                  className="rounded-lg p-1 text-[#9CA3AF] hover:text-[#F5F5F5]"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {enemiesLoading ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#F59E0B]" />
+                  <p className="text-sm text-[#6B7280]">Designing enemies & NPCs...</p>
+                </div>
+              ) : enemies.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-2">
+                  <Swords className="h-10 w-10 text-[#3A3A3A]" />
+                  <p className="text-sm text-[#6B7280]">No enemies generated yet</p>
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {enemies.map((enemy, i) => {
+                    const typeColors: Record<string, { border: string; bg: string; text: string; label: string }> = {
+                      Minion: { border: "#6B7280", bg: "#6B728015", text: "#9CA3AF", label: "MINION" },
+                      Elite: { border: "#3B82F6", bg: "#3B82F615", text: "#60A5FA", label: "ELITE" },
+                      Boss: { border: "#EF4444", bg: "#EF444415", text: "#F87171", label: "BOSS" },
+                      NPC: { border: "#10B981", bg: "#10B98115", text: "#34D399", label: "NPC" },
+                    };
+                    const tc = typeColors[enemy.type] || typeColors.Minion;
+                    const maxHealth = Math.max(...enemies.map((e) => e.health || 100), 100);
+                    const maxDmg = Math.max(...enemies.map((e) => e.attackDamage || 10), 10);
+
+                    return (
+                      <div
+                        key={i}
+                        className="rounded-xl border-2 bg-[#0F0F0F] p-5 transition-all hover:bg-[#131313]"
+                        style={{ borderColor: tc.border + "50" }}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <div className="flex items-center gap-2.5">
+                            <div
+                              className="flex h-8 w-8 items-center justify-center rounded-lg"
+                              style={{ backgroundColor: tc.bg }}
+                            >
+                              <Swords className="h-4 w-4" style={{ color: tc.text }} />
+                            </div>
+                            <h4 className="text-sm font-bold text-[#F5F5F5]">{enemy.name}</h4>
+                          </div>
+                          <span
+                            className="shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                            style={{ backgroundColor: tc.bg, color: tc.text }}
+                          >
+                            {tc.label}
+                          </span>
+                        </div>
+
+                        <div className="space-y-2 mb-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[11px] text-[#6B7280]">HP</span>
+                              <span className="text-[11px] font-mono text-[#9CA3AF]">{enemy.health}</span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full bg-[#1A1A1A]">
+                              <div
+                                className="h-1.5 rounded-full transition-all"
+                                style={{
+                                  width: `${Math.min(100, ((enemy.health || 0) / maxHealth) * 100)}%`,
+                                  backgroundColor: "#EF4444",
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[11px] text-[#6B7280]">ATK</span>
+                              <span className="text-[11px] font-mono text-[#9CA3AF]">{enemy.attackDamage}</span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full bg-[#1A1A1A]">
+                              <div
+                                className="h-1.5 rounded-full transition-all"
+                                style={{
+                                  width: `${Math.min(100, ((enemy.attackDamage || 0) / maxDmg) * 100)}%`,
+                                  backgroundColor: "#F59E0B",
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[11px] text-[#6B7280]">SPD</span>
+                              <span className="text-[11px] font-mono text-[#9CA3AF]">{enemy.speed}</span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full bg-[#1A1A1A]">
+                              <div
+                                className="h-1.5 rounded-full transition-all"
+                                style={{
+                                  width: `${Math.min(100, ((enemy.speed || 0) / 10) * 100)}%`,
+                                  backgroundColor: "#3B82F6",
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="rounded-lg bg-[#1A1A1A] px-3 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#F59E0B] mb-0.5">Special Ability</p>
+                            <p className="text-xs text-[#9CA3AF] leading-relaxed">{enemy.specialAbility}</p>
+                          </div>
+                          <div className="rounded-lg bg-[#1A1A1A] px-3 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] mb-0.5">Behavior</p>
+                            <p className="text-xs text-[#9CA3AF] leading-relaxed">{enemy.behaviorPattern}</p>
+                          </div>
+                          <div className="rounded-lg bg-[#1A1A1A] px-3 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] mb-0.5">Appearance</p>
+                            <p className="text-xs text-[#9CA3AF] leading-relaxed">{enemy.visualDescription}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {enemies.length > 0 && (
+              <div className="flex items-center justify-between border-t border-[#2A2A2A] px-6 py-3 shrink-0">
+                <p className="text-xs text-[#6B7280]">
+                  {enemies.filter((e) => e.type === "Boss").length} Boss, {" "}
+                  {enemies.filter((e) => e.type === "Elite").length} Elite, {" "}
+                  {enemies.filter((e) => e.type === "Minion").length} Minion, {" "}
+                  {enemies.filter((e) => e.type === "NPC").length} NPC
+                </p>
+                <button
+                  onClick={handleGenerateEnemies}
+                  disabled={enemiesLoading}
                   className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black hover:bg-[#F59E0B]/90 disabled:opacity-50"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
