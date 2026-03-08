@@ -179,6 +179,53 @@ export default function DevlogPage() {
   const [formContent, setFormContent] = useState("");
   const [formMood, setFormMood] = useState<DevlogEntry["mood"]>("productive");
   const [aiLoading, setAiLoading] = useState(false);
+  const [weeklySummary, setWeeklySummary] = useState("");
+  const [weeklySummaryLoading, setWeeklySummaryLoading] = useState(false);
+  const [showWeeklySummary, setShowWeeklySummary] = useState(false);
+
+  const handleWeeklySummary = async () => {
+    setWeeklySummaryLoading(true);
+    setShowWeeklySummary(true);
+    try {
+      const now = new Date();
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const weekAgoStr = weekAgo.toISOString().split("T")[0];
+      const recentEntries = entries.filter((e) => e.date >= weekAgoStr);
+
+      if (recentEntries.length === 0) {
+        setWeeklySummary("No devlog entries from the past 7 days to summarize. Start writing!");
+        return;
+      }
+
+      const entriesText = recentEntries
+        .map((e) => `[${e.date}] ${e.title} (${e.mood}): ${e.content}`)
+        .join("\n\n");
+
+      const prompt = `Summarize these game development devlog entries from the past week: ${entriesText}. Write a brief weekly progress report (3-4 sentences) highlighting: what was accomplished, what challenges were faced, and what the focus should be next week.`;
+
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      setWeeklySummary(content || "Couldn't generate a summary. Try again later.");
+    } catch {
+      setWeeklySummary("Failed to generate summary. Check your connection and try again.");
+    } finally {
+      setWeeklySummaryLoading(false);
+    }
+  };
 
   const handleAiAssist = async () => {
     setAiLoading(true);
@@ -371,14 +418,57 @@ export default function DevlogPage() {
             Your daily standup &mdash; everything you&apos;ve been working on
           </p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2.5 text-sm font-medium text-black transition-colors hover:bg-[#D97706]"
-        >
-          <Plus className="h-4 w-4" />
-          Write Entry
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleWeeklySummary}
+            disabled={weeklySummaryLoading}
+            className="flex items-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-4 py-2.5 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {weeklySummaryLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            AI Weekly Summary
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2.5 text-sm font-medium text-black transition-colors hover:bg-[#D97706]"
+          >
+            <Plus className="h-4 w-4" />
+            Write Entry
+          </button>
+        </div>
       </div>
+
+      {showWeeklySummary && (
+        <div className="relative overflow-hidden rounded-xl border border-[#F59E0B]/20 bg-gradient-to-br from-[#F59E0B]/5 via-[#1A1A1A] to-[#1A1A1A]">
+          <div className="flex items-center justify-between border-b border-[#F59E0B]/10 px-5 py-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                <Sparkles className="h-3.5 w-3.5 text-[#F59E0B]" />
+              </div>
+              <h2 className="text-sm font-semibold text-[#F59E0B]">Weekly Summary</h2>
+            </div>
+            <button
+              onClick={() => setShowWeeklySummary(false)}
+              className="rounded-lg p-1 text-[#6B7280] transition-colors hover:text-[#F5F5F5]"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="px-5 py-4">
+            {weeklySummaryLoading ? (
+              <div className="flex items-center gap-3 py-2">
+                <Loader2 className="h-4 w-4 animate-spin text-[#F59E0B]" />
+                <span className="text-sm text-[#9CA3AF]">Analyzing your week...</span>
+              </div>
+            ) : (
+              <p className="text-sm leading-relaxed text-[#D1D5DB]">{weeklySummary}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Stats Row */}
       {entries.length > 0 && (

@@ -29,6 +29,8 @@ import {
   Target,
   Loader2,
   ExternalLink,
+  Gauge,
+  ArrowUpRight,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
 import {
@@ -826,6 +828,129 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Productivity Score */}
+      {(() => {
+        const allTasks = recentTasks.length > 0 || stats.openTasks > 0;
+        const totalTasks = stats.openTasks + weeklySummary.tasksCompleted.length;
+        const taskCompletionRate = totalTasks > 0
+          ? Math.min(1, weeklySummary.tasksCompleted.length / Math.max(totalTasks, 1))
+          : 0;
+
+        const totalBugs = stats.openBugs + weeklySummary.bugsClosed.length;
+        const bugFixRate = totalBugs > 0
+          ? Math.min(1, weeklySummary.bugsClosed.length / Math.max(totalBugs, 1))
+          : (allTasks ? 1 : 0);
+
+        const devlogConsistency = Math.min(1, weeklySummary.devlogsWritten.length / 5);
+
+        const sprintVelocity = weeklySummary.sprintProgress / 100;
+
+        const overdueTasks = recentTasks.filter((t) => {
+          if (t.status === "done" || !t.dueDate) return false;
+          return new Date(t.dueDate) < new Date();
+        });
+        const overduePenalty = Math.min(1, overdueTasks.length * 0.2);
+
+        const rawScore = Math.round(
+          taskCompletionRate * 30 +
+          bugFixRate * 20 +
+          devlogConsistency * 20 +
+          sprintVelocity * 15 +
+          (1 - overduePenalty) * 15
+        );
+        const score = Math.max(0, Math.min(100, rawScore));
+
+        const scoreColor = score >= 80 ? "#10B981" : score >= 60 ? "#F59E0B" : score >= 40 ? "#F97316" : "#EF4444";
+        const scoreLabel = score >= 80 ? "Excellent" : score >= 60 ? "Good" : score >= 40 ? "Needs Work" : "Critical";
+
+        const breakdowns = [
+          { label: "Task Completion", value: Math.round(taskCompletionRate * 100), weight: 30, color: "#3B82F6" },
+          { label: "Bug Fix Rate", value: Math.round(bugFixRate * 100), weight: 20, color: "#EF4444" },
+          { label: "Devlog Consistency", value: Math.round(devlogConsistency * 100), weight: 20, color: "#F59E0B" },
+          { label: "Sprint Velocity", value: Math.round(sprintVelocity * 100), weight: 15, color: "#8B5CF6" },
+          { label: "On-time Delivery", value: Math.round((1 - overduePenalty) * 100), weight: 15, color: "#10B981" },
+        ];
+        const weakest = [...breakdowns].sort((a, b) => a.value - b.value)[0];
+
+        const tips: Record<string, string> = {
+          "Task Completion": "Focus on closing out open tasks before starting new ones.",
+          "Bug Fix Rate": "Prioritize squashing bugs — they compound if ignored.",
+          "Devlog Consistency": "Write at least one devlog entry per day to build the habit.",
+          "Sprint Velocity": "Break tasks into smaller chunks to boost sprint throughput.",
+          "On-time Delivery": "Review due dates and rescope overdue tasks realistically.",
+        };
+
+        const circumference = 2 * Math.PI * 54;
+        const strokeDashoffset = circumference - (score / 100) * circumference;
+
+        return (
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+            <div className="flex items-center gap-2 border-b border-[#2A2A2A] px-5 py-4">
+              <Gauge className="h-4 w-4 text-[#F59E0B]" />
+              <h2 className="font-semibold">Productivity Score</h2>
+            </div>
+            <div className="p-5">
+              <div className="flex flex-col items-center gap-6 sm:flex-row">
+                <div className="relative flex shrink-0 items-center justify-center">
+                  <svg width="140" height="140" viewBox="0 0 140 140">
+                    <circle
+                      cx="70" cy="70" r="54"
+                      fill="none"
+                      stroke="#2A2A2A"
+                      strokeWidth="10"
+                    />
+                    <circle
+                      cx="70" cy="70" r="54"
+                      fill="none"
+                      stroke={scoreColor}
+                      strokeWidth="10"
+                      strokeLinecap="round"
+                      strokeDasharray={circumference}
+                      strokeDashoffset={strokeDashoffset}
+                      transform="rotate(-90 70 70)"
+                      className="transition-all duration-700"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-3xl font-bold" style={{ color: scoreColor }}>{score}</span>
+                    <span className="text-[10px] font-medium text-[#6B7280]">{scoreLabel}</span>
+                  </div>
+                </div>
+
+                <div className="flex-1 space-y-2.5 w-full">
+                  {breakdowns.map((b) => (
+                    <div key={b.label}>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-[#9CA3AF]">{b.label} <span className="text-[#6B7280]">({b.weight}%)</span></span>
+                        <span className="font-medium tabular-nums" style={{ color: b.color }}>{b.value}%</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-[#2A2A2A]">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${b.value}%`, backgroundColor: b.color }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {weakest && weakest.value < 80 && (
+                <div className="mt-5 flex items-start gap-3 rounded-lg border border-[#F59E0B]/15 bg-[#F59E0B]/5 px-4 py-3">
+                  <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-[#F59E0B]" />
+                  <div>
+                    <p className="text-xs font-semibold text-[#F59E0B]">How to improve</p>
+                    <p className="mt-0.5 text-xs text-[#9CA3AF]">
+                      Your weakest area is <span className="text-[#F5F5F5] font-medium">{weakest.label}</span> at {weakest.value}%. {tips[weakest.label]}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Quick Actions */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
