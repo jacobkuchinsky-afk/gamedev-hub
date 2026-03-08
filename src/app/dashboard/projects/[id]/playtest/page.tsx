@@ -195,6 +195,10 @@ export default function PlaytestPage() {
   const [showAiQuestions, setShowAiQuestions] = useState(false);
   const [questionsCopied, setQuestionsCopied] = useState(false);
 
+  const [aiResponses, setAiResponses] = useState<Record<string, string>>({});
+  const [aiResponseLoading, setAiResponseLoading] = useState<Record<string, boolean>>({});
+  const [aiResponseCopied, setAiResponseCopied] = useState<Record<string, boolean>>({});
+
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [testPlanLoading, setTestPlanLoading] = useState(false);
   const [showTestPlan, setShowTestPlan] = useState(false);
@@ -279,6 +283,50 @@ export default function PlaytestPage() {
     navigator.clipboard.writeText(aiQuestions).then(() => {
       setQuestionsCopied(true);
       setTimeout(() => setQuestionsCopied(false), 2000);
+    });
+  };
+
+  const handleAiRespond = async (r: PlaytestResponse) => {
+    setAiResponseLoading((prev) => ({ ...prev, [r.id]: true }));
+    try {
+      const feedbackParts: string[] = [];
+      if (r.favoriteMoment) feedbackParts.push(`Liked: ${r.favoriteMoment}`);
+      if (r.frustratingMoment) feedbackParts.push(`Frustrated by: ${r.frustratingMoment}`);
+      if (r.bugEncountered && r.bugDescription) feedbackParts.push(`Bug report: ${r.bugDescription}`);
+      if (r.suggestions) feedbackParts.push(`Suggestions: ${r.suggestions}`);
+      const feedback = feedbackParts.join(". ") || `Rating: ${r.overallRating}/5, Difficulty: ${DIFFICULTY_LABELS[r.difficulty]}`;
+
+      const prompt = `A playtester gave this feedback for our game: '${feedback}'. Write a brief, professional developer response (2-3 sentences) that: acknowledges their feedback, explains what you plan to do about it, and thanks them. Be warm and professional.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      setAiResponses((prev) => ({ ...prev, [r.id]: content || "Could not generate a response. Try again." }));
+    } catch {
+      setAiResponses((prev) => ({ ...prev, [r.id]: "Failed to generate response. Check your connection and try again." }));
+    } finally {
+      setAiResponseLoading((prev) => ({ ...prev, [r.id]: false }));
+    }
+  };
+
+  const copyAiResponse = (id: string) => {
+    const text = aiResponses[id];
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      setAiResponseCopied((prev) => ({ ...prev, [id]: true }));
+      setTimeout(() => setAiResponseCopied((prev) => ({ ...prev, [id]: false })), 2000);
     });
   };
 
@@ -1305,6 +1353,68 @@ export default function PlaytestPage() {
                           <p className="mt-1 text-sm text-[#D1D5DB] leading-relaxed">{r.suggestions}</p>
                         </div>
                       )}
+
+                      {/* AI Respond */}
+                      <div className="border-t border-[#2A2A2A]/50 pt-4">
+                        {!aiResponses[r.id] ? (
+                          <button
+                            onClick={() => handleAiRespond(r)}
+                            disabled={aiResponseLoading[r.id]}
+                            className="flex items-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {aiResponseLoading[r.id] ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Sparkles className="h-3.5 w-3.5" />
+                            )}
+                            {aiResponseLoading[r.id] ? "Generating response..." : "AI Respond"}
+                          </button>
+                        ) : (
+                          <div className="rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-1.5">
+                                <Sparkles className="h-3.5 w-3.5 text-[#F59E0B]" />
+                                <span className="text-[11px] font-semibold text-[#F59E0B]">Suggested Response</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => copyAiResponse(r.id)}
+                                  className={`flex items-center gap-1 rounded px-2 py-1 text-[10px] font-medium transition-colors ${
+                                    aiResponseCopied[r.id]
+                                      ? "bg-[#10B981]/10 text-[#10B981]"
+                                      : "bg-[#F59E0B]/10 text-[#F59E0B] hover:bg-[#F59E0B]/20"
+                                  }`}
+                                >
+                                  {aiResponseCopied[r.id] ? (
+                                    <><Check className="h-3 w-3" /> Copied</>
+                                  ) : (
+                                    <><ClipboardCopy className="h-3 w-3" /> Copy</>
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => handleAiRespond(r)}
+                                  disabled={aiResponseLoading[r.id]}
+                                  className="rounded px-2 py-1 text-[10px] font-medium text-[#6B7280] transition-colors hover:text-[#9CA3AF] disabled:opacity-50"
+                                  title="Regenerate"
+                                >
+                                  {aiResponseLoading[r.id] ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    "Retry"
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => setAiResponses((prev) => { const next = { ...prev }; delete next[r.id]; return next; })}
+                                  className="rounded p-0.5 text-[#6B7280] transition-colors hover:text-[#9CA3AF]"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </div>
+                            <p className="text-sm leading-relaxed text-[#D1D5DB]">{aiResponses[r.id]}</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
