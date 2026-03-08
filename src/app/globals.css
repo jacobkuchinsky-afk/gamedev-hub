@@ -28,8 +28,12 @@ body {
 }
 
 ::selection {
-  background: rgba(245, 158, 11, 0.3);
-  color: #F5F5F5;
+  background: #F59E0B;
+  color: #0F0F0F;
+}
+::-moz-selection {
+  background: #F59E0B;
+  color: #0F0F0F;
 }
 
 input, textarea, select {
