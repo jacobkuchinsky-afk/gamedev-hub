@@ -152,6 +152,8 @@ export default function CheatsheetPage() {
   const [aiExplain, setAiExplain] = useState<Record<string, string>>({});
   const [aiLoading, setAiLoading] = useState<Record<string, boolean>>({});
   const [aiOpen, setAiOpen] = useState<Record<string, boolean>>({});
+  const [aiTips, setAiTips] = useState<Record<string, string>>({});
+  const [aiTipLoading, setAiTipLoading] = useState<Record<string, boolean>>({});
 
   const filtered = useMemo(() => {
     if (!search.trim()) return CHEAT_DATA;
@@ -372,8 +374,39 @@ export default function CheatsheetPage() {
                                   <Sparkles className="h-3.5 w-3.5" />
                                 )}
                               </button>
+                              <button
+                                onClick={async () => {
+                                  if (aiTipLoading[entryKey]) return;
+                                  setAiTipLoading(prev => ({ ...prev, [entryKey]: true }));
+                                  try {
+                                    const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+                                      method: "POST",
+                                      headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+                                      body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Give a quick pro-tip for using ${entry.title} in games. 1 sentence.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+                                    });
+                                    const data = await response.json();
+                                    setAiTips(prev => ({ ...prev, [entryKey]: data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "" }));
+                                  } catch {} finally { setAiTipLoading(prev => ({ ...prev, [entryKey]: false })); }
+                                }}
+                                disabled={aiTipLoading[entryKey]}
+                                className="rounded-md p-1.5 text-[#6B7280] transition-colors hover:bg-[#10B981]/10 hover:text-[#10B981] disabled:opacity-50"
+                                title="Quick Tip"
+                              >
+                                {aiTipLoading[entryKey] ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[#10B981]" />
+                                ) : (
+                                  <BookOpen className="h-3.5 w-3.5" />
+                                )}
+                              </button>
                             </div>
                           </div>
+
+                          {aiTips[entryKey] && (
+                            <div className="mt-2 flex items-start gap-2 rounded-lg border border-[#10B981]/20 bg-[#10B981]/5 px-3 py-2">
+                              <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-[#10B981]" />
+                              <p className="text-[11px] leading-relaxed text-[#D1D5DB]">{aiTips[entryKey]}</p>
+                            </div>
+                          )}
 
                           {isExplainOpen && (
                             <div className="mt-3 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-4">

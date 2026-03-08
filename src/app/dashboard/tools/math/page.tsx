@@ -570,6 +570,49 @@ function AiFormulaSuggest() {
   );
 }
 
+// ── AI Math Game Application ──
+
+function AiMathGameApp() {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState("");
+  const calcTypes = ["distance", "lerp", "projectile motion", "random range", "grid position", "FPS/frame time", "damage"];
+  const [calcIdx, setCalcIdx] = useState(0);
+
+  return (
+    <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">AI Game Application</h3>
+        </div>
+        <button
+          onClick={async () => {
+            if (loading) return;
+            setLoading(true); setResult("");
+            const ct = calcTypes[calcIdx % calcTypes.length];
+            setCalcIdx(i => i + 1);
+            try {
+              const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+                method: "POST",
+                headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+                body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Suggest a game mechanic that uses the ${ct} formula. 1 sentence.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+              });
+              const data = await response.json();
+              setResult(data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "");
+            } catch {} finally { setLoading(false); }
+          }}
+          disabled={loading}
+          className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-2.5 py-1.5 text-[11px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/20 disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+          Suggest Mechanic
+        </button>
+      </div>
+      {result && <p className="mt-2 text-xs leading-relaxed text-[#D1D5DB]">{result}</p>}
+    </div>
+  );
+}
+
 // ── Main Page ──
 
 export default function GameMathPage() {
@@ -591,6 +634,7 @@ export default function GameMathPage() {
       </div>
 
       <AiFormulaSuggest />
+      <AiMathGameApp />
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         <DistanceCalc />

@@ -216,6 +216,8 @@ export default function EffectsPage() {
     reason: string;
   } | null>(null);
   const pendingAiPreview = useRef<string[]>([]);
+  const [aiTimingLoading, setAiTimingLoading] = useState(false);
+  const [aiTimingResult, setAiTimingResult] = useState("");
   const screenRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -809,6 +811,35 @@ export default function EffectsPage() {
 
         {/* Effects Panel */}
         <div className="w-72 shrink-0 space-y-2">
+          {/* AI Effect Timing */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF]">AI Timing</span>
+              <button
+                onClick={async () => {
+                  if (aiTimingLoading) return;
+                  setAiTimingLoading(true); setAiTimingResult("");
+                  const enabledEffects = Object.entries(effects).filter(([,v]) => v.enabled).map(([k]) => k);
+                  const effectName = enabledEffects[0] || "shake";
+                  try {
+                    const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+                      method: "POST",
+                      headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+                      body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Suggest ideal timing for a ${effectName} screen effect in a ${aiQuery.trim() || "action"} game. Duration in ms. Just the number and a brief reason.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+                    });
+                    const data = await response.json();
+                    setAiTimingResult(data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "");
+                  } catch {} finally { setAiTimingLoading(false); }
+                }}
+                disabled={aiTimingLoading}
+                className="flex items-center gap-1 rounded-md border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-2 py-1 text-[10px] font-medium text-[#F59E0B] hover:bg-[#F59E0B]/20 disabled:opacity-50"
+              >
+                {aiTimingLoading ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Sparkles className="h-2.5 w-2.5" />}
+                Suggest
+              </button>
+            </div>
+            {aiTimingResult && <p className="text-[11px] leading-relaxed text-[#D1D5DB]">{aiTimingResult}</p>}
+          </div>
           <EffectCard
             title="Screen Shake"
             active={activeEffects.has("shake")}

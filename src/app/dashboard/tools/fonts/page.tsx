@@ -112,6 +112,8 @@ export default function FontPreviewPage() {
   const [pairingLoading, setPairingLoading] = useState(false);
   const [pairingResults, setPairingResults] = useState<FontPairing[]>([]);
   const [pairingError, setPairingError] = useState("");
+  const [aiFontSizeLoading, setAiFontSizeLoading] = useState(false);
+  const [aiFontSizeResult, setAiFontSizeResult] = useState("");
 
   const previewBg = darkBg ? "#0F0F0F" : "#F0F0F0";
   const previewText = text || "Your Game Title";
@@ -547,6 +549,39 @@ export default function FontPreviewPage() {
             <p className="text-xs text-[#EF4444]">{aiResult.reason}</p>
           </div>
         )}
+      </div>
+
+      {/* AI Font Size Suggest */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">AI Font Size Suggest</h3>
+          </div>
+          <button
+            onClick={async () => {
+              if (aiFontSizeLoading) return;
+              setAiFontSizeLoading(true); setAiFontSizeResult("");
+              const elements = ["title", "HUD", "dialogue", "menu"];
+              const el = elements[Math.floor(Math.random() * elements.length)];
+              try {
+                const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+                  method: "POST",
+                  headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+                  body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `What font size works best for a game ${el} (title/HUD/dialogue/menu) at 1920x1080? Give the size in px and why.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+                });
+                const data = await response.json();
+                setAiFontSizeResult(data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "");
+              } catch {} finally { setAiFontSizeLoading(false); }
+            }}
+            disabled={aiFontSizeLoading}
+            className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-2.5 py-1.5 text-[11px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/20 disabled:opacity-50"
+          >
+            {aiFontSizeLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+            Suggest Size
+          </button>
+        </div>
+        {aiFontSizeResult && <p className="mt-2 text-xs leading-relaxed text-[#D1D5DB]">{aiFontSizeResult}</p>}
       </div>
 
       {/* AI Font Pairing */}

@@ -309,6 +309,8 @@ export default function ControlsPage() {
   const [aiDescCopied, setAiDescCopied] = useState(false);
   const [aiPresetInput, setAiPresetInput] = useState("");
   const [aiPresetLoading, setAiPresetLoading] = useState(false);
+  const [aiConflictLoading, setAiConflictLoading] = useState(false);
+  const [aiConflictResult, setAiConflictResult] = useState("");
 
   const conflicts = useMemo(() => {
     const seen = new Map<string, string[]>();
@@ -700,12 +702,47 @@ export default function ControlsPage() {
 
       {/* Conflict warnings */}
       {conflicts.size > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-4 py-3">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-[#F59E0B]" />
-          <span className="text-sm text-[#F59E0B]">
-            Key conflict{conflicts.size > 1 ? "s" : ""} detected:{" "}
-            {[...conflicts].map((k) => `"${k}"`).join(", ")}
-          </span>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-[#F59E0B]" />
+              <span className="text-sm text-[#F59E0B]">
+                Key conflict{conflicts.size > 1 ? "s" : ""} detected:{" "}
+                {[...conflicts].map((k) => `"${k}"`).join(", ")}
+              </span>
+            </div>
+            <button
+              onClick={async () => {
+                if (aiConflictLoading) return;
+                setAiConflictLoading(true); setAiConflictResult("");
+                const conflictKeys = [...conflicts];
+                const k1 = conflictKeys[0] || "W";
+                const mappingsForKey = keyMappings.filter(m => m.key === k1);
+                const a1 = mappingsForKey[0]?.action || "Move Up";
+                const a2 = mappingsForKey[1]?.action || "Jump";
+                try {
+                  const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+                    method: "POST",
+                    headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+                    body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `These game controls have a conflict: ${k1}=${a1} and ${k1}=${a2}. Suggest a better alternative key for one of them. Just: move {action} to {key}.` }], stream: false, max_tokens: 64, temperature: 0.7 }),
+                  });
+                  const data = await response.json();
+                  setAiConflictResult(data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "");
+                } catch {} finally { setAiConflictLoading(false); }
+              }}
+              disabled={aiConflictLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-2.5 py-1.5 text-[11px] font-medium text-[#F59E0B] hover:bg-[#F59E0B]/20 disabled:opacity-50"
+            >
+              {aiConflictLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+              AI Fix
+            </button>
+          </div>
+          {aiConflictResult && (
+            <div className="flex items-center gap-2 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-4 py-2">
+              <Sparkles className="h-3 w-3 shrink-0 text-[#F59E0B]" />
+              <span className="text-xs text-[#D1D5DB]">{aiConflictResult}</span>
+            </div>
+          )}
         </div>
       )}
 

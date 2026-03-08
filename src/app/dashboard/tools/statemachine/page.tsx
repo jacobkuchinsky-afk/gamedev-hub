@@ -243,6 +243,8 @@ export default function StateMachinePage() {
 
   const [stateDescriptions, setStateDescriptions] = useState<Record<string, string>>({});
   const [aiDescLoading, setAiDescLoading] = useState<string | null>(null);
+  const [aiSmNamingLoading, setAiSmNamingLoading] = useState(false);
+  const [aiSmNamingResult, setAiSmNamingResult] = useState("");
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const interRef = useRef<Interaction>({ type: "idle" });
@@ -747,7 +749,33 @@ Keep state names short (1-2 words). Include 4-8 states and relevant transitions 
               <RotateCcw className="w-3.5 h-3.5" /> Step
             </button>
           )}
+          <button
+            onClick={async () => {
+              if (aiSmNamingLoading) return;
+              setAiSmNamingLoading(true); setAiSmNamingResult("");
+              try {
+                const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+                  method: "POST",
+                  headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+                  body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Suggest a name for this state machine: ${states.length} states, ${transitions.length} transitions. Use a descriptive name like 'Enemy Patrol AI'. Just the name.` }], stream: false, max_tokens: 64, temperature: 0.7 }),
+                });
+                const data = await response.json();
+                setAiSmNamingResult(data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "");
+              } catch {} finally { setAiSmNamingLoading(false); }
+            }}
+            disabled={aiSmNamingLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-[#F59E0B]/30 bg-[#F59E0B]/10 rounded-lg text-sm text-[#F59E0B] hover:bg-[#F59E0B]/20 disabled:opacity-50 transition-colors"
+          >
+            {aiSmNamingLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            Name It
+          </button>
         </div>
+        {aiSmNamingResult && (
+          <div className="mx-4 mt-1 mb-2 flex items-center gap-2 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-1.5">
+            <Sparkles className="h-3 w-3 shrink-0 text-[#F59E0B]" />
+            <span className="text-xs text-[#F59E0B]">{aiSmNamingResult}</span>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-1 overflow-hidden">

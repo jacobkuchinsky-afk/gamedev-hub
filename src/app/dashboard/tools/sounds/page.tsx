@@ -206,6 +206,8 @@ export default function SoundsPage() {
   const [saveName, setSaveName] = useState("");
   const [showLibrary, setShowLibrary] = useState(true);
   const [aiNamingLoading, setAiNamingLoading] = useState(false);
+  const [aiWaveLoading, setAiWaveLoading] = useState(false);
+  const [aiWaveResult, setAiWaveResult] = useState("");
 
   const toggleAdvisorCheck = (catIdx: number, itemIdx: number) => {
     setAdvisorResults((prev) =>
@@ -903,6 +905,37 @@ export default function SoundsPage() {
               <ParamRow label="Volume" value={`${Math.round(params.volume * 100)}%`} />
               <ParamRow label="Decay" value={`${params.decay.toFixed(2)} s`} />
             </div>
+          </div>
+
+          {/* AI Waveform Description */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">AI Waveform Insight</h3>
+              <button
+                onClick={async () => {
+                  if (aiWaveLoading) return;
+                  setAiWaveLoading(true);
+                  setAiWaveResult("");
+                  try {
+                    const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+                      method: "POST",
+                      headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+                      body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Describe this sound waveform: ${params.waveType} at ${Math.round(params.freqStart)}Hz. What game sound does it resemble? 1 sentence.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+                    });
+                    const data = await response.json();
+                    setAiWaveResult(data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "");
+                  } catch {} finally { setAiWaveLoading(false); }
+                }}
+                disabled={aiWaveLoading}
+                className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-2.5 py-1.5 text-[11px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/20 disabled:opacity-50"
+              >
+                {aiWaveLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                Describe
+              </button>
+            </div>
+            {aiWaveResult && (
+              <p className="mt-2 text-xs leading-relaxed text-[#D1D5DB]">{aiWaveResult}</p>
+            )}
           </div>
 
           {/* Tips */}

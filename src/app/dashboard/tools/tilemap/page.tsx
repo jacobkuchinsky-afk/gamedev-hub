@@ -106,6 +106,8 @@ export default function TilemapPage() {
   const [aiPacingResult, setAiPacingResult] = useState("");
   const [aiCollisionLoading, setAiCollisionLoading] = useState(false);
   const [aiCollisionResult, setAiCollisionResult] = useState("");
+  const [aiThemeLoading, setAiThemeLoading] = useState(false);
+  const [aiThemeResult, setAiThemeResult] = useState("");
 
   const layersRef = useRef(layers);
   layersRef.current = layers;
@@ -1119,6 +1121,36 @@ export default function TilemapPage() {
             >
               <Upload className="h-3.5 w-3.5" /> Import JSON
             </button>
+          </div>
+
+          {/* AI Tilemap Theme */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF]">AI Theme</span>
+              <button
+                onClick={async () => {
+                  if (aiThemeLoading) return;
+                  setAiThemeLoading(true); setAiThemeResult("");
+                  const genres = ["platformer", "RPG", "roguelike", "puzzle", "adventure"];
+                  const genre = genres[Math.floor(Math.random() * genres.length)];
+                  try {
+                    const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+                      method: "POST",
+                      headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+                      body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Suggest a level theme for a ${gridW}x${gridH} tilemap in a ${genre} game. Just the theme name and 1-sentence description.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+                    });
+                    const data = await response.json();
+                    setAiThemeResult(data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "");
+                  } catch {} finally { setAiThemeLoading(false); }
+                }}
+                disabled={aiThemeLoading}
+                className="flex items-center gap-1 rounded-md border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-2 py-1 text-[10px] font-medium text-[#F59E0B] hover:bg-[#F59E0B]/20 disabled:opacity-50"
+              >
+                {aiThemeLoading ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Sparkles className="h-2.5 w-2.5" />}
+                Suggest
+              </button>
+            </div>
+            {aiThemeResult && <p className="text-[11px] leading-relaxed text-[#D1D5DB]">{aiThemeResult}</p>}
           </div>
 
           {/* Minimap */}

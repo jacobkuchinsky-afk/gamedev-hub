@@ -205,6 +205,8 @@ export default function ParticlesPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiName, setAiName] = useState("");
   const [aiNameLoading, setAiNameLoading] = useState(false);
+  const [aiComboLoading, setAiComboLoading] = useState(false);
+  const [aiComboResult, setAiComboResult] = useState("");
 
   const updateConfig = useCallback(
     (key: keyof ParticleConfig, value: number | string) => {
@@ -722,6 +724,35 @@ export default function ParticlesPage() {
               onChange={(v) => updateConfig("shapeRadius", v)}
             />
           )}
+
+          {/* AI Particle Combo */}
+          <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF]">AI Combo</span>
+              <button
+                onClick={async () => {
+                  if (aiComboLoading) return;
+                  setAiComboLoading(true); setAiComboResult("");
+                  const desc = aiDescription.trim() || activePreset || "explosion";
+                  try {
+                    const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+                      method: "POST",
+                      headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+                      body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Suggest a combination of 2 particle effects to layer for a ${desc} VFX. Name them both. 1 sentence.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+                    });
+                    const data = await response.json();
+                    setAiComboResult(data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "");
+                  } catch {} finally { setAiComboLoading(false); }
+                }}
+                disabled={aiComboLoading}
+                className="flex items-center gap-1 rounded-md border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-2 py-1 text-[10px] font-medium text-[#F59E0B] hover:bg-[#F59E0B]/20 disabled:opacity-50"
+              >
+                {aiComboLoading ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Sparkles className="h-2.5 w-2.5" />}
+                Suggest
+              </button>
+            </div>
+            {aiComboResult && <p className="text-[11px] leading-relaxed text-[#D1D5DB]">{aiComboResult}</p>}
+          </div>
 
           <div className="flex gap-2 pt-1 border-t border-[#2A2A2A]">
             <button

@@ -146,6 +146,8 @@ export default function CodeSnippetPage() {
   const [expandedSnippet, setExpandedSnippet] = useState<string | null>(null);
   const [snippetName, setSnippetName] = useState("");
   const [nameGenLoading, setNameGenLoading] = useState(false);
+  const [aiLangTipLoading, setAiLangTipLoading] = useState(false);
+  const [aiLangTipResult, setAiLangTipResult] = useState("");
   const codeRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
@@ -694,6 +696,36 @@ export default function CodeSnippetPage() {
                   </div>
                 </div>
               )}
+
+              {/* AI Language Tip */}
+              <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">AI Language Tip</span>
+                  <button
+                    onClick={async () => {
+                      if (aiLangTipLoading) return;
+                      setAiLangTipLoading(true); setAiLangTipResult("");
+                      const langLabel = LANGUAGES.find(l => l.id === language)?.label || language;
+                      const engineLabel = ENGINES.find(e => e.id === engine)?.label || engine;
+                      try {
+                        const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+                          method: "POST",
+                          headers: { Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""), "Content-Type": "application/json" },
+                          body: JSON.stringify({ model: "moonshotai/Kimi-K2.5-TEE", messages: [{ role: "user", content: `Give one quick tip for writing game code in ${langLabel} for ${engineLabel}. 1 sentence.` }], stream: false, max_tokens: 128, temperature: 0.7 }),
+                        });
+                        const data = await response.json();
+                        setAiLangTipResult(data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "");
+                      } catch {} finally { setAiLangTipLoading(false); }
+                    }}
+                    disabled={aiLangTipLoading}
+                    className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-2.5 py-1.5 text-[11px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/20 disabled:opacity-50"
+                  >
+                    {aiLangTipLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    Quick Tip
+                  </button>
+                </div>
+                {aiLangTipResult && <p className="mt-2 text-xs leading-relaxed text-[#D1D5DB]">{aiLangTipResult}</p>}
+              </div>
 
               {/* AI Review */}
               {review && (
