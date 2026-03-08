@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -14,6 +14,19 @@ import {
   Menu,
   X,
   ChevronRight,
+  Search,
+  Paintbrush,
+  Music,
+  Palette,
+  ScrollText,
+  Calculator,
+  MessageSquare,
+  Lightbulb,
+  Map,
+  Sparkles,
+  Film,
+  Activity,
+  Command,
 } from "lucide-react";
 import { AuthProvider, useAuthContext } from "@/components/AuthProvider";
 import { getProjects, getStatusColor, type Project } from "@/lib/store";
@@ -25,11 +38,110 @@ const NAV_ITEMS = [
   { href: "/dashboard/devlog", icon: BookOpen, label: "Devlog" },
 ];
 
+const CMD_ITEMS = [
+  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard", section: "Navigation" },
+  { href: "/dashboard/projects", icon: FolderKanban, label: "Projects", section: "Navigation" },
+  { href: "/dashboard/tools", icon: Wrench, label: "Tools", section: "Navigation" },
+  { href: "/dashboard/devlog", icon: BookOpen, label: "Devlog", section: "Navigation" },
+  { href: "/dashboard/settings", icon: Settings, label: "Settings", section: "Navigation" },
+  { href: "/dashboard/tools/sprites", icon: Paintbrush, label: "Sprite Editor", section: "Tools" },
+  { href: "/dashboard/tools/sounds", icon: Music, label: "Sound Generator", section: "Tools" },
+  { href: "/dashboard/tools/colors", icon: Palette, label: "Color Palettes", section: "Tools" },
+  { href: "/dashboard/tools/names", icon: ScrollText, label: "Name Generator", section: "Tools" },
+  { href: "/dashboard/tools/balance", icon: Calculator, label: "Balance Calculator", section: "Tools" },
+  { href: "/dashboard/tools/dialogue", icon: MessageSquare, label: "Dialogue Trees", section: "Tools" },
+  { href: "/dashboard/tools/ideas", icon: Lightbulb, label: "AI Idea Generator", section: "Tools" },
+  { href: "/dashboard/tools/tilemap", icon: Map, label: "Tilemap Painter", section: "Tools" },
+  { href: "/dashboard/tools/effects", icon: Sparkles, label: "Screen Effects", section: "Tools" },
+  { href: "/dashboard/tools/animation", icon: Film, label: "Animation Frames", section: "Tools" },
+  { href: "/dashboard/tools/easing", icon: Activity, label: "Easing Visualizer", section: "Tools" },
+];
+
+function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [query, setQuery] = useState("");
+  const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      setQuery("");
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }, [open]);
+
+  const filtered = CMD_ITEMS.filter(
+    (item) =>
+      !query || item.label.toLowerCase().includes(query.toLowerCase())
+  );
+
+  const sections = filtered.reduce<Record<string, typeof CMD_ITEMS>>((acc, item) => {
+    (acc[item.section] ??= []).push(item);
+    return acc;
+  }, {});
+
+  const go = (href: string) => {
+    router.push(href);
+    onClose();
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[20vh]" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/60" />
+      <div
+        className="relative z-10 w-full max-w-lg overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 border-b border-[#2A2A2A] px-4 py-3">
+          <Search className="h-4 w-4 shrink-0 text-[#6B7280]" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") onClose();
+              if (e.key === "Enter" && filtered.length > 0) go(filtered[0].href);
+            }}
+            placeholder="Search pages and tools..."
+            className="flex-1 bg-transparent text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none"
+          />
+          <kbd className="rounded bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] text-[#6B7280]">ESC</kbd>
+        </div>
+        <div className="max-h-72 overflow-y-auto p-2">
+          {filtered.length === 0 && (
+            <p className="px-3 py-6 text-center text-sm text-[#6B7280]">No results</p>
+          )}
+          {Object.entries(sections).map(([section, items]) => (
+            <div key={section}>
+              <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                {section}
+              </p>
+              {items.map((item) => (
+                <button
+                  key={item.href}
+                  onClick={() => go(item.href)}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:bg-[#F59E0B]/10 hover:text-[#F59E0B]"
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuthContext();
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
 
   useEffect(() => {
@@ -48,6 +160,18 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      e.preventDefault();
+      setCmdOpen((prev) => !prev);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
 
   const handleLogout = () => {
     logout();
@@ -192,7 +316,19 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           >
             <Menu className="h-5 w-5" />
           </button>
+          <button
+            onClick={() => setCmdOpen(true)}
+            className="ml-auto flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-sm text-[#6B7280] transition-colors hover:border-[#F59E0B]/30 hover:text-[#9CA3AF]"
+          >
+            <Search className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Search</span>
+            <kbd className="hidden rounded bg-[#0F0F0F] px-1.5 py-0.5 text-[10px] sm:inline">
+              <Command className="inline h-2.5 w-2.5" />K
+            </kbd>
+          </button>
         </header>
+
+        <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
