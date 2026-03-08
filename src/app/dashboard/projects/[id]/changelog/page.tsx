@@ -17,12 +17,16 @@ import {
   Check,
   Clock,
   AlertCircle,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import {
   getProject,
   getChangelog,
   addChangelogEntry,
   deleteChangelogEntry,
+  getTasks,
+  getBugs,
   VERSION_TYPE_COLORS,
   CHANGE_CATEGORY_COLORS,
   type Project,
@@ -77,6 +81,67 @@ export default function ChangelogPage() {
   });
   const [versionError, setVersionError] = useState("");
   const [formAttempted, setFormAttempted] = useState(false);
+  const [aiWriting, setAiWriting] = useState(false);
+
+  const handleAiWriteNotes = async () => {
+    if (aiWriting) return;
+    setAiWriting(true);
+    try {
+      const tasks = getTasks(projectId);
+      const bugs = getBugs(projectId);
+      const completedTasks = tasks.filter((t) => t.status === "done").map((t) => t.title).slice(0, 15);
+      const fixedBugs = bugs.filter((b) => b.status === "closed").map((b) => b.title).slice(0, 15);
+
+      const prompt = `Write changelog notes for version ${formVersion || "upcoming"} (${formType.toLowerCase()} release) of a game. Recent completed tasks: ${completedTasks.length > 0 ? completedTasks.join(", ") : "none listed"}. Recent fixed bugs: ${fixedBugs.length > 0 ? fixedBugs.join(", ") : "none listed"}. Format your response EXACTLY like this, with each section on its own line:
+Added:
+- item 1
+- item 2
+Changed:
+- item 1
+Fixed:
+- item 1
+Be specific and brief. Only include sections that have items.`;
+
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+
+      const parseSection = (label: string): string => {
+        const regex = new RegExp(`${label}:\\s*\\n((?:[-*]\\s+.+\\n?)+)`, "i");
+        const match = content.match(regex);
+        if (!match) return "";
+        return match[1]
+          .split("\n")
+          .map((l: string) => l.replace(/^[-*]\s+/, "").trim())
+          .filter(Boolean)
+          .join("\n");
+      };
+
+      setFormChanges((prev) => ({
+        ...prev,
+        Added: parseSection("Added") || prev.Added,
+        Changed: parseSection("Changed") || prev.Changed,
+        Fixed: parseSection("Fixed") || prev.Fixed,
+      }));
+    } catch {
+      // silently fail
+    } finally {
+      setAiWriting(false);
+    }
+  };
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -365,7 +430,22 @@ export default function ChangelogPage() {
               </div>
 
               <div className="space-y-3">
-                <p className="text-xs text-[#9CA3AF]">Changes (one per line)</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-[#9CA3AF]">Changes (one per line)</p>
+                  <button
+                    type="button"
+                    onClick={handleAiWriteNotes}
+                    disabled={aiWriting}
+                    className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 px-3 py-1.5 text-xs font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {aiWriting ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5" />
+                    )}
+                    {aiWriting ? "Writing..." : "AI Write Notes"}
+                  </button>
+                </div>
                 {CHANGE_CATEGORIES.map((cat) => (
                   <div key={cat}>
                     <label className="mb-1 flex items-center gap-2 text-xs font-medium" style={{ color: CHANGE_CATEGORY_COLORS[cat] }}>

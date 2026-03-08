@@ -14,6 +14,8 @@ import {
   Bug as BugIcon,
   CheckCircle2,
   Zap,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import {
   getProject,
@@ -88,6 +90,8 @@ export default function BugTrackerPage() {
   const [newSeverity, setNewSeverity] = useState<Bug["severity"]>("major");
   const [newPlatform, setNewPlatform] = useState("All");
   const [newReproSteps, setNewReproSteps] = useState("");
+  const [aiSuggestingPriority, setAiSuggestingPriority] = useState(false);
+  const [aiSuggestFlash, setAiSuggestFlash] = useState(false);
 
   const reload = useCallback(() => {
     setBugsState(getBugs(projectId));
@@ -137,6 +141,40 @@ export default function BugTrackerPage() {
     setQuickPlatform("All");
     setShowQuickForm(false);
     reload();
+  };
+
+  const handleAiSuggestPriority = async () => {
+    if (!newTitle.trim() || aiSuggestingPriority) return;
+    setAiSuggestingPriority(true);
+    try {
+      const prompt = `A game developer reported this bug: '${newTitle.trim()}'. Description: '${newDesc.trim() || "none"}'. Based on this, suggest a severity level: blocker, critical, major, or minor. Respond with ONLY one word: the severity level.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim().toLowerCase();
+      const match = content.match(/\b(blocker|critical|major|minor)\b/);
+      if (match) {
+        setNewSeverity(match[1] as Bug["severity"]);
+        setAiSuggestFlash(true);
+        setTimeout(() => setAiSuggestFlash(false), 1500);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setAiSuggestingPriority(false);
+    }
   };
 
   const changeBugStatus = (bugId: string, newStatus: Bug["status"]) => {
@@ -467,15 +505,34 @@ export default function BugTrackerPage() {
               />
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs text-[#6B7280]">
-                    Severity
-                  </label>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="block text-xs text-[#6B7280]">
+                      Severity
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleAiSuggestPriority}
+                      disabled={!newTitle.trim() || aiSuggestingPriority}
+                      className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {aiSuggestingPriority ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3 w-3" />
+                      )}
+                      AI Suggest
+                    </button>
+                  </div>
                   <select
                     value={newSeverity}
                     onChange={(e) =>
                       setNewSeverity(e.target.value as Bug["severity"])
                     }
-                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#F59E0B]/50"
+                    className={`w-full rounded-lg border bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] outline-none transition-all focus:border-[#F59E0B]/50 ${
+                      aiSuggestFlash
+                        ? "border-[#F59E0B] ring-1 ring-[#F59E0B]/30"
+                        : "border-[#2A2A2A]"
+                    }`}
                   >
                     {SEVERITIES.map((s) => (
                       <option key={s} value={s}>
