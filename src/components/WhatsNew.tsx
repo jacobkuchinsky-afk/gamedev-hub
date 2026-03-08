@@ -26,6 +26,12 @@ export default function WhatsNew() {
     }
   }, []);
 
+  useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener("gameforge-open-whatsnew", handler);
+    return () => window.removeEventListener("gameforge-open-whatsnew", handler);
+  }, []);
+
   const dismiss = () => {
     localStorage.setItem(STORAGE_KEY, CURRENT_VERSION);
     setOpen(false);

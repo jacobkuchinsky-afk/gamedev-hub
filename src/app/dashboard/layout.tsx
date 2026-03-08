@@ -1101,6 +1101,13 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
               {!sidebarCollapsed && <span>Logout</span>}
             </button>
           </div>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent("gameforge-open-whatsnew"))}
+            className={`mt-2 w-full text-[10px] text-[#6B7280] transition-colors hover:text-[#9CA3AF] ${sidebarCollapsed ? "text-center" : "text-center"}`}
+            title="What's New"
+          >
+            v2.0.0
+          </button>
         </div>
       </aside>
 
