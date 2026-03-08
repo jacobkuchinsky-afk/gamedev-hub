@@ -128,6 +128,8 @@ export default function BugTrackerPage() {
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [aiAnalysis, setAiAnalysis] = useState<Record<string, string>>({});
   const [aiAnalyzingBug, setAiAnalyzingBug] = useState<string | null>(null);
+  const [aiFixSuggestions, setAiFixSuggestions] = useState<Record<string, string>>({});
+  const [aiFixLoading, setAiFixLoading] = useState<string | null>(null);
 
   const similarBugs = useMemo(() => {
     const q = newTitle.trim().toLowerCase();
@@ -284,6 +286,35 @@ Be concise and professional. Fill in any missing sections based on the title and
       // silently fail
     } finally {
       setAiSuggestingPriority(false);
+    }
+  };
+
+  const handleAiFixSuggestion = async (bug: Bug) => {
+    if (aiFixLoading === bug.id) return;
+    setAiFixLoading(bug.id);
+    try {
+      const prompt = `Suggest a fix approach for this game bug: '${bug.title}'. ${bug.description || ""}. Give a brief technical suggestion (2 sentences).`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setAiFixSuggestions((prev) => ({ ...prev, [bug.id]: content || "No suggestion available." }));
+    } catch {
+      setAiFixSuggestions((prev) => ({ ...prev, [bug.id]: "Failed to get suggestion. Try again." }));
+    } finally {
+      setAiFixLoading(null);
     }
   };
 
@@ -673,6 +704,29 @@ Be concise and professional. Fill in any missing sections based on the title and
                 </div>
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">
                   {aiAnalysis[bug.id]}
+                </p>
+              </div>
+            )}
+            <button
+              onClick={() => handleAiFixSuggestion(bug)}
+              disabled={aiFixLoading === bug.id}
+              className="flex items-center gap-1.5 rounded-lg border border-[#10B981]/30 bg-[#10B981]/5 px-3 py-1.5 text-xs font-medium text-[#10B981] transition-colors hover:bg-[#10B981]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {aiFixLoading === bug.id ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Zap className="h-3.5 w-3.5" />
+              )}
+              AI Fix Idea
+            </button>
+            {aiFixSuggestions[bug.id] && aiFixLoading !== bug.id && (
+              <div className="rounded-lg border border-[#10B981]/20 bg-[#10B981]/5 p-3 space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <Zap className="h-3.5 w-3.5 text-[#10B981]" />
+                  <span className="text-xs font-semibold text-[#10B981]">Fix Suggestion</span>
+                </div>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">
+                  {aiFixSuggestions[bug.id]}
                 </p>
               </div>
             )}

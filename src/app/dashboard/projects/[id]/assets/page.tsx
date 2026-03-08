@@ -102,6 +102,7 @@ export default function AssetPipelinePage() {
   const [newFolder, setNewFolder] = useState<AssetFolder>(TYPE_TO_DEFAULT_FOLDER["sprite"]);
   const [aiSuggestion, setAiSuggestion] = useState("");
   const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
+  const [aiDescLoading, setAiDescLoading] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [bumpNotes, setBumpNotes] = useState("");
 
@@ -224,6 +225,32 @@ export default function AssetPipelinePage() {
     } finally {
       setAiSuggestLoading(false);
     }
+  };
+
+  const handleAiDescribe = async () => {
+    if (!newName.trim()) return;
+    setAiDescLoading(true);
+    try {
+      const prompt = `Write a brief asset description for a game asset named '${newName.trim()}' of type '${ASSET_TYPE_LABELS[newType]}'. 1-2 sentences about its purpose and usage.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      if (content) setNewNotes(content.trim());
+    } catch { /* silently fail */ }
+    finally { setAiDescLoading(false); }
   };
 
   const moveAsset = (assetId: string, newStatus: AssetStatus) => {
@@ -942,13 +969,29 @@ export default function AssetPipelinePage() {
                   className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50 font-mono text-xs"
                 />
               </div>
-              <textarea
-                value={newNotes}
-                onChange={(e) => setNewNotes(e.target.value)}
-                placeholder="Notes (optional)"
-                rows={2}
-                className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50 resize-none"
-              />
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-xs text-[#6B7280]">Notes</label>
+                  {newName.trim() && (
+                    <button
+                      type="button"
+                      onClick={handleAiDescribe}
+                      disabled={aiDescLoading}
+                      className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {aiDescLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      AI Describe
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  value={newNotes}
+                  onChange={(e) => setNewNotes(e.target.value)}
+                  placeholder="Notes (optional)"
+                  rows={2}
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none focus:border-[#F59E0B]/50 resize-none"
+                />
+              </div>
               <button
                 type="submit"
                 className="w-full rounded-lg bg-[#F59E0B] py-2.5 text-sm font-semibold text-black transition-colors hover:bg-[#F59E0B]/90"

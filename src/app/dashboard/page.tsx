@@ -410,6 +410,8 @@ export default function DashboardPage() {
   const [standupText, setStandupText] = useState("");
   const [standupCopied, setStandupCopied] = useState(false);
   const [devlogCalendar, setDevlogCalendar] = useState<{ date: string; count: number; label: string }[]>([]);
+  const [aiWeeklySummary, setAiWeeklySummary] = useState("");
+  const [aiWeeklyLoading, setAiWeeklyLoading] = useState(false);
 
   const [badgeStats, setBadgeStats] = useState<ReturnType<typeof getGamificationStats>>({ projects: 0, bugs: 0, devlogs: 0, completedSprints: 0, toolsUsed: 0, aiUses: 0 });
   const [streak, setStreak] = useState<StreakData>({ lastActiveDate: "", currentStreak: 0, longestStreak: 0 });
@@ -553,6 +555,45 @@ export default function DashboardPage() {
     setJamState(null);
     setJamTheme("");
   }, []);
+
+  const handleAiWeeklySummary = async () => {
+    setAiWeeklyLoading(true);
+    setAiWeeklySummary("");
+    try {
+      const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const projects = getProjects();
+      let tasksDone = 0;
+      let bugsFixed = 0;
+      let devlogsWritten = 0;
+      projects.forEach((p) => {
+        tasksDone += getTasks(p.id).filter((t) => t.status === "done" && new Date(t.created_at).getTime() > oneWeekAgo).length;
+        bugsFixed += getBugs(p.id).filter((b) => (b.status === "fixed" || b.status === "closed") && new Date(b.created_at).getTime() > oneWeekAgo).length;
+        devlogsWritten += getDevlog(p.id).filter((d) => new Date(d.date).getTime() > oneWeekAgo).length;
+      });
+      const prompt = `Summarize my week of game development across all projects. Tasks done: ${tasksDone}. Bugs fixed: ${bugsFixed}. Devlogs written: ${devlogsWritten}. Write a brief 2-sentence weekly recap.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setAiWeeklySummary(content || "No summary available.");
+    } catch {
+      setAiWeeklySummary("Failed to generate summary.");
+    } finally {
+      setAiWeeklyLoading(false);
+    }
+  };
 
   const generateStandup = async () => {
     setStandupLoading(true);
@@ -2579,6 +2620,40 @@ export default function DashboardPage() {
           </div>
         );
       })()}
+
+      {/* AI Weekly Summary */}
+      <div className="rounded-xl border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-5 py-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+              <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-[#F5F5F5]">AI Weekly Summary</h3>
+              <p className="text-[10px] text-[#6B7280]">Get an AI-generated recap of your week</p>
+            </div>
+          </div>
+          <button
+            onClick={handleAiWeeklySummary}
+            disabled={aiWeeklyLoading}
+            className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-[#F59E0B]/90 disabled:opacity-50"
+          >
+            {aiWeeklyLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            {aiWeeklySummary ? "Refresh" : "Generate"}
+          </button>
+        </div>
+        {aiWeeklyLoading && (
+          <div className="flex items-center gap-3 py-4">
+            <Loader2 className="h-5 w-5 animate-spin text-[#F59E0B]" />
+            <span className="text-sm text-[#9CA3AF]">Generating your weekly recap...</span>
+          </div>
+        )}
+        {aiWeeklySummary && !aiWeeklyLoading && (
+          <div className="rounded-lg bg-[#0F0F0F] border border-[#2A2A2A] p-4">
+            <p className="text-sm leading-relaxed text-[#D1D5DB]">{aiWeeklySummary}</p>
+          </div>
+        )}
+      </div>
 
       {/* Platform Stats */}
       <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">

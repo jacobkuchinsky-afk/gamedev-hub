@@ -245,6 +245,7 @@ export default function TaskBoardPage() {
 
   const [retroNotes, setRetroNotes] = useState<Record<string, { wentWell: string; didntGoWell: string; improve: string }>>({});
   const [aiRetroLoading, setAiRetroLoading] = useState(false);
+  const [aiSprintNameLoading, setAiSprintNameLoading] = useState(false);
 
   const [taskExportOpen, setTaskExportOpen] = useState(false);
   const taskExportRef = useRef<HTMLDivElement>(null);
@@ -516,6 +517,33 @@ export default function TaskBoardPage() {
     });
     setQuickAddTexts((p) => ({ ...p, [status]: "" }));
     reload();
+  };
+
+  const handleAiSprintName = async () => {
+    setAiSprintNameLoading(true);
+    try {
+      const num = sprints.length + 1;
+      const genre = project?.genre || "indie";
+      const prompt = `Suggest a creative sprint name for sprint #${num} of a ${genre} game. Just the name, max 3 words.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim().replace(/^["']|["']$/g, "");
+      if (content) setCsName(content);
+    } catch { /* silently fail */ }
+    finally { setAiSprintNameLoading(false); }
   };
 
   const handleCreateSprint = (e: React.FormEvent) => {
@@ -1957,9 +1985,18 @@ export default function TaskBoardPage() {
             </div>
             <form onSubmit={handleCreateSprint} className="space-y-4">
               <div>
-                <label className="mb-1 block text-xs text-[#6B7280]">
-                  Sprint Name
-                </label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-xs text-[#6B7280]">Sprint Name</label>
+                  <button
+                    type="button"
+                    onClick={handleAiSprintName}
+                    disabled={aiSprintNameLoading}
+                    className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {aiSprintNameLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    AI Name
+                  </button>
+                </div>
                 <input
                   type="text"
                   value={csName}

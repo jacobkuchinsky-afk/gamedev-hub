@@ -1685,6 +1685,8 @@ export default function ProjectDetailPage() {
   const [msName, setMsName] = useState("");
   const [msDate, setMsDate] = useState("");
   const [msStatus, setMsStatus] = useState<Milestone["status"]>("upcoming");
+  const [msAiDesc, setMsAiDesc] = useState("");
+  const [msAiDescLoading, setMsAiDescLoading] = useState(false);
 
   const [aiMilestoneLoading, setAiMilestoneLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -2433,6 +2435,37 @@ export default function ProjectDetailPage() {
       setAiMilestoneLoading(false);
     }
   }, [project, projectId, taskPct, aiMilestoneLoading]);
+
+  const handleAiMilestoneDesc = async () => {
+    if (!msName.trim() || msAiDescLoading) return;
+    setMsAiDescLoading(true);
+    setMsAiDesc("");
+    try {
+      const genre = project?.genre || "indie";
+      const prompt = `Write a brief milestone description for '${msName.trim()}' in a ${genre} game. 1 sentence about what this milestone means for the project.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setMsAiDesc(content || "No description available.");
+    } catch {
+      setMsAiDesc("Failed to generate description.");
+    } finally {
+      setMsAiDescLoading(false);
+    }
+  };
 
   const generatePostmortem = useCallback(async () => {
     if (!project || postmortemLoading) return;
@@ -3200,6 +3233,17 @@ export default function ProjectDetailPage() {
                 </select>
               </div>
               <div className="flex gap-2">
+                {msName.trim() && (
+                  <button
+                    type="button"
+                    onClick={handleAiMilestoneDesc}
+                    disabled={msAiDescLoading}
+                    className="flex items-center gap-1 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50"
+                  >
+                    {msAiDescLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    AI Describe
+                  </button>
+                )}
                 <button
                   type="submit"
                   className="rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-[#F59E0B]/90"
@@ -3214,6 +3258,15 @@ export default function ProjectDetailPage() {
                   Cancel
                 </button>
               </div>
+              {msAiDesc && (
+                <div className="col-span-full rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-2 text-xs leading-relaxed text-[#D1D5DB]">
+                  <div className="flex items-center gap-1 mb-1">
+                    <Sparkles className="h-3 w-3 text-[#F59E0B]" />
+                    <span className="text-[10px] font-semibold text-[#F59E0B]">AI Description</span>
+                  </div>
+                  {msAiDesc}
+                </div>
+              )}
             </form>
           </div>
         )}

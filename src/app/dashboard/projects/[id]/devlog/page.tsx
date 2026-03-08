@@ -13,6 +13,8 @@ import {
   FileText,
   MessageSquare,
   Send,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import {
   getProject,
@@ -181,6 +183,8 @@ export default function DevlogPage() {
   const [newMood, setNewMood] = useState<DevlogEntry["mood"]>("productive");
   const [noteInputs, setNoteInputs] = useState<Record<string, string>>({});
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
+  const [aiReflections, setAiReflections] = useState<Record<string, string>>({});
+  const [aiReflectLoading, setAiReflectLoading] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     const e = getDevlog(projectId);
@@ -257,6 +261,35 @@ export default function DevlogPage() {
     updateDevlogEntry(entryId, { notes: [...existing, newNote] } as Partial<Omit<DevlogEntry, "id" | "projectId">>);
     setNoteInputs((p) => ({ ...p, [entryId]: "" }));
     reload();
+  };
+
+  const handleAiReflect = async (entry: DevlogEntry) => {
+    if (aiReflectLoading === entry.id) return;
+    setAiReflectLoading(entry.id);
+    try {
+      const prompt = `Based on this devlog entry about '${entry.title}': '${entry.content}', suggest a one-sentence reflection or takeaway that could help the developer improve.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setAiReflections((prev) => ({ ...prev, [entry.id]: content || "No reflection available." }));
+    } catch {
+      setAiReflections((prev) => ({ ...prev, [entry.id]: "Failed to generate reflection." }));
+    } finally {
+      setAiReflectLoading(null);
+    }
   };
 
   if (!project) return null;
@@ -525,6 +558,31 @@ export default function DevlogPage() {
                     <div className="space-y-1">
                       {renderMarkdown(entry.content)}
                     </div>
+
+                    {/* AI Reflection */}
+                    <div className="mt-3 flex items-center gap-2">
+                      <button
+                        onClick={() => handleAiReflect(entry)}
+                        disabled={aiReflectLoading === entry.id}
+                        className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-1.5 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {aiReflectLoading === entry.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-3.5 w-3.5" />
+                        )}
+                        AI Reflect
+                      </button>
+                    </div>
+                    {aiReflections[entry.id] && aiReflectLoading !== entry.id && (
+                      <div className="mt-2 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Sparkles className="h-3 w-3 text-[#F59E0B]" />
+                          <span className="text-[10px] font-semibold text-[#F59E0B]">Reflection</span>
+                        </div>
+                        <p className="text-sm leading-relaxed text-[#D1D5DB]">{aiReflections[entry.id]}</p>
+                      </div>
+                    )}
 
                     {/* Notes Section */}
                     <div className="mt-4 border-t border-[#2A2A2A] pt-3">
