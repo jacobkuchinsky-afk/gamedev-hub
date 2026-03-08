@@ -10,10 +10,21 @@ interface ShortcutGroup {
 
 const SHORTCUT_GROUPS: ShortcutGroup[] = [
   {
-    title: "Navigation",
+    title: "General",
     shortcuts: [
-      { keys: ["Ctrl", "K"], description: "Open command palette" },
+      { keys: ["Ctrl", "+", "K"], description: "Open command palette" },
       { keys: ["?"], description: "Show keyboard shortcuts" },
+      { keys: ["N"], description: "New project" },
+    ],
+  },
+  {
+    title: "Go To (press G, then...)",
+    shortcuts: [
+      { keys: ["G", "D"], description: "Dashboard" },
+      { keys: ["G", "P"], description: "Projects" },
+      { keys: ["G", "T"], description: "Tools" },
+      { keys: ["G", "L"], description: "Devlog" },
+      { keys: ["G", "S"], description: "Settings" },
     ],
   },
   {

@@ -174,6 +174,14 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
   );
 }
 
+const VIM_NAV: Record<string, string> = {
+  d: "/dashboard",
+  p: "/dashboard/projects",
+  t: "/dashboard/tools",
+  l: "/dashboard/devlog",
+  s: "/dashboard/settings",
+};
+
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuthContext();
   const router = useRouter();
@@ -183,6 +191,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
+  const pendingKeyRef = useRef<string | null>(null);
+  const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     console.log("[DashboardLayout] rendered");
@@ -204,10 +214,19 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     setSidebarOpen(false);
   }, [pathname]);
 
+  const clearPending = useCallback(() => {
+    pendingKeyRef.current = null;
+    if (pendingTimerRef.current) {
+      clearTimeout(pendingTimerRef.current);
+      pendingTimerRef.current = null;
+    }
+  }, []);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "k") {
       e.preventDefault();
       setCmdOpen((prev) => !prev);
+      clearPending();
       return;
     }
     const target = e.target as HTMLElement;
@@ -216,16 +235,50 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       target.tagName === "TEXTAREA" ||
       target.tagName === "SELECT" ||
       target.isContentEditable;
-    if (e.key === "?" && !isTyping && !cmdOpen) {
+    if (isTyping) return;
+
+    if (e.key === "?" && !cmdOpen) {
       e.preventDefault();
       setShortcutsOpen((prev) => !prev);
+      clearPending();
+      return;
     }
-  }, [cmdOpen]);
+
+    if (pendingKeyRef.current === "g") {
+      const lower = e.key.toLowerCase();
+      const dest = VIM_NAV[lower];
+      if (dest) {
+        e.preventDefault();
+        router.push(dest);
+      }
+      clearPending();
+      return;
+    }
+
+    if (e.key.toLowerCase() === "g" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      pendingKeyRef.current = "g";
+      pendingTimerRef.current = setTimeout(clearPending, 500);
+      return;
+    }
+
+    if (e.key.toLowerCase() === "n" && !e.metaKey && !e.ctrlKey && !e.altKey && !cmdOpen) {
+      e.preventDefault();
+      router.push("/dashboard/projects/new");
+      return;
+    }
+  }, [cmdOpen, router, clearPending]);
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+    };
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -246,6 +299,14 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen bg-[#0F0F0F]">
+      {/* Skip to content */}
+      <a
+        href="#main-content"
+        className="fixed left-2 top-2 z-[200] -translate-y-16 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-semibold text-[#0F0F0F] transition-transform focus:translate-y-0 focus:outline-none focus:ring-2 focus:ring-[#F59E0B] focus:ring-offset-2 focus:ring-offset-[#0F0F0F]"
+      >
+        Skip to content
+      </a>
+
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -256,6 +317,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar */}
       <aside
+        role="navigation"
+        aria-label="Main navigation"
         className={`fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-[#2A2A2A] bg-[#0F0F0F] transition-transform duration-200 md:relative md:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
@@ -277,7 +340,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
+        <nav aria-label="Sidebar" className="flex-1 overflow-y-auto px-3 py-4">
           <div className="space-y-1">
             {NAV_ITEMS.map((item) => {
               const active = pathname === item.href;
@@ -285,6 +348,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={item.href}
                   href={item.href}
+                  aria-current={active ? "page" : undefined}
                   className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                     active
                       ? "bg-[#F59E0B]/10 text-[#F59E0B]"
@@ -373,7 +437,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       {/* Main */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex h-16 items-center gap-4 border-b border-[#2A2A2A] px-6">
+        <header aria-label="Top bar" className="flex h-16 items-center gap-4 border-b border-[#2A2A2A] px-6">
           <button
             onClick={() => setSidebarOpen((prev) => !prev)}
             className={`flex flex-col items-center justify-center gap-[5px] rounded-lg p-2 text-[#9CA3AF] hover:bg-[#1A1A1A] hover:text-[#F5F5F5] md:hidden ${sidebarOpen ? "hamburger-open" : ""}`}
@@ -399,7 +463,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main id="main-content" aria-label="Page content" className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>
   );
