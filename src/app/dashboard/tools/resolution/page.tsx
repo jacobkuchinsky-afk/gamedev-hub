@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, Monitor, Smartphone, Gamepad2, Globe, X, Star, Zap } from "lucide-react";
+import { ArrowLeft, Monitor, Smartphone, Gamepad2, Globe, X, Star, Zap, Sparkles, Loader2 } from "lucide-react";
 
 interface Resolution {
   label: string;
@@ -120,6 +120,42 @@ export default function ResolutionGuidePage() {
   const [calcWidth, setCalcWidth] = useState(1920);
   const [activeRes, setActiveRes] = useState<Resolution | null>(null);
   const [selectedPlatform, setSelectedPlatform] = useState<PlatformKey | null>(null);
+
+  const [aiGenre, setAiGenre] = useState("");
+  const [aiArtStyle, setAiArtStyle] = useState("");
+  const [aiPlatform, setAiPlatform] = useState("");
+  const [aiResult, setAiResult] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const handleAiRecommend = useCallback(async () => {
+    if (!aiGenre.trim() || !aiArtStyle.trim() || !aiPlatform.trim()) return;
+    setAiLoading(true);
+    setAiResult(null);
+    try {
+      const prompt = `For a ${aiGenre.trim()} game with ${aiArtStyle.trim()} art targeting ${aiPlatform.trim()}, recommend the best base resolution. Consider: art clarity, performance, and standard conventions. Respond with: resolution (WxH), aspect ratio, and a brief reason. One paragraph.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      setAiResult(content || "No recommendation returned. Try again.");
+    } catch {
+      setAiResult("Failed to get recommendation. Check your connection and try again.");
+    } finally {
+      setAiLoading(false);
+    }
+  }, [aiGenre, aiArtStyle, aiPlatform]);
 
   const aspectResults = useMemo(
     () =>
@@ -483,6 +519,77 @@ export default function ResolutionGuidePage() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      {/* AI Recommend */}
+      <section className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+            <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-[#F5F5F5]">AI Resolution Advisor</h2>
+            <p className="text-[10px] text-[#6B7280]">Describe your game and get a tailored recommendation</p>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label className="mb-1.5 block text-xs text-[#9CA3AF]">Genre</label>
+            <input
+              type="text"
+              placeholder="e.g. Platformer, RPG, Strategy"
+              value={aiGenre}
+              onChange={(e) => setAiGenre(e.target.value)}
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/50"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs text-[#9CA3AF]">Art Style</label>
+            <input
+              type="text"
+              placeholder="e.g. Pixel Art, Hand-Drawn, 3D"
+              value={aiArtStyle}
+              onChange={(e) => setAiArtStyle(e.target.value)}
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/50"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs text-[#9CA3AF]">Target Platform</label>
+            <input
+              type="text"
+              placeholder="e.g. Desktop, Mobile, Web"
+              value={aiPlatform}
+              onChange={(e) => setAiPlatform(e.target.value)}
+              className="w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/50"
+            />
+          </div>
+        </div>
+        <button
+          onClick={handleAiRecommend}
+          disabled={aiLoading || !aiGenre.trim() || !aiArtStyle.trim() || !aiPlatform.trim()}
+          className="mt-4 flex items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2.5 text-sm font-semibold text-[#0F0F0F] transition-all hover:bg-[#D97706] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {aiLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Analyzing...
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4" />
+              AI Recommend
+            </>
+          )}
+        </button>
+        {aiResult && (
+          <div className="mt-4 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-4">
+            <div className="mb-2 flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-[#F59E0B]" />
+              <span className="text-xs font-semibold text-[#F59E0B]">AI Recommendation</span>
+            </div>
+            <p className="text-sm leading-relaxed text-[#E5E7EB]">{aiResult}</p>
+          </div>
+        )}
       </section>
 
       {/* Platform Recommendations */}

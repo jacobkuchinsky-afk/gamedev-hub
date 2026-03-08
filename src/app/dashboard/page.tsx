@@ -22,6 +22,9 @@ import {
   X,
   ChevronRight,
   HardDrive,
+  TrendingUp,
+  Flame,
+  CalendarDays,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
 import {
@@ -38,6 +41,7 @@ import {
   type Task,
   type Bug as BugType,
   type DevlogEntry,
+  type Sprint,
 } from "@/lib/store";
 
 interface Stats {
@@ -102,6 +106,22 @@ export default function DashboardPage() {
   const [lastBackup, setLastBackup] = useState<string | null>(null);
   const [backupLoaded, setBackupLoaded] = useState(false);
   const [showAllActivity, setShowAllActivity] = useState(false);
+
+  const [weeklySummary, setWeeklySummary] = useState<{
+    tasksCompleted: Task[];
+    bugsClosed: BugType[];
+    devlogsWritten: DevlogEntry[];
+    activeSprint: Sprint | null;
+    sprintProgress: number;
+    message: string;
+  }>({
+    tasksCompleted: [],
+    bugsClosed: [],
+    devlogsWritten: [],
+    activeSprint: null,
+    sprintProgress: 0,
+    message: "",
+  });
 
   useEffect(() => {
     const dismissed = localStorage.getItem("gameforge_welcome_dismissed") === "true";
@@ -228,6 +248,37 @@ export default function DashboardPage() {
         };
       })
     );
+
+    const weeklyTasksCompleted = tasks.filter(
+      (t) => t.status === "done" && new Date(t.created_at) >= weekAgo
+    );
+    const weeklyBugsClosed = bugs.filter(
+      (b) => b.status === "closed" && new Date(b.created_at) >= weekAgo
+    );
+    const weeklyDevlogs = devlog.filter((d) => new Date(d.date) >= weekAgo);
+    const activeSprint = sprints.find((s) => s.status === "active") || null;
+    let sprintProg = 0;
+    if (activeSprint) {
+      const sprintTasks = tasks.filter((t) => t.sprint === activeSprint.name);
+      const sprintDone = sprintTasks.filter((t) => t.status === "done").length;
+      sprintProg = sprintTasks.length > 0 ? Math.round((sprintDone / sprintTasks.length) * 100) : 0;
+    }
+
+    const totalActivity = weeklyTasksCompleted.length + weeklyBugsClosed.length + weeklyDevlogs.length;
+    let motivational = "Just getting started. You got this!";
+    if (totalActivity >= 10) motivational = "Unstoppable week. Keep that energy!";
+    else if (totalActivity >= 5) motivational = "Great week! Solid momentum.";
+    else if (totalActivity >= 2) motivational = "Good progress. Keep pushing!";
+    else if (totalActivity >= 1) motivational = "Nice start. Let's build on it!";
+
+    setWeeklySummary({
+      tasksCompleted: weeklyTasksCompleted,
+      bugsClosed: weeklyBugsClosed,
+      devlogsWritten: weeklyDevlogs,
+      activeSprint,
+      sprintProgress: sprintProg,
+      message: motivational,
+    });
   }, []);
 
   const statCards = [
@@ -450,6 +501,129 @@ export default function DashboardPage() {
             <p className="mt-3 text-sm text-[#9CA3AF]">{stat.label}</p>
           </Link>
         ))}
+      </div>
+
+      {/* This Week Summary */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+        <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-4">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-[#F59E0B]" />
+            <h2 className="font-semibold">This Week</h2>
+          </div>
+          <div className="flex items-center gap-1.5 rounded-full bg-[#F59E0B]/10 px-3 py-1">
+            <Flame className="h-3 w-3 text-[#F59E0B]" />
+            <span className="text-xs font-medium text-[#F59E0B]">{weeklySummary.message}</span>
+          </div>
+        </div>
+
+        <div className="grid gap-px bg-[#2A2A2A] sm:grid-cols-4">
+          <div className="flex flex-col bg-[#1A1A1A] p-4">
+            <div className="flex items-center gap-2 text-xs text-[#9CA3AF]">
+              <CheckCircle2 className="h-3.5 w-3.5 text-[#10B981]" />
+              Tasks Completed
+            </div>
+            <span className="mt-2 text-2xl font-bold text-[#F5F5F5]">{weeklySummary.tasksCompleted.length}</span>
+          </div>
+          <div className="flex flex-col bg-[#1A1A1A] p-4">
+            <div className="flex items-center gap-2 text-xs text-[#9CA3AF]">
+              <Bug className="h-3.5 w-3.5 text-[#EF4444]" />
+              Bugs Fixed
+            </div>
+            <span className="mt-2 text-2xl font-bold text-[#F5F5F5]">{weeklySummary.bugsClosed.length}</span>
+          </div>
+          <div className="flex flex-col bg-[#1A1A1A] p-4">
+            <div className="flex items-center gap-2 text-xs text-[#9CA3AF]">
+              <PenLine className="h-3.5 w-3.5 text-[#F59E0B]" />
+              Devlog Entries
+            </div>
+            <span className="mt-2 text-2xl font-bold text-[#F5F5F5]">{weeklySummary.devlogsWritten.length}</span>
+          </div>
+          <div className="flex flex-col bg-[#1A1A1A] p-4">
+            <div className="flex items-center gap-2 text-xs text-[#9CA3AF]">
+              <TrendingUp className="h-3.5 w-3.5 text-[#3B82F6]" />
+              Sprint Progress
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-2xl font-bold text-[#F5F5F5]">{weeklySummary.sprintProgress}%</span>
+              {weeklySummary.activeSprint && (
+                <span className="truncate text-[10px] text-[#6B7280]">{weeklySummary.activeSprint.name}</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {(weeklySummary.tasksCompleted.length > 0 || weeklySummary.bugsClosed.length > 0 || weeklySummary.devlogsWritten.length > 0) && (
+          <div className="border-t border-[#2A2A2A] px-5 py-3">
+            <div className="flex flex-wrap gap-4">
+              {weeklySummary.tasksCompleted.length > 0 && (
+                <div className="min-w-0 flex-1">
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#10B981]">Completed Tasks</p>
+                  <div className="space-y-1">
+                    {weeklySummary.tasksCompleted.slice(0, 4).map((t) => (
+                      <p key={t.id} className="flex items-center gap-1.5 text-xs text-[#9CA3AF]">
+                        <CheckCircle2 className="h-3 w-3 shrink-0 text-[#10B981]/60" />
+                        <span className="truncate">{t.title}</span>
+                      </p>
+                    ))}
+                    {weeklySummary.tasksCompleted.length > 4 && (
+                      <p className="text-[10px] text-[#6B7280]">+{weeklySummary.tasksCompleted.length - 4} more</p>
+                    )}
+                  </div>
+                </div>
+              )}
+              {weeklySummary.bugsClosed.length > 0 && (
+                <div className="min-w-0 flex-1">
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#EF4444]">Bugs Fixed</p>
+                  <div className="space-y-1">
+                    {weeklySummary.bugsClosed.slice(0, 4).map((b) => (
+                      <p key={b.id} className="flex items-center gap-1.5 text-xs text-[#9CA3AF]">
+                        <CheckCircle2 className="h-3 w-3 shrink-0 text-[#EF4444]/60" />
+                        <span className="truncate">{b.title}</span>
+                      </p>
+                    ))}
+                    {weeklySummary.bugsClosed.length > 4 && (
+                      <p className="text-[10px] text-[#6B7280]">+{weeklySummary.bugsClosed.length - 4} more</p>
+                    )}
+                  </div>
+                </div>
+              )}
+              {weeklySummary.devlogsWritten.length > 0 && (
+                <div className="min-w-0 flex-1">
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#F59E0B]">Devlog Entries</p>
+                  <div className="space-y-1">
+                    {weeklySummary.devlogsWritten.slice(0, 4).map((d) => (
+                      <p key={d.id} className="flex items-center gap-1.5 text-xs text-[#9CA3AF]">
+                        <PenLine className="h-3 w-3 shrink-0 text-[#F59E0B]/60" />
+                        <span className="truncate">{d.title}</span>
+                      </p>
+                    ))}
+                    {weeklySummary.devlogsWritten.length > 4 && (
+                      <p className="text-[10px] text-[#6B7280]">+{weeklySummary.devlogsWritten.length - 4} more</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {weeklySummary.activeSprint && (
+          <div className="border-t border-[#2A2A2A] px-5 py-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[#6B7280]">{weeklySummary.activeSprint.name}: {weeklySummary.activeSprint.goal}</span>
+              <span className="font-medium tabular-nums text-[#F5F5F5]">{weeklySummary.sprintProgress}%</span>
+            </div>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#2A2A2A]">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{
+                  width: `${weeklySummary.sprintProgress}%`,
+                  backgroundColor: weeklySummary.sprintProgress === 100 ? "#10B981" : weeklySummary.sprintProgress >= 50 ? "#F59E0B" : "#3B82F6",
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Quick Actions */}
