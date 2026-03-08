@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
   Plus,
@@ -14,12 +14,15 @@ import {
   BookOpen,
   Clock,
   AlertTriangle,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import {
   getProjects,
   getTasks,
   getBugs,
   getDevlog,
+  updateProject,
   type Project,
 } from "@/lib/store";
 
@@ -74,8 +77,9 @@ export default function ProjectsPage() {
   const [view, setView] = useState<ViewMode>("grid");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("updated");
+  const [showArchived, setShowArchived] = useState(false);
 
-  useEffect(() => {
+  const loadData = useCallback(() => {
     const allProjects = getProjects();
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     const data: ProjectData[] = allProjects.map((p) => {
@@ -97,8 +101,26 @@ export default function ProjectsPage() {
     setProjectData(data);
   }, []);
 
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleArchive = (projectId: string, archive: boolean) => {
+    updateProject(projectId, { archived: archive });
+    loadData();
+  };
+
+  const archivedCount = useMemo(
+    () => projectData.filter((d) => d.project.archived).length,
+    [projectData]
+  );
+
   const filtered = useMemo(() => {
     let items = [...projectData];
+
+    if (!showArchived) {
+      items = items.filter((d) => !d.project.archived);
+    }
 
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -124,7 +146,7 @@ export default function ProjectsPage() {
     });
 
     return items;
-  }, [projectData, search, sortBy]);
+  }, [projectData, search, sortBy, showArchived]);
 
   const sortOptions: { key: SortKey; label: string }[] = [
     { key: "updated", label: "Last Updated" },
@@ -204,6 +226,19 @@ export default function ProjectsPage() {
               <List className="h-4 w-4" />
             </button>
           </div>
+          {archivedCount > 0 && (
+            <button
+              onClick={() => setShowArchived(!showArchived)}
+              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-medium transition-colors ${
+                showArchived
+                  ? "border-[#F59E0B]/40 bg-[#F59E0B]/10 text-[#F59E0B]"
+                  : "border-[#2A2A2A] text-[#6B7280] hover:text-[#9CA3AF]"
+              }`}
+            >
+              <Archive className="h-3.5 w-3.5" />
+              {showArchived ? "Hide" : "Show"} Archived ({archivedCount})
+            </button>
+          )}
         </div>
       </div>
 
@@ -256,7 +291,11 @@ export default function ProjectsPage() {
                 <Link
                   key={project.id}
                   href={`/dashboard/projects/${project.id}`}
-                  className="group rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] transition-all hover:border-[#F59E0B]/30"
+                  className={`group rounded-xl border bg-[#1A1A1A] transition-all ${
+                    project.archived
+                      ? "border-dashed border-[#2A2A2A] opacity-50 hover:opacity-70"
+                      : "border-[#2A2A2A] hover:border-[#F59E0B]/30"
+                  }`}
                 >
                   <div
                     className="h-2 rounded-t-xl"
@@ -320,9 +359,30 @@ export default function ProjectsPage() {
                         </div>
                       )}
                     </div>
-                    <div className="mt-2 flex items-center gap-1 text-[10px] text-[#6B7280]">
-                      <Clock className="h-3 w-3" />
-                      Updated {relativeTime(project.updated_at)}
+                    <div className="mt-2 flex items-center justify-between">
+                      <div className="flex items-center gap-1 text-[10px] text-[#6B7280]">
+                        <Clock className="h-3 w-3" />
+                        Updated {relativeTime(project.updated_at)}
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleArchive(project.id, !project.archived);
+                        }}
+                        className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium transition-all ${
+                          project.archived
+                            ? "text-[#F59E0B] hover:bg-[#F59E0B]/10"
+                            : "text-[#6B7280] opacity-0 group-hover:opacity-100 hover:text-[#F59E0B] hover:bg-[#F59E0B]/10"
+                        }`}
+                      >
+                        {project.archived ? (
+                          <ArchiveRestore className="h-3 w-3" />
+                        ) : (
+                          <Archive className="h-3 w-3" />
+                        )}
+                        {project.archived ? "Unarchive" : "Archive"}
+                      </button>
                     </div>
                   </div>
                 </Link>
@@ -361,7 +421,9 @@ export default function ProjectsPage() {
                   <Link
                     key={project.id}
                     href={`/dashboard/projects/${project.id}`}
-                    className="grid grid-cols-[1fr_100px_100px_70px_80px_110px] items-center gap-2 px-5 py-3.5 transition-colors hover:bg-[#1F1F1F]"
+                    className={`group grid grid-cols-[1fr_100px_100px_70px_80px_110px] items-center gap-2 px-5 py-3.5 transition-colors ${
+                      project.archived ? "opacity-50" : "hover:bg-[#1F1F1F]"
+                    }`}
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <div
@@ -401,10 +463,31 @@ export default function ProjectsPage() {
                         <span className="text-[10px] text-[#4B5563]">—</span>
                       )}
                     </div>
-                    <span className="flex items-center justify-end gap-1 text-xs text-[#6B7280]">
-                      <Clock className="h-3 w-3" />
-                      {relativeTime(project.updated_at)}
-                    </span>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <span className="flex items-center gap-1 text-xs text-[#6B7280]">
+                        <Clock className="h-3 w-3" />
+                        {relativeTime(project.updated_at)}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleArchive(project.id, !project.archived);
+                        }}
+                        className={`rounded p-1 transition-colors ${
+                          project.archived
+                            ? "text-[#F59E0B] hover:bg-[#F59E0B]/10"
+                            : "text-transparent group-hover:text-[#4B5563] hover:!text-[#F59E0B] hover:!bg-[#F59E0B]/10"
+                        }`}
+                        title={project.archived ? "Unarchive" : "Archive"}
+                      >
+                        {project.archived ? (
+                          <ArchiveRestore className="h-3.5 w-3.5" />
+                        ) : (
+                          <Archive className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    </div>
                   </Link>
                 );
               }

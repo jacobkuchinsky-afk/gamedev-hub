@@ -6,6 +6,7 @@ export interface Project {
   genre: string;
   status: "concept" | "prototype" | "alpha" | "beta" | "gold" | "released";
   coverColor: string;
+  archived?: boolean;
   created_at: string;
   updated_at: string;
 }

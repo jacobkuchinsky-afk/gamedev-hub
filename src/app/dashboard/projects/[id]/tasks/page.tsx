@@ -111,6 +111,10 @@ export default function TaskBoardPage() {
 
   const [subtaskInputs, setSubtaskInputs] = useState<Record<string, string>>({});
 
+  const [aiSprintLoading, setAiSprintLoading] = useState(false);
+  const [aiSprintResult, setAiSprintResult] = useState<string | null>(null);
+  const [showAiSprintPanel, setShowAiSprintPanel] = useState(false);
+
   const reload = useCallback(() => {
     setTasks(getTasks(projectId));
     setSprints(getSprints(projectId));
@@ -169,6 +173,102 @@ export default function TaskBoardPage() {
       // silently fail
     } finally {
       setAiDetailLoading(false);
+    }
+  };
+
+  const handleAiSprintPlan = async () => {
+    if (aiSprintLoading) return;
+    setAiSprintLoading(true);
+    setShowAiSprintPanel(true);
+    setAiSprintResult(null);
+
+    const backlogTasks = tasks.filter(
+      (t) => !t.sprint || t.sprint === "Backlog"
+    );
+    if (backlogTasks.length === 0) {
+      setAiSprintResult(
+        "No backlog tasks found. Add tasks to the backlog first."
+      );
+      setAiSprintLoading(false);
+      return;
+    }
+
+    const taskList = backlogTasks
+      .map(
+        (t) =>
+          `- "${t.title}" (priority: ${t.priority}${t.estimatedHours ? `, estimate: ${t.estimatedHours}h` : ""}${t.tags?.length ? `, tags: ${t.tags.join(", ")}` : ""})`
+      )
+      .join("\n");
+
+    const vel = velocity > 0 ? Math.round(velocity) : 5;
+
+    const prompt = `I have these backlog tasks for my game:\n${taskList}\n\nMy sprint capacity is ${vel} tasks (based on previous sprints). Suggest which tasks to include in the next sprint. Prioritize by: critical bugs first, then high-priority features, then polish. List the task names you'd include and briefly explain why.`;
+
+    try {
+      const response = await fetch(
+        "https://llm.chutes.ai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization:
+              "Bearer " +
+              (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "moonshotai/Kimi-K2.5-TEE",
+            messages: [{ role: "user", content: prompt }],
+            stream: false,
+            max_tokens: 512,
+            temperature: 0.7,
+          }),
+        }
+      );
+      const data = await response.json();
+      const content = (
+        data.choices?.[0]?.message?.content ||
+        data.choices?.[0]?.message?.reasoning ||
+        ""
+      ).trim();
+      setAiSprintResult(content || "No recommendation received.");
+    } catch {
+      setAiSprintResult(
+        "Failed to get AI recommendation. Please try again."
+      );
+    } finally {
+      setAiSprintLoading(false);
+    }
+  };
+
+  const handleApplySprintPlan = () => {
+    if (!aiSprintResult) return;
+    const backlogTasks = tasks.filter(
+      (t) => !t.sprint || t.sprint === "Backlog"
+    );
+    const targetSprint =
+      sprints.find((s) => s.status === "planned")?.name ||
+      sprints.find((s) => s.status === "active")?.name ||
+      `Sprint ${nextSprintNum}`;
+
+    let applied = 0;
+    backlogTasks.forEach((task) => {
+      if (
+        aiSprintResult.toLowerCase().includes(task.title.toLowerCase())
+      ) {
+        updateTask(task.id, { sprint: targetSprint });
+        applied++;
+      }
+    });
+
+    if (applied > 0) {
+      reload();
+      setAiSprintResult(
+        `Done! Moved ${applied} task${applied !== 1 ? "s" : ""} to ${targetSprint}.`
+      );
+    } else {
+      setAiSprintResult(
+        "Could not match any tasks from the recommendation. Try reviewing manually."
+      );
     }
   };
 
@@ -564,6 +664,18 @@ export default function TaskBoardPage() {
           <Plus className="h-3 w-3" />
           New Sprint
         </button>
+        <button
+          onClick={handleAiSprintPlan}
+          disabled={aiSprintLoading}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-1.5 text-xs font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {aiSprintLoading ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Sparkles className="h-3 w-3" />
+          )}
+          AI Plan Sprint
+        </button>
       </div>
 
       {/* Sprint Summary */}
@@ -667,6 +779,62 @@ export default function TaskBoardPage() {
           </div>
         </div>
       </div>
+
+      {/* AI Sprint Plan Panel */}
+      {showAiSprintPanel && (
+        <div className="rounded-xl border border-[#F59E0B]/20 bg-[#1A1A1A] p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+              <h3 className="text-sm font-semibold text-[#F5F5F5]">
+                AI Sprint Recommendation
+              </h3>
+            </div>
+            <button
+              onClick={() => setShowAiSprintPanel(false)}
+              className="rounded-lg p-1 text-[#6B7280] transition-colors hover:text-[#F5F5F5]"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          {aiSprintLoading ? (
+            <div className="flex items-center justify-center gap-3 py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-[#F59E0B]" />
+              <span className="text-sm text-[#9CA3AF]">
+                Analyzing backlog and planning sprint...
+              </span>
+            </div>
+          ) : aiSprintResult ? (
+            <div className="space-y-3">
+              <div className="max-h-64 overflow-y-auto rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-3">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">
+                  {aiSprintResult}
+                </p>
+              </div>
+              {!aiSprintResult.startsWith("Done!") &&
+                !aiSprintResult.startsWith("No backlog") &&
+                !aiSprintResult.startsWith("Failed") &&
+                !aiSprintResult.startsWith("Could not") && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleApplySprintPlan}
+                      className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-[#F59E0B]/90"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                      Apply to Sprint
+                    </button>
+                    <button
+                      onClick={handleAiSprintPlan}
+                      className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#3A3A3A] hover:text-[#F5F5F5]"
+                    >
+                      Regenerate
+                    </button>
+                  </div>
+                )}
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {/* Sprint Burndown Chart */}
       {burndownData && currentSprintInfo && (
