@@ -20,6 +20,7 @@ import {
   LayoutGrid,
   Sparkles,
   Loader2,
+  Activity,
 } from "lucide-react";
 
 const BASE_TILE = 32;
@@ -101,6 +102,8 @@ export default function TilemapPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiDecorateLoading, setAiDecorateLoading] = useState(false);
   const [aiDecorateResult, setAiDecorateResult] = useState("");
+  const [aiPacingLoading, setAiPacingLoading] = useState(false);
+  const [aiPacingResult, setAiPacingResult] = useState("");
 
   const layersRef = useRef(layers);
   layersRef.current = layers;
@@ -290,6 +293,55 @@ export default function TilemapPage() {
       setAiDecorateResult("Failed to generate decorations. Try again.");
     } finally {
       setAiDecorateLoading(false);
+    }
+  };
+
+  const aiAnalyzePacing = async () => {
+    if (aiPacingLoading) return;
+    setAiPacingLoading(true);
+    setAiPacingResult("");
+    try {
+      const groundLayer = layers.Ground;
+      const tileNames: Record<number, string> = {};
+      TILE_TYPES.forEach((t) => { tileNames[t.id] = t.name; });
+      const total = gridW * gridH;
+      const counts: Record<string, number> = {};
+      for (let y = 0; y < gridH; y++) {
+        for (let x = 0; x < gridW; x++) {
+          const id = groundLayer[y]?.[x] ?? 0;
+          const name = tileNames[id] || "Empty";
+          counts[name] = (counts[name] || 0) + 1;
+        }
+      }
+
+      const composition = Object.entries(counts)
+        .map(([name, count]) => `${Math.round((count / total) * 100)}% ${name}`)
+        .join(", ");
+
+      const prompt = `Analyze this game level's pacing based on tile composition: ${composition}. Map size: ${gridW}x${gridH}. Suggest: 1) Is there enough variety? 2) Are there natural rest/safe areas? 3) Where should difficulty ramp up? 4) What's missing? Be brief.`;
+
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      setAiPacingResult(content || "No analysis returned. Try again.");
+    } catch {
+      setAiPacingResult("Failed to analyze pacing. Try again.");
+    } finally {
+      setAiPacingLoading(false);
     }
   };
 
@@ -732,6 +784,38 @@ export default function TilemapPage() {
             {aiDecorateResult && (
               <div className="mt-2 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-2">
                 <p className="text-[11px] text-[#F59E0B]">{aiDecorateResult}</p>
+              </div>
+            )}
+          </div>
+
+          {/* AI Pacing */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-3">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              <Activity className="inline h-3 w-3 mr-1" /> AI Pacing
+            </h3>
+            <p className="mb-2 text-[10px] text-[#6B7280]">
+              Analyze your level&apos;s pacing and get suggestions for variety, rest areas, and difficulty curves.
+            </p>
+            <button
+              onClick={aiAnalyzePacing}
+              disabled={aiPacingLoading}
+              className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-3 py-2 text-xs font-semibold text-[#F59E0B] hover:bg-[#F59E0B]/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {aiPacingLoading ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Activity className="h-3.5 w-3.5" />
+                  Analyze Pacing
+                </>
+              )}
+            </button>
+            {aiPacingResult && (
+              <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-2">
+                <p className="text-[11px] text-[#D1D5DB] whitespace-pre-wrap leading-relaxed">{aiPacingResult}</p>
               </div>
             )}
           </div>
