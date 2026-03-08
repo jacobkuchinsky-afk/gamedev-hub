@@ -141,6 +141,10 @@ button:disabled:hover {
   filter: none;
 }
 
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
 ::selection {
   background: #F59E0B;
   color: #0F0F0F;
