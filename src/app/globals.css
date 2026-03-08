@@ -79,6 +79,11 @@ button {
 
 input, textarea, select {
   color-scheme: dark;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
 }
 
 @keyframes fadeIn {
