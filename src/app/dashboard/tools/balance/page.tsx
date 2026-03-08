@@ -1563,7 +1563,7 @@ function EconomyBalance() {
 
 // ── Economy Designer Tab ──
 
-const RARITY_COLORS: Record<string, string> = {
+const ECON_RARITY_COLORS: Record<string, string> = {
   common: "text-neutral-400",
   uncommon: "text-green-400",
   rare: "text-blue-400",
