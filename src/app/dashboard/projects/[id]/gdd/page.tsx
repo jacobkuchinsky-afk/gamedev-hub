@@ -59,6 +59,13 @@ interface GDDField {
   options?: string[];
 }
 
+interface CodexEntry {
+  id: string;
+  topic: string;
+  content: string;
+  createdAt: string;
+}
+
 interface Competitor {
   name: string;
   type: "direct" | "indirect";
@@ -539,6 +546,21 @@ function savePillarsData(projectId: string, pillars: DesignPillar[]) {
   localStorage.setItem(getPillarsKey(projectId), JSON.stringify(pillars));
 }
 
+function getCodexKey(projectId: string) {
+  return `gameforge_codex_${projectId}`;
+}
+
+function loadCodex(projectId: string): CodexEntry[] {
+  if (typeof window === "undefined") return [];
+  const raw = localStorage.getItem(getCodexKey(projectId));
+  if (raw) return JSON.parse(raw);
+  return [];
+}
+
+function saveCodex(projectId: string, entries: CodexEntry[]) {
+  localStorage.setItem(getCodexKey(projectId), JSON.stringify(entries));
+}
+
 export default function GDDPage() {
   const params = useParams();
   const router = useRouter();
@@ -590,6 +612,14 @@ export default function GDDPage() {
   const [showConceptDoc, setShowConceptDoc] = useState(false);
   const [conceptDocCopied, setConceptDocCopied] = useState(false);
 
+  const [showWiki, setShowWiki] = useState(false);
+  const [wikiTopic, setWikiTopic] = useState("");
+  const [wikiLoading, setWikiLoading] = useState(false);
+  const [wikiResult, setWikiResult] = useState("");
+  const [codexEntries, setCodexEntries] = useState<CodexEntry[]>([]);
+  const [codexView, setCodexView] = useState(false);
+  const [selectedCodexEntry, setSelectedCodexEntry] = useState<CodexEntry | null>(null);
+
   useEffect(() => {
     console.log("[GDDPage] rendered, id:", projectId);
     const p = getProject(projectId);
@@ -600,6 +630,7 @@ export default function GDDPage() {
     setProject(p);
     setData(loadGDD(projectId));
     setPillars(loadPillarsData(projectId));
+    setCodexEntries(loadCodex(projectId));
     const initial: Record<string, boolean> = {};
     GDD_SECTIONS.forEach((s) => (initial[s.id] = true));
     setExpanded(initial);
@@ -1152,6 +1183,77 @@ export default function GDDPage() {
     URL.revokeObjectURL(url);
   }, [conceptDocResult, data, project]);
 
+  const handleGenerateWikiEntry = useCallback(async () => {
+    if (!project || !wikiTopic.trim()) return;
+    setWikiLoading(true);
+    setWikiResult("");
+    setSelectedCodexEntry(null);
+
+    const name = data.gameTitle || project.name || "Untitled";
+    const genre = data.genre || project.genre || "unspecified";
+
+    const prompt = `Write a game wiki/codex entry for the topic '${wikiTopic.trim()}' in '${name}', a ${genre} game. Include: overview (1 paragraph), history/background, key details (3 bullet points), and connections to other game elements. Write in an in-universe tone, like a game encyclopedia. Keep it to 200 words.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.8,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+      const apiData = await response.json();
+      const content = apiData.choices?.[0]?.message?.content || apiData.choices?.[0]?.message?.reasoning || "";
+      setWikiResult(content.trim());
+      setToast({ message: `Wiki entry for "${wikiTopic.trim()}" generated!`, type: "success" });
+    } catch (err) {
+      console.error("[GDD Wiki]", err);
+      setWikiResult("Failed to generate wiki entry. Please try again.");
+      setToast({ message: "Wiki generation failed -- try again", type: "error" });
+    } finally {
+      setWikiLoading(false);
+    }
+  }, [project, data, wikiTopic]);
+
+  const handleSaveCodexEntry = useCallback(() => {
+    if (!wikiResult || !wikiTopic.trim()) return;
+    const entry: CodexEntry = {
+      id: `codex_${Date.now()}`,
+      topic: wikiTopic.trim(),
+      content: wikiResult,
+      createdAt: new Date().toISOString(),
+    };
+    setCodexEntries((prev) => {
+      const next = [entry, ...prev];
+      saveCodex(projectId, next);
+      return next;
+    });
+    setToast({ message: `"${wikiTopic.trim()}" saved to codex!`, type: "success" });
+  }, [wikiResult, wikiTopic, projectId]);
+
+  const handleDeleteCodexEntry = useCallback(
+    (id: string) => {
+      setCodexEntries((prev) => {
+        const next = prev.filter((e) => e.id !== id);
+        saveCodex(projectId, next);
+        return next;
+      });
+      if (selectedCodexEntry?.id === id) {
+        setSelectedCodexEntry(null);
+      }
+    },
+    [projectId, selectedCodexEntry]
+  );
+
   const filledFields = Object.values(data).filter((v) => v.trim().length > 0).length;
   const totalFields = GDD_SECTIONS.reduce((acc, s) => acc + s.fields.length, 0);
   const completionPct = totalFields > 0 ? Math.round((filledFields / totalFields) * 100) : 0;
@@ -1310,6 +1412,18 @@ export default function GDDPage() {
                   <Trophy className="h-3.5 w-3.5" />
                 )}
                 AI Achievements
+              </button>
+              <button
+                onClick={() => { setShowWiki(true); setCodexView(false); }}
+                className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10"
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+                AI Game Wiki
+                {codexEntries.length > 0 && (
+                  <span className="ml-0.5 rounded-full bg-[#F59E0B]/20 px-1.5 py-0.5 text-[10px] font-semibold">
+                    {codexEntries.length}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setShowTemplateModal(true)}
@@ -2350,6 +2464,209 @@ export default function GDDPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* AI Game Wiki / Codex Modal */}
+      {showWiki && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#F59E0B]/10">
+                  <BookOpen className="h-4 w-4 text-[#F59E0B]" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">Game Wiki / Codex</h3>
+                  <p className="text-xs text-[#6B7280]">
+                    Generate encyclopedia entries for {data.gameTitle || project?.name || "your game"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setCodexView(!codexView); setSelectedCodexEntry(null); }}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                    codexView
+                      ? "bg-[#F59E0B]/10 text-[#F59E0B]"
+                      : "text-[#9CA3AF] hover:text-[#F5F5F5]"
+                  }`}
+                >
+                  {codexView ? "New Entry" : `Codex (${codexEntries.length})`}
+                </button>
+                <button
+                  onClick={() => setShowWiki(false)}
+                  className="rounded-lg p-1.5 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {codexView ? (
+                <div className="flex h-full">
+                  <div className="w-64 shrink-0 border-r border-[#2A2A2A] overflow-y-auto">
+                    {codexEntries.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-16 gap-3 px-4">
+                        <BookOpen className="h-8 w-8 text-[#2A2A2A]" />
+                        <p className="text-xs text-[#6B7280] text-center">No codex entries yet. Generate your first wiki entry!</p>
+                      </div>
+                    ) : (
+                      <div className="p-2 space-y-1">
+                        {codexEntries.map((entry) => (
+                          <button
+                            key={entry.id}
+                            onClick={() => setSelectedCodexEntry(entry)}
+                            className={`w-full text-left rounded-lg px-3 py-2.5 transition-all group ${
+                              selectedCodexEntry?.id === entry.id
+                                ? "bg-[#F59E0B]/10 border border-[#F59E0B]/30"
+                                : "hover:bg-[#2A2A2A]/50 border border-transparent"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-1">
+                              <span className={`text-sm font-medium truncate ${
+                                selectedCodexEntry?.id === entry.id ? "text-[#F59E0B]" : "text-[#D1D5DB]"
+                              }`}>
+                                {entry.topic}
+                              </span>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDeleteCodexEntry(entry.id); }}
+                                className="shrink-0 rounded p-0.5 text-[#6B7280] opacity-0 transition-all group-hover:opacity-100 hover:text-red-400"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                            <p className="mt-0.5 text-[10px] text-[#6B7280]">
+                              {new Date(entry.createdAt).toLocaleDateString()}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 p-6 overflow-y-auto">
+                    {selectedCodexEntry ? (
+                      <div>
+                        <h4 className="text-lg font-bold text-[#F59E0B] mb-1">{selectedCodexEntry.topic}</h4>
+                        <p className="text-[10px] text-[#6B7280] mb-4">
+                          Created {new Date(selectedCodexEntry.createdAt).toLocaleString()}
+                        </p>
+                        <div className="prose prose-invert max-w-none">
+                          {selectedCodexEntry.content.split("\n").map((line, i) => {
+                            const trimmed = line.trim();
+                            if (!trimmed) return <div key={i} className="h-3" />;
+                            if (trimmed.startsWith("# ") || trimmed.startsWith("## ") || (trimmed.startsWith("**") && trimmed.endsWith("**"))) {
+                              const text = trimmed.replace(/^#+\s*/, "").replace(/^\*\*/, "").replace(/\*\*:?$/, "").replace(/\*\*$/, "");
+                              return <h3 key={i} className="text-sm font-semibold text-[#F59E0B] mt-4 mb-1">{text}</h3>;
+                            }
+                            if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+                              return (
+                                <div key={i} className="flex items-start gap-2 py-0.5">
+                                  <div className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#F59E0B]" />
+                                  <p className="text-sm leading-relaxed text-[#D1D5DB]">{trimmed.replace(/^[-*]\s*/, "")}</p>
+                                </div>
+                              );
+                            }
+                            return <p key={i} className="text-sm leading-relaxed text-[#D1D5DB]">{trimmed}</p>;
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full gap-3">
+                        <BookOpen className="h-10 w-10 text-[#2A2A2A]" />
+                        <p className="text-sm text-[#6B7280]">Select an entry from the codex</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6 space-y-5">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={wikiTopic}
+                      onChange={(e) => setWikiTopic(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && wikiTopic.trim()) handleGenerateWikiEntry(); }}
+                      placeholder="Enter a topic... e.g. 'the ancient ruins', 'the protagonist', 'the magic system'"
+                      className="flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none transition-colors focus:border-[#F59E0B]/50"
+                    />
+                    <button
+                      onClick={handleGenerateWikiEntry}
+                      disabled={wikiLoading || !wikiTopic.trim()}
+                      className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2.5 text-sm font-medium text-black transition-colors hover:bg-[#F59E0B]/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {wikiLoading ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3.5 w-3.5" />
+                      )}
+                      {wikiLoading ? "Generating..." : "Generate"}
+                    </button>
+                  </div>
+
+                  {wikiLoading && (
+                    <div className="flex flex-col items-center justify-center py-12 gap-3">
+                      <Loader2 className="h-8 w-8 animate-spin text-[#F59E0B]" />
+                      <p className="text-sm text-[#6B7280]">Writing codex entry for &quot;{wikiTopic}&quot;...</p>
+                    </div>
+                  )}
+
+                  {!wikiLoading && wikiResult && (
+                    <div className="rounded-xl border border-[#2A2A2A] bg-[#0F0F0F] p-5">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-base font-bold text-[#F59E0B]">{wikiTopic}</h4>
+                        <button
+                          onClick={handleSaveCodexEntry}
+                          className="flex items-center gap-1.5 rounded-lg border border-[#10B981]/30 bg-[#10B981]/5 px-3 py-1.5 text-xs font-medium text-[#10B981] transition-all hover:bg-[#10B981]/10"
+                        >
+                          <Save className="h-3 w-3" />
+                          Save to Codex
+                        </button>
+                      </div>
+                      <div className="prose prose-invert max-w-none">
+                        {wikiResult.split("\n").map((line, i) => {
+                          const trimmed = line.trim();
+                          if (!trimmed) return <div key={i} className="h-3" />;
+                          if (trimmed.startsWith("# ") || trimmed.startsWith("## ") || (trimmed.startsWith("**") && trimmed.endsWith("**"))) {
+                            const text = trimmed.replace(/^#+\s*/, "").replace(/^\*\*/, "").replace(/\*\*:?$/, "").replace(/\*\*$/, "");
+                            return <h3 key={i} className="text-sm font-semibold text-[#F59E0B] mt-4 mb-1">{text}</h3>;
+                          }
+                          if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+                            return (
+                              <div key={i} className="flex items-start gap-2 py-0.5">
+                                <div className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#F59E0B]" />
+                                <p className="text-sm leading-relaxed text-[#D1D5DB]">{trimmed.replace(/^[-*]\s*/, "")}</p>
+                              </div>
+                            );
+                          }
+                          return <p key={i} className="text-sm leading-relaxed text-[#D1D5DB]">{trimmed}</p>;
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {!wikiLoading && !wikiResult && (
+                    <div className="flex flex-col items-center justify-center py-12 gap-3">
+                      <BookOpen className="h-10 w-10 text-[#2A2A2A]" />
+                      <p className="text-sm text-[#6B7280]">Enter a topic from your game world to generate a wiki entry</p>
+                      <div className="flex flex-wrap gap-2 mt-2 justify-center">
+                        {["the protagonist", "the magic system", "the ancient ruins", "the main villain", "the capital city"].map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            onClick={() => setWikiTopic(suggestion)}
+                            className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-xs text-[#9CA3AF] transition-all hover:border-[#F59E0B]/40 hover:text-[#F59E0B]"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

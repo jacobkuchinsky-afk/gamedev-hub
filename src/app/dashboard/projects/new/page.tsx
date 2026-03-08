@@ -92,6 +92,7 @@ export default function NewProjectPage() {
   const [activeTemplate, setActiveTemplate] = useState<string | null>(null);
   const [nameSuggestions, setNameSuggestions] = useState<string[]>([]);
   const [suggestingNames, setSuggestingNames] = useState(false);
+  const [aiDescLoading, setAiDescLoading] = useState(false);
 
   async function suggestNames() {
     setSuggestingNames(true);
@@ -124,6 +125,41 @@ export default function NewProjectPage() {
       toast({ title: "Couldn't get suggestions", description: "Check your API key or try again", type: "error" });
     } finally {
       setSuggestingNames(false);
+    }
+  }
+
+  async function suggestDescription() {
+    if (!genre) return;
+    setAiDescLoading(true);
+    try {
+      const gameName = name.trim() || "an untitled game";
+      const prompt = `Write a brief game project description for a ${genre} game called '${gameName}'. 2-3 sentences describing the concept, target audience, and unique angle. Be specific and compelling.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const cleaned = content.trim().replace(/^["']|["']$/g, "");
+      if (cleaned && cleaned.length <= DESCRIPTION_MAX) {
+        setDescription(cleaned);
+      } else if (cleaned) {
+        setDescription(cleaned.slice(0, DESCRIPTION_MAX));
+      }
+    } catch {
+      toast({ title: "Couldn't generate description", description: "Check your API key or try again", type: "error" });
+    } finally {
+      setAiDescLoading(false);
     }
   }
 
@@ -251,7 +287,22 @@ export default function NewProjectPage() {
           {/* Description */}
           <div>
             <div className="mb-1.5 flex items-center justify-between">
-              <label className="text-sm font-medium text-[#D1D5DB]">Description</label>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-[#D1D5DB]">Description</label>
+                <button
+                  type="button"
+                  onClick={suggestDescription}
+                  disabled={aiDescLoading}
+                  className="inline-flex items-center gap-1 rounded-md border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-2 py-0.5 text-[11px] font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/10 disabled:opacity-50"
+                >
+                  {aiDescLoading ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-3 w-3" />
+                  )}
+                  {aiDescLoading ? "Writing..." : "AI Help"}
+                </button>
+              </div>
               <span className={`text-xs ${description.length > DESCRIPTION_MAX ? "text-[#EF4444]" : "text-[#6B7280]"}`}>
                 {description.length}/{DESCRIPTION_MAX}
               </span>
