@@ -119,6 +119,15 @@ export default function ForgotPasswordPage() {
             </Link>
           </p>
         )}
+
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-[#6B7280]">
+          {["200+ AI Features", "23 Game Dev Tools", "Free Forever"].map((item) => (
+            <span key={item} className="flex items-center gap-1.5">
+              <span className="h-1 w-1 shrink-0 rounded-full bg-[#F59E0B]" />
+              {item}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
