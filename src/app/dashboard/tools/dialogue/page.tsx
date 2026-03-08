@@ -137,133 +137,21 @@ function makeNode(type: NodeType, x: number, y: number): DialogueNode {
   };
 }
 
-// ── Sample Data ──────────────────────────────────────────────
+// ── Templates ────────────────────────────────────────────────
 
-const SAMPLE_NODES: DialogueNode[] = [
-  {
-    id: "s1",
-    type: "npc",
-    x: 340,
-    y: 40,
-    character: "Tavern Keeper",
-    text: "Welcome to the Golden Tankard! What brings you here?",
-    choices: [],
-    condition: "",
-    conditionParam: "",
-    action: "",
-    actionParam: "",
-  },
-  {
-    id: "s2",
-    type: "choice",
-    x: 300,
-    y: 200,
-    character: "Player",
-    text: "Choose your response:",
-    choices: [
-      "I'll have an ale.",
-      "Tell me about the ruins.",
-      "Any work available?",
-    ],
-    condition: "",
-    conditionParam: "",
-    action: "",
-    actionParam: "",
-  },
-  {
-    id: "s3",
-    type: "npc",
-    x: 40,
-    y: 430,
-    character: "Tavern Keeper",
-    text: "Coming right up! That'll be 5 gold.",
-    choices: [],
-    condition: "",
-    conditionParam: "",
-    action: "",
-    actionParam: "",
-  },
-  {
-    id: "s4",
-    type: "condition",
-    x: 320,
-    y: 430,
-    character: "",
-    text: "",
-    choices: [],
-    condition: "has_flag",
-    conditionParam: "talked_to_elder",
-    action: "",
-    actionParam: "",
-  },
-  {
-    id: "s5",
-    type: "npc",
-    x: 610,
-    y: 430,
-    character: "Tavern Keeper",
-    text: "Rats in my cellar! Clear them out for 20 gold.",
-    choices: [],
-    condition: "",
-    conditionParam: "",
-    action: "",
-    actionParam: "",
-  },
-  {
-    id: "s6",
-    type: "action",
-    x: 40,
-    y: 590,
-    character: "",
-    text: "",
-    choices: [],
-    condition: "",
-    conditionParam: "",
-    action: "give_item",
-    actionParam: "Ale",
-  },
-  {
-    id: "s7",
-    type: "npc",
-    x: 220,
-    y: 590,
-    character: "Tavern Keeper",
-    text: "The elder sent you? Take the north road past the bridge.",
-    choices: [],
-    condition: "",
-    conditionParam: "",
-    action: "",
-    actionParam: "",
-  },
-  {
-    id: "s8",
-    type: "npc",
-    x: 450,
-    y: 590,
-    character: "Tavern Keeper",
-    text: "The ruins? Talk to the village elder first.",
-    choices: [],
-    condition: "",
-    conditionParam: "",
-    action: "",
-    actionParam: "",
-  },
-  {
-    id: "s9",
-    type: "action",
-    x: 630,
-    y: 590,
-    character: "",
-    text: "",
-    choices: [],
-    condition: "",
-    conditionParam: "",
-    action: "set_flag",
-    actionParam: "cellar_quest",
-  },
+const TAVERN_NODES: DialogueNode[] = [
+  { id: "s1", type: "npc", x: 340, y: 40, character: "Tavern Keeper", text: "Welcome to the Golden Tankard! What brings you here?", choices: [], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "s2", type: "choice", x: 300, y: 200, character: "Player", text: "Choose your response:", choices: ["I'll have an ale.", "Tell me about the ruins.", "Any work available?"], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "s3", type: "npc", x: 40, y: 430, character: "Tavern Keeper", text: "Coming right up! That'll be 5 gold.", choices: [], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "s4", type: "condition", x: 320, y: 430, character: "", text: "", choices: [], condition: "has_flag", conditionParam: "talked_to_elder", action: "", actionParam: "" },
+  { id: "s5", type: "npc", x: 610, y: 430, character: "Tavern Keeper", text: "Rats in my cellar! Clear them out for 20 gold.", choices: [], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "s6", type: "action", x: 40, y: 590, character: "", text: "", choices: [], condition: "", conditionParam: "", action: "give_item", actionParam: "Ale" },
+  { id: "s7", type: "npc", x: 220, y: 590, character: "Tavern Keeper", text: "The elder sent you? Take the north road past the bridge.", choices: [], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "s8", type: "npc", x: 450, y: 590, character: "Tavern Keeper", text: "The ruins? Talk to the village elder first.", choices: [], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "s9", type: "action", x: 630, y: 590, character: "", text: "", choices: [], condition: "", conditionParam: "", action: "set_flag", actionParam: "cellar_quest" },
 ];
 
-const SAMPLE_CONNS: Connection[] = [
+const TAVERN_CONNS: Connection[] = [
   { id: "c1", fromNodeId: "s1", fromPortIndex: 0, toNodeId: "s2" },
   { id: "c2", fromNodeId: "s2", fromPortIndex: 0, toNodeId: "s3" },
   { id: "c3", fromNodeId: "s2", fromPortIndex: 1, toNodeId: "s4" },
@@ -272,6 +160,66 @@ const SAMPLE_CONNS: Connection[] = [
   { id: "c6", fromNodeId: "s4", fromPortIndex: 0, toNodeId: "s7" },
   { id: "c7", fromNodeId: "s4", fromPortIndex: 1, toNodeId: "s8" },
   { id: "c8", fromNodeId: "s5", fromPortIndex: 0, toNodeId: "s9" },
+];
+
+const SHOP_NODES: DialogueNode[] = [
+  { id: "sh1", type: "npc", x: 340, y: 40, character: "Merchant", text: "Welcome to my shop! What can I get for you today?", choices: [], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "sh2", type: "choice", x: 300, y: 200, character: "Player", text: "What would you like?", choices: ["Buy a Health Potion", "Buy an Iron Sword", "Just browsing"], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "sh3", type: "action", x: 40, y: 420, character: "", text: "", choices: [], condition: "", conditionParam: "", action: "give_item", actionParam: "Health_Potion" },
+  { id: "sh4", type: "npc", x: 40, y: 560, character: "Merchant", text: "Here's your potion. Stay safe out there!", choices: [], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "sh5", type: "npc", x: 300, y: 420, character: "Merchant", text: "A fine blade! That'll be 50 gold pieces.", choices: [], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "sh6", type: "npc", x: 560, y: 420, character: "Merchant", text: "Take your time! Let me know if anything catches your eye.", choices: [], condition: "", conditionParam: "", action: "", actionParam: "" },
+];
+
+const SHOP_CONNS: Connection[] = [
+  { id: "shc1", fromNodeId: "sh1", fromPortIndex: 0, toNodeId: "sh2" },
+  { id: "shc2", fromNodeId: "sh2", fromPortIndex: 0, toNodeId: "sh3" },
+  { id: "shc3", fromNodeId: "sh2", fromPortIndex: 1, toNodeId: "sh5" },
+  { id: "shc4", fromNodeId: "sh2", fromPortIndex: 2, toNodeId: "sh6" },
+  { id: "shc5", fromNodeId: "sh3", fromPortIndex: 0, toNodeId: "sh4" },
+];
+
+const QUEST_NODES: DialogueNode[] = [
+  { id: "q1", type: "npc", x: 340, y: 40, character: "Village Elder", text: "Brave adventurer! Our village needs your help.", choices: [], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "q2", type: "condition", x: 320, y: 200, character: "", text: "", choices: [], condition: "has_flag", conditionParam: "wolves_cleared", action: "", actionParam: "" },
+  { id: "q3", type: "npc", x: 80, y: 380, character: "Village Elder", text: "You've already proven yourself! A dragon has been spotted near the mountains.", choices: [], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "q4", type: "npc", x: 500, y: 380, character: "Village Elder", text: "Wolves have been attacking our livestock at night. Can you help us?", choices: [], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "q5", type: "choice", x: 440, y: 540, character: "Player", text: "Your response:", choices: ["I'll take care of it", "Not right now"], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "q6", type: "action", x: 360, y: 700, character: "", text: "", choices: [], condition: "", conditionParam: "", action: "set_flag", actionParam: "wolf_quest_accepted" },
+  { id: "q7", type: "npc", x: 580, y: 700, character: "Village Elder", text: "I understand. Come back when you're ready.", choices: [], condition: "", conditionParam: "", action: "", actionParam: "" },
+];
+
+const QUEST_CONNS: Connection[] = [
+  { id: "qc1", fromNodeId: "q1", fromPortIndex: 0, toNodeId: "q2" },
+  { id: "qc2", fromNodeId: "q2", fromPortIndex: 0, toNodeId: "q3" },
+  { id: "qc3", fromNodeId: "q2", fromPortIndex: 1, toNodeId: "q4" },
+  { id: "qc4", fromNodeId: "q4", fromPortIndex: 0, toNodeId: "q5" },
+  { id: "qc5", fromNodeId: "q5", fromPortIndex: 0, toNodeId: "q6" },
+  { id: "qc6", fromNodeId: "q5", fromPortIndex: 1, toNodeId: "q7" },
+];
+
+const GUARD_NODES: DialogueNode[] = [
+  { id: "g1", type: "npc", x: 340, y: 40, character: "Castle Guard", text: "Halt! State your business. No one enters without authorization.", choices: [], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "g2", type: "choice", x: 300, y: 220, character: "Player", text: "Your response:", choices: ["I have a royal summons", "I'll come back later"], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "g3", type: "condition", x: 120, y: 420, character: "", text: "", choices: [], condition: "has_flag", conditionParam: "royal_summons", action: "", actionParam: "" },
+  { id: "g4", type: "npc", x: 20, y: 590, character: "Castle Guard", text: "So you do. The king awaits in the throne room. Don't keep him waiting.", choices: [], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "g5", type: "npc", x: 280, y: 590, character: "Castle Guard", text: "Nice try. Come back with a proper summons from the steward.", choices: [], condition: "", conditionParam: "", action: "", actionParam: "" },
+  { id: "g6", type: "npc", x: 520, y: 420, character: "Castle Guard", text: "Move along then.", choices: [], condition: "", conditionParam: "", action: "", actionParam: "" },
+];
+
+const GUARD_CONNS: Connection[] = [
+  { id: "gc1", fromNodeId: "g1", fromPortIndex: 0, toNodeId: "g2" },
+  { id: "gc2", fromNodeId: "g2", fromPortIndex: 0, toNodeId: "g3" },
+  { id: "gc3", fromNodeId: "g2", fromPortIndex: 1, toNodeId: "g6" },
+  { id: "gc4", fromNodeId: "g3", fromPortIndex: 0, toNodeId: "g4" },
+  { id: "gc5", fromNodeId: "g3", fromPortIndex: 1, toNodeId: "g5" },
+];
+
+const TEMPLATES = [
+  { key: "tavern", name: "Tavern Keeper", desc: "Branching tavern dialogue with conditions", nodes: TAVERN_NODES, connections: TAVERN_CONNS },
+  { key: "shop", name: "Shop Keeper", desc: "Buy items from a merchant", nodes: SHOP_NODES, connections: SHOP_CONNS },
+  { key: "quest", name: "Quest Giver", desc: "Quest with condition gates", nodes: QUEST_NODES, connections: QUEST_CONNS },
+  { key: "guard", name: "Guard", desc: "Gate check with authorization", nodes: GUARD_NODES, connections: GUARD_CONNS },
 ];
 
 // ── Component ────────────────────────────────────────────────
@@ -288,8 +236,8 @@ interface Interaction {
 }
 
 export default function DialoguePage() {
-  const [nodes, setNodes] = useState<DialogueNode[]>(SAMPLE_NODES);
-  const [connections, setConnections] = useState<Connection[]>(SAMPLE_CONNS);
+  const [nodes, setNodes] = useState<DialogueNode[]>(TAVERN_NODES);
+  const [connections, setConnections] = useState<Connection[]>(TAVERN_CONNS);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [treeName, setTreeName] = useState("Tavern Keeper");
@@ -327,6 +275,12 @@ export default function DialoguePage() {
   const selectedNode = selectedId
     ? nodes.find((n) => n.id === selectedId) || null
     : null;
+
+  const nodeCounts = (["npc", "choice", "condition", "action"] as NodeType[]).map((type) => ({
+    type,
+    count: nodes.filter((n) => n.type === type).length,
+    color: TYPE_COLORS[type],
+  }));
 
   // ── Load saved trees ────────────────────────────────────
 
@@ -623,6 +577,16 @@ export default function DialoguePage() {
     setTempEnd(null);
   }, []);
 
+  const loadTemplate = useCallback((t: typeof TEMPLATES[number]) => {
+    setNodes(t.nodes.map((n) => ({ ...n })));
+    setConnections(t.connections.map((c) => ({ ...c })));
+    setTreeName(t.name);
+    setSelectedId(null);
+    setConnectFrom(null);
+    setTempEnd(null);
+    setPan({ x: 0, y: 0 });
+  }, []);
+
   const deleteSavedTree = useCallback((id: string) => {
     setSavedTrees((prev) => {
       const updated = prev.filter((t) => t.id !== id);
@@ -632,7 +596,60 @@ export default function DialoguePage() {
   }, []);
 
   const exportJSON = useCallback(() => {
-    const data = { name: treeName, nodes, connections };
+    const withIncoming = new Set(connections.map((c) => c.toNodeId));
+    const startNode =
+      nodes.find((n) => !withIncoming.has(n.id) && n.type === "npc") || nodes[0];
+
+    const exportNodes: Record<string, Record<string, unknown>> = {};
+    for (const n of nodes) {
+      const outConns = connections.filter((c) => c.fromNodeId === n.id);
+
+      if (n.type === "npc") {
+        exportNodes[n.id] = {
+          type: "dialogue",
+          speaker: n.character || "NPC",
+          text: n.text,
+          next: outConns[0]?.toNodeId || null,
+        };
+      } else if (n.type === "choice") {
+        exportNodes[n.id] = {
+          type: "choice",
+          speaker: n.character || "Player",
+          prompt: n.text,
+          options: n.choices.map((text, i) => ({
+            text,
+            next:
+              outConns.find((c) => c.fromPortIndex === i)?.toNodeId || null,
+          })),
+        };
+      } else if (n.type === "condition") {
+        exportNodes[n.id] = {
+          type: "condition",
+          check: n.condition,
+          param: n.conditionParam,
+          if_true:
+            outConns.find((c) => c.fromPortIndex === 0)?.toNodeId || null,
+          if_false:
+            outConns.find((c) => c.fromPortIndex === 1)?.toNodeId || null,
+        };
+      } else if (n.type === "action") {
+        exportNodes[n.id] = {
+          type: "action",
+          action: n.action,
+          param: n.actionParam,
+          next: outConns[0]?.toNodeId || null,
+        };
+      }
+    }
+
+    const data = {
+      name: treeName,
+      format: "gameforge_dialogue_v1",
+      start_node: startNode?.id || null,
+      node_count: nodes.length,
+      nodes: exportNodes,
+    };
+
     const blob = new Blob([JSON.stringify(data, null, 2)], {
       type: "application/json",
     });
@@ -800,7 +817,7 @@ export default function DialoguePage() {
       <div
         key={n.id}
         data-node-id={n.id}
-        className={`absolute rounded-lg border overflow-visible select-none cursor-grab active:cursor-grabbing ${isSelected ? "ring-2 ring-amber-500/60 border-[#444]" : "border-[#2A2A2A]"}`}
+        className={`group absolute rounded-lg border overflow-visible select-none cursor-grab active:cursor-grabbing ${isSelected ? "ring-2 ring-amber-500/60 border-[#444]" : "border-[#2A2A2A]"}`}
         style={{
           left: n.x,
           top: n.y,
@@ -811,6 +828,18 @@ export default function DialoguePage() {
           borderLeftColor: color,
         }}
       >
+        {/* Delete button on hover */}
+        <button
+          className="absolute -top-2.5 -right-2.5 w-6 h-6 rounded-full bg-red-500/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 z-20 shadow-lg"
+          onClick={(e) => {
+            e.stopPropagation();
+            deleteNode(n.id);
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <Trash2 className="w-3 h-3 text-white" />
+        </button>
+
         {/* Input port */}
         <div
           className="absolute w-[14px] h-[14px] rounded-full border-2 border-[#555] hover:border-white hover:scale-[1.4] transition-all cursor-crosshair"
@@ -924,6 +953,30 @@ export default function DialoguePage() {
           <h1 className="text-lg font-bold text-white">
             Dialogue Tree Builder
           </h1>
+          {/* Node count stats */}
+          <div className="hidden sm:flex items-center gap-1.5 ml-2">
+            {nodeCounts.map(({ type, count, color }) =>
+              count > 0 ? (
+                <span
+                  key={type}
+                  className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                  style={{
+                    backgroundColor: color + "18",
+                    color: color,
+                  }}
+                >
+                  {count}{" "}
+                  {type === "npc"
+                    ? "NPC"
+                    : type === "choice"
+                      ? "Choice"
+                      : type === "condition"
+                        ? "Cond"
+                        : "Action"}
+                </span>
+              ) : null,
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <input
@@ -986,6 +1039,29 @@ export default function DialoguePage() {
             </div>
           </div>
 
+          {/* Templates */}
+          <div className="p-3 border-b border-[#2A2A2A]">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              Templates
+            </h3>
+            <div className="space-y-1">
+              {TEMPLATES.map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => loadTemplate(t)}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#1A1A1A] transition-colors group/tpl"
+                >
+                  <div className="text-xs text-gray-300 font-medium group-hover/tpl:text-white transition-colors">
+                    {t.name}
+                  </div>
+                  <div className="text-[10px] text-gray-600 mt-0.5 leading-snug">
+                    {t.desc}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="flex-1 overflow-y-auto p-3">
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
               Saved Trees
@@ -999,7 +1075,7 @@ export default function DialoguePage() {
                 {savedTrees.map((t) => (
                   <div
                     key={t.id}
-                    className="flex items-center gap-1 p-2 rounded-lg hover:bg-[#1A1A1A] group"
+                    className="flex items-center gap-1 p-2 rounded-lg hover:bg-[#1A1A1A] group/saved"
                   >
                     <FolderOpen className="w-3.5 h-3.5 text-gray-500 shrink-0" />
                     <button
@@ -1010,7 +1086,7 @@ export default function DialoguePage() {
                     </button>
                     <button
                       onClick={() => deleteSavedTree(t.id)}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 text-gray-600 hover:text-red-400 transition-all"
+                      className="opacity-0 group-hover/saved:opacity-100 p-0.5 text-gray-600 hover:text-red-400 transition-all"
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
@@ -1409,62 +1485,73 @@ export default function DialoguePage() {
         )}
       </div>
 
-      {/* Simulator panel */}
+      {/* Simulator modal overlay */}
       {simOpen && (
-        <div className="h-80 border-t border-[#2A2A2A] shrink-0 bg-[#111] flex flex-col">
-          {/* Sim header */}
-          <div className="h-10 flex items-center justify-between px-4 border-b border-[#2A2A2A] shrink-0">
-            <div className="flex items-center gap-2">
-              <Play className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-sm font-semibold text-amber-400">
-                Dialogue Preview
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              {(Object.keys(simFlags).length > 0 ||
-                simInventory.length > 0) && (
-                <div className="flex items-center gap-2 mr-4">
-                  {Object.keys(simFlags).map((f) => (
-                    <span
-                      key={f}
-                      className="px-1.5 py-0.5 bg-green-500/20 border border-green-500/30 rounded text-[10px] text-green-400"
-                    >
-                      {f}
-                    </span>
-                  ))}
-                  {simInventory.map((item, i) => (
-                    <span
-                      key={i}
-                      className="px-1.5 py-0.5 bg-blue-500/20 border border-blue-500/30 rounded text-[10px] text-blue-400"
-                    >
-                      {item}
-                    </span>
-                  ))}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div
+            className="w-full max-w-lg mx-4 rounded-2xl border border-[#2A2A2A] bg-[#111] shadow-2xl flex flex-col overflow-hidden"
+            style={{ maxHeight: "75vh" }}
+          >
+            {/* Sim header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-[#2A2A2A] bg-[#0F0F0F] shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
+                  <Play className="w-4 h-4 text-amber-400" />
                 </div>
-              )}
-              <button
-                onClick={simRestart}
-                className="p-1 text-gray-500 hover:text-white transition-colors"
-                title="Restart"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setSimOpen(false)}
-                className="p-1 text-gray-500 hover:text-white transition-colors"
-                title="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
+                <div>
+                  <span className="text-sm font-semibold text-white">
+                    Dialogue Preview
+                  </span>
+                  <div className="text-[10px] text-gray-500">
+                    {treeName}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={simRestart}
+                  className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-[#1A1A1A] transition-colors"
+                  title="Restart"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setSimOpen(false)}
+                  className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-[#1A1A1A] transition-colors"
+                  title="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          </div>
 
-          {/* Sim content */}
-          <div className="flex-1 flex overflow-hidden">
-            {/* History */}
+            {/* State badges */}
+            {(Object.keys(simFlags).length > 0 ||
+              simInventory.length > 0) && (
+              <div className="px-5 py-2 border-b border-[#2A2A2A] flex flex-wrap gap-1.5 shrink-0">
+                {Object.keys(simFlags).map((f) => (
+                  <span
+                    key={f}
+                    className="px-2 py-0.5 bg-green-500/15 border border-green-500/25 rounded-full text-[10px] text-green-400"
+                  >
+                    {f}
+                  </span>
+                ))}
+                {simInventory.map((item, i) => (
+                  <span
+                    key={i}
+                    className="px-2 py-0.5 bg-blue-500/15 border border-blue-500/25 rounded-full text-[10px] text-blue-400"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Chat history */}
             <div
               ref={simHistRef}
-              className="flex-1 overflow-y-auto p-4 space-y-3"
+              className="flex-1 overflow-y-auto px-5 py-4 space-y-4"
             >
               {simHistory.map((entry, i) => (
                 <div
@@ -1472,20 +1559,35 @@ export default function DialoguePage() {
                   className={`flex ${entry.isPlayer ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[70%] ${entry.isPlayer ? "text-right" : ""}`}
+                    className={`max-w-[80%] ${entry.isPlayer ? "text-right" : ""}`}
                   >
+                    {!entry.isPlayer && entry.char !== "System" && (
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-[10px] font-bold text-blue-400">
+                          {entry.char[0]}
+                        </div>
+                        <span className="text-xs font-semibold text-blue-400">
+                          {entry.char}
+                        </span>
+                      </div>
+                    )}
+                    {entry.isPlayer && (
+                      <div className="text-[10px] font-semibold mb-0.5 text-amber-400">
+                        You
+                      </div>
+                    )}
+                    {entry.char === "System" && (
+                      <div className="text-[10px] font-semibold mb-0.5 text-gray-600">
+                        System
+                      </div>
+                    )}
                     <div
-                      className={`text-[10px] font-semibold mb-0.5 ${entry.isPlayer ? "text-amber-400" : entry.char === "System" ? "text-gray-600" : "text-blue-400"}`}
-                    >
-                      {entry.char}
-                    </div>
-                    <div
-                      className={`inline-block px-3 py-1.5 rounded-lg text-sm ${
+                      className={`inline-block px-4 py-2.5 text-sm leading-relaxed ${
                         entry.isPlayer
-                          ? "bg-amber-500/20 text-amber-200"
+                          ? "bg-amber-500/20 text-amber-200 rounded-2xl rounded-tr-md"
                           : entry.char === "System"
-                            ? "bg-[#1A1A1A] text-gray-500 italic text-xs"
-                            : "bg-[#1A1A1A] text-gray-300"
+                            ? "bg-[#1A1A1A] text-gray-500 italic text-xs rounded-2xl rounded-tl-md"
+                            : "bg-[#1A1A1A] text-gray-300 rounded-2xl rounded-tl-md"
                       }`}
                     >
                       {entry.text}
@@ -1493,37 +1595,42 @@ export default function DialoguePage() {
                   </div>
                 </div>
               ))}
+            </div>
 
-              {/* Current interaction */}
+            {/* Action area */}
+            <div className="border-t border-[#2A2A2A] p-4 shrink-0 bg-[#0D0D0D]">
               {currentSimNode && currentSimNode.type === "npc" && (
-                <div className="flex justify-center pt-2">
-                  <button
-                    onClick={simContinue}
-                    className="px-4 py-1.5 bg-[#1A1A1A] border border-[#2A2A2A] rounded-lg text-sm text-gray-400 hover:text-white hover:border-amber-500/40 transition-colors"
-                  >
-                    Continue &rarr;
-                  </button>
+                <button
+                  onClick={simContinue}
+                  className="w-full py-2.5 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl text-sm text-gray-300 hover:text-white hover:border-amber-500/40 transition-colors"
+                >
+                  Continue...
+                </button>
+              )}
+              {currentSimNode && currentSimNode.type === "choice" && (
+                <div className="space-y-2">
+                  {currentSimNode.choices.map((c, i) => (
+                    <button
+                      key={i}
+                      onClick={() => simChoose(i)}
+                      className="w-full text-left px-4 py-2.5 bg-amber-500/10 border border-amber-500/25 rounded-xl text-sm text-amber-300 hover:bg-amber-500/20 transition-colors"
+                    >
+                      {c}
+                    </button>
+                  ))}
                 </div>
               )}
-              {currentSimNode &&
-                currentSimNode.type === "choice" && (
-                  <div className="pt-2 space-y-1.5 max-w-[80%] ml-auto">
-                    {currentSimNode.choices.map((c, i) => (
-                      <button
-                        key={i}
-                        onClick={() => simChoose(i)}
-                        className="w-full text-left px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-sm text-amber-300 hover:bg-amber-500/20 transition-colors"
-                      >
-                        {c}
-                      </button>
-                    ))}
-                  </div>
-                )}
               {!simCurrentId && simHistory.length > 0 && (
-                <div className="flex justify-center pt-2">
-                  <div className="px-4 py-2 bg-[#1A1A1A] border border-[#2A2A2A] rounded-lg text-sm text-gray-500 italic">
+                <div className="text-center py-1">
+                  <p className="text-sm text-gray-500 italic mb-2">
                     End of dialogue
-                  </div>
+                  </p>
+                  <button
+                    onClick={simRestart}
+                    className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
+                  >
+                    Restart conversation
+                  </button>
                 </div>
               )}
             </div>

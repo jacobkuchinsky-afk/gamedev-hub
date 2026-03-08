@@ -11,6 +11,8 @@ import {
   Link as LinkIcon,
   X,
   Image,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import {
   getProject,
@@ -36,6 +38,7 @@ export default function ReferenceBoardPage() {
   const [filterCategory, setFilterCategory] = useState<ReferenceCategory | "all">("all");
   const [showForm, setShowForm] = useState(false);
   const [quickUrl, setQuickUrl] = useState("");
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
 
   const [formTitle, setFormTitle] = useState("");
   const [formUrl, setFormUrl] = useState("");
@@ -96,6 +99,35 @@ export default function ReferenceBoardPage() {
   function handleDelete(id: string) {
     deleteReference(id);
     setReferences((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  function moveReference(id: string, direction: "up" | "down") {
+    setReferences((prev) => {
+      const idx = prev.findIndex((r) => r.id === id);
+      if (idx === -1) return prev;
+      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+      return next;
+    });
+  }
+
+  function toggleNoteExpand(id: string) {
+    setExpandedNotes((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function extractDomain(url: string): string {
+    try {
+      return new URL(url).hostname.replace("www.", "");
+    } catch {
+      return "Open link";
+    }
   }
 
   const categoryCounts = CATEGORIES.reduce((acc, cat) => {
@@ -173,7 +205,7 @@ export default function ReferenceBoardPage() {
             onClick={() => setFilterCategory(cat)}
             className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
               filterCategory === cat
-                ? `text-[${REFERENCE_CATEGORY_COLORS[cat]}]`
+                ? ""
                 : "bg-[#1A1A1A] text-[#9CA3AF] hover:text-[#F5F5F5]"
             }`}
             style={
@@ -292,24 +324,51 @@ export default function ReferenceBoardPage() {
           </button>
         </div>
       ) : (
-        <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
-          {filtered.map((ref, i) => {
-            const hasLongNotes = ref.notes.length > 80;
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((ref) => {
+            const isExpanded = expandedNotes.has(ref.id);
+            const hasLongNotes = ref.notes.length > 50;
+            const domain = extractDomain(ref.url);
+
             return (
               <div
                 key={ref.id}
-                className="mb-4 break-inside-avoid rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] transition-colors hover:border-[#3A3A3A]"
-                style={{ borderTopColor: ref.colorLabel, borderTopWidth: "3px" }}
+                className="group rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] transition-colors hover:border-[#3A3A3A] overflow-hidden flex"
               >
-                <div className="p-4">
+                {/* Color label strip */}
+                <div
+                  className="w-1.5 shrink-0"
+                  style={{ backgroundColor: ref.colorLabel }}
+                />
+
+                <div className="flex-1 p-4">
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="text-sm font-semibold leading-snug">{ref.title}</h3>
-                    <button
-                      onClick={() => handleDelete(ref.id)}
-                      className="shrink-0 rounded p-1 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#EF4444]"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {/* Reorder buttons */}
+                      <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => moveReference(ref.id, "up")}
+                          className="p-0.5 text-[#6B7280] hover:text-[#F59E0B] transition-colors"
+                          title="Move up"
+                        >
+                          <ChevronUp className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={() => moveReference(ref.id, "down")}
+                          className="p-0.5 text-[#6B7280] hover:text-[#F59E0B] transition-colors"
+                          title="Move down"
+                        >
+                          <ChevronDown className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => handleDelete(ref.id)}
+                        className="shrink-0 rounded p-1 text-[#6B7280] opacity-0 group-hover:opacity-100 transition-all hover:bg-[#2A2A2A] hover:text-[#EF4444]"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   <span
@@ -322,22 +381,38 @@ export default function ReferenceBoardPage() {
                     {ref.category}
                   </span>
 
+                  {/* Notes with preview/expand */}
                   {ref.notes && (
-                    <p className={`mt-3 text-xs leading-relaxed text-[#9CA3AF] ${hasLongNotes ? "" : ""}`}>
-                      {ref.notes}
-                    </p>
+                    <div className="mt-3">
+                      <p className="text-xs leading-relaxed text-[#9CA3AF]">
+                        {isExpanded || !hasLongNotes
+                          ? ref.notes
+                          : ref.notes.slice(0, 50) + "..."}
+                      </p>
+                      {hasLongNotes && (
+                        <button
+                          onClick={() => toggleNoteExpand(ref.id)}
+                          className="mt-1 text-[10px] text-[#F59E0B] hover:underline"
+                        >
+                          {isExpanded ? "Show less" : "Show more"}
+                        </button>
+                      )}
+                    </div>
                   )}
 
+                  {/* URL with colored dot + domain */}
                   <a
                     href={ref.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-3 inline-flex items-center gap-1 text-xs text-[#F59E0B] transition-colors hover:underline"
+                    className="mt-3 inline-flex items-center gap-1.5 text-xs text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
                   >
-                    <ExternalLink className="h-3 w-3" />
-                    {(() => {
-                      try { return new URL(ref.url).hostname.replace("www.", ""); } catch { return "Open link"; }
-                    })()}
+                    <span
+                      className="h-2.5 w-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: ref.colorLabel }}
+                    />
+                    <span className="truncate max-w-[180px]">{domain}</span>
+                    <ExternalLink className="h-3 w-3 shrink-0" />
                   </a>
                 </div>
               </div>
