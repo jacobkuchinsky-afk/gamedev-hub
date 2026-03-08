@@ -16,6 +16,8 @@ import {
   Film,
   Activity,
   Search,
+  Type,
+  Monitor,
 } from "lucide-react";
 
 type Category = "All" | "Art & Design" | "Audio" | "Game Design" | "AI-Powered" | "Level Design" | "Animation";
@@ -126,6 +128,24 @@ const TOOLS: {
       "Preview and compare easing functions with live animations. Copy CSS or JS code for any curve.",
     color: "#06B6D4",
     category: "Animation",
+  },
+  {
+    href: "/dashboard/tools/fonts",
+    icon: Type,
+    name: "Font Preview",
+    description:
+      "Preview how different fonts look for game UI and titles. Compare, apply effects, and copy CSS snippets.",
+    color: "#E879F9",
+    category: "Art & Design",
+  },
+  {
+    href: "/dashboard/tools/resolution",
+    icon: Monitor,
+    name: "Resolution Guide",
+    description:
+      "Visual resolution comparison, aspect ratio calculator, platform recommendations, and sprite density info.",
+    color: "#38BDF8",
+    category: "Game Design",
   },
 ];
 
