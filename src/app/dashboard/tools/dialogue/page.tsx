@@ -24,6 +24,7 @@ import Link from "next/link";
 // ── Types ────────────────────────────────────────────────────
 
 type NodeType = "npc" | "choice" | "condition" | "action";
+type EmotionType = "Neutral" | "Happy" | "Angry" | "Sad" | "Scared" | "Excited" | "Mysterious";
 
 interface DialogueNode {
   id: string;
@@ -37,6 +38,7 @@ interface DialogueNode {
   conditionParam: string;
   action: string;
   actionParam: string;
+  emotion?: EmotionType;
 }
 
 interface Connection {
@@ -82,6 +84,16 @@ const TYPE_META: Record<
   choice: { label: "Player Choice", Icon: Users },
   condition: { label: "Condition", Icon: GitBranch },
   action: { label: "Action", Icon: Zap },
+};
+
+const EMOTIONS: Record<EmotionType, { emoji: string; color: string }> = {
+  Neutral: { emoji: "\u{1F610}", color: "#9CA3AF" },
+  Happy: { emoji: "\u{1F60A}", color: "#22C55E" },
+  Angry: { emoji: "\u{1F621}", color: "#EF4444" },
+  Sad: { emoji: "\u{1F622}", color: "#3B82F6" },
+  Scared: { emoji: "\u{1F628}", color: "#A855F7" },
+  Excited: { emoji: "\u{1F929}", color: "#F59E0B" },
+  Mysterious: { emoji: "\u{1F52E}", color: "#6366F1" },
 };
 
 const VOICE_OPTIONS = [
@@ -146,6 +158,7 @@ function makeNode(type: NodeType, x: number, y: number): DialogueNode {
     conditionParam: "",
     action: type === "action" ? "set_flag" : "",
     actionParam: "",
+    emotion: type === "npc" ? "Neutral" : undefined,
   };
 }
 
@@ -274,6 +287,7 @@ export default function DialoguePage() {
   const [voiceSelection, setVoiceSelection] = useState("Wise Elder");
   const [customVoice, setCustomVoice] = useState("");
   const [aiRewriteLoading, setAiRewriteLoading] = useState(false);
+  const [aiEmotionLoading, setAiEmotionLoading] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const interRef = useRef<Interaction>({ type: "idle" });
@@ -627,6 +641,7 @@ export default function DialoguePage() {
           type: "dialogue",
           speaker: n.character || "NPC",
           text: n.text,
+          emotion: n.emotion || "Neutral",
           next: outConns[0]?.toNodeId || null,
         };
       } else if (n.type === "choice") {
@@ -785,6 +800,57 @@ export default function DialoguePage() {
     }
     setAiRewriteLoading(false);
   }, [selectedNode, voiceSelection, customVoice, updateNode]);
+
+  const aiSuggestEmotions = useCallback(async () => {
+    const npcNodes = nodes.filter((n) => n.type === "npc" && n.text.trim());
+    if (npcNodes.length === 0) return;
+    setAiEmotionLoading(true);
+
+    const lines = npcNodes.map((n, i) => `${i + 1}. ${n.text}`).join("\n");
+    const prompt = `For each of these dialogue lines, suggest the most fitting emotion (Neutral/Happy/Angry/Sad/Scared/Excited/Mysterious):\n${lines}\n\nReturn ONLY the number and emotion, one per line. Example:\n1. Happy\n2. Angry`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+
+      const validEmotions: EmotionType[] = ["Neutral", "Happy", "Angry", "Sad", "Scared", "Excited", "Mysterious"];
+      const updates: Record<string, EmotionType> = {};
+
+      content.split("\n").forEach((line: string) => {
+        const match = line.match(/(\d+)[\.\)\:\-\s]+(\w+)/);
+        if (match) {
+          const idx = parseInt(match[1]) - 1;
+          const emotion = validEmotions.find((e) => e.toLowerCase() === match[2].toLowerCase());
+          if (emotion && npcNodes[idx]) updates[npcNodes[idx].id] = emotion;
+        }
+      });
+
+      const count = Object.keys(updates).length;
+      if (count > 0) {
+        setNodes((prev) => prev.map((n) => updates[n.id] ? { ...n, emotion: updates[n.id] } : n));
+        setAiWriteNotice(`Applied emotions to ${count} node${count > 1 ? "s" : ""}`);
+      } else {
+        setAiWriteNotice("Could not parse emotion suggestions");
+      }
+    } catch {
+      setAiWriteNotice("AI emotion suggestion failed");
+    }
+    setAiEmotionLoading(false);
+  }, [nodes]);
 
   // ── Simulator ───────────────────────────────────────────
 
@@ -987,8 +1053,19 @@ export default function DialoguePage() {
             </span>
           </div>
           {n.character && (
-            <div className="text-[13px] font-bold text-white truncate">
-              {n.character}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[13px] font-bold text-white truncate">
+                {n.character}
+              </span>
+              {n.type === "npc" && (
+                <span
+                  className="shrink-0 text-[10px] leading-none"
+                  style={{ color: EMOTIONS[n.emotion || "Neutral"].color }}
+                  title={n.emotion || "Neutral"}
+                >
+                  {EMOTIONS[n.emotion || "Neutral"].emoji}
+                </span>
+              )}
             </div>
           )}
           <div className="text-[11px] text-gray-400 line-clamp-2 leading-snug mt-0.5">
@@ -1123,6 +1200,14 @@ export default function DialoguePage() {
           >
             {aiWriteLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
             {aiWriteLoading ? "Writing..." : "AI Write"}
+          </button>
+          <button
+            onClick={aiSuggestEmotions}
+            disabled={aiEmotionLoading || nodes.filter((n) => n.type === "npc").length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 rounded-lg text-sm hover:bg-indigo-500/30 transition-colors disabled:opacity-50"
+          >
+            {aiEmotionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            {aiEmotionLoading ? "Analyzing..." : "Emotions"}
           </button>
           <button
             onClick={startSim}
@@ -1353,6 +1438,13 @@ export default function DialoguePage() {
             </div>
           )}
 
+          {aiEmotionLoading && (
+            <div className="absolute top-14 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-[#1A1A1A]/95 px-4 py-2 text-xs text-indigo-400 shadow-lg backdrop-blur-sm">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              AI is analyzing emotions...
+            </div>
+          )}
+
           {/* Node count badge */}
           <div className="absolute bottom-3 left-3 px-2 py-1 bg-[#1A1A1A]/80 rounded text-[10px] text-gray-500">
             {nodes.length} nodes &middot; {connections.length} connections
@@ -1408,6 +1500,29 @@ export default function DialoguePage() {
                       })
                     }
                   />
+                </div>
+              )}
+
+              {/* Emotion */}
+              {selectedNode.type === "npc" && (
+                <div>
+                  <label className="text-[11px] text-gray-500 uppercase tracking-wider font-semibold block mb-1">
+                    Emotion
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="flex-1 bg-[#1A1A1A] border border-[#2A2A2A] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
+                      value={selectedNode.emotion || "Neutral"}
+                      onChange={(e) => updateNode(selectedNode.id, { emotion: e.target.value as EmotionType })}
+                    >
+                      {(Object.keys(EMOTIONS) as EmotionType[]).map((emo) => (
+                        <option key={emo} value={emo}>{EMOTIONS[emo].emoji} {emo}</option>
+                      ))}
+                    </select>
+                    <span className="text-lg" title={selectedNode.emotion || "Neutral"}>
+                      {EMOTIONS[selectedNode.emotion || "Neutral"].emoji}
+                    </span>
+                  </div>
                 </div>
               )}
 

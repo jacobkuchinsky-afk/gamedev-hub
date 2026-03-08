@@ -56,6 +56,7 @@ import {
   getMoodEmoji,
   addProject,
   addTask,
+  addBug,
   type Project,
   type Task,
   type Bug as BugType,
@@ -442,6 +443,11 @@ export default function DashboardPage() {
   const [quickTaskProjectId, setQuickTaskProjectId] = useState("");
   const [quickTaskConfirm, setQuickTaskConfirm] = useState<string | null>(null);
 
+  const [quickBugTitle, setQuickBugTitle] = useState("");
+  const [quickBugProjectId, setQuickBugProjectId] = useState("");
+  const [quickBugSeverity, setQuickBugSeverity] = useState<"blocker" | "critical" | "major" | "minor" | "trivial">("major");
+  const [quickBugConfirm, setQuickBugConfirm] = useState<string | null>(null);
+
   const [lifetimeStats, setLifetimeStats] = useState({
     totalTasks: 0,
     totalBugs: 0,
@@ -619,6 +625,27 @@ export default function DashboardPage() {
     setTimeout(() => setQuickTaskConfirm(null), 2500);
   }, [quickTaskName, quickTaskProjectId]);
 
+  const handleQuickBug = useCallback(() => {
+    if (!quickBugTitle.trim() || !quickBugProjectId) return;
+    const projects = getProjects();
+    const proj = projects.find((p) => p.id === quickBugProjectId);
+    if (!proj) return;
+
+    addBug({
+      projectId: quickBugProjectId,
+      title: quickBugTitle.trim(),
+      description: "",
+      severity: quickBugSeverity,
+      status: "open",
+      platform: "",
+      reproSteps: "",
+    });
+
+    setQuickBugTitle("");
+    setQuickBugConfirm(proj.name);
+    setTimeout(() => setQuickBugConfirm(null), 2500);
+  }, [quickBugTitle, quickBugProjectId, quickBugSeverity]);
+
   useEffect(() => {
     const projects = getProjects();
     const tasks = getTasks();
@@ -628,6 +655,9 @@ export default function DashboardPage() {
     setTotalProjects(projects.length);
     if (projects.length > 0 && !quickTaskProjectId) {
       setQuickTaskProjectId(projects[0].id);
+    }
+    if (projects.length > 0 && !quickBugProjectId) {
+      setQuickBugProjectId(projects[0].id);
     }
     const projectMap = Object.fromEntries(projects.map((p) => [p.id, p.name]));
 
@@ -1232,6 +1262,55 @@ export default function DashboardPage() {
             <div className="mt-2 flex items-center gap-1.5 pl-11">
               <CheckCircle2 className="h-3.5 w-3.5 text-[#10B981]" />
               <span className="text-xs text-[#10B981]">Task added to {quickTaskConfirm}</span>
+            </div>
+          )}
+          <div className="h-px bg-[#2A2A2A] mt-2" />
+          <div className="flex items-center gap-3 mt-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-500/10">
+              <Bug className="h-4 w-4 text-red-400" />
+            </div>
+            <div className="flex flex-1 items-center gap-2">
+              <input
+                type="text"
+                value={quickBugTitle}
+                onChange={(e) => setQuickBugTitle(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleQuickBug(); }}
+                placeholder="Quick bug... press Enter to file"
+                className="flex-1 bg-transparent text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none"
+              />
+              <select
+                value={quickBugProjectId}
+                onChange={(e) => setQuickBugProjectId(e.target.value)}
+                className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-2.5 py-1.5 text-xs text-[#9CA3AF] outline-none transition-colors focus:border-[#F59E0B]/50"
+              >
+                {allProjects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <select
+                value={quickBugSeverity}
+                onChange={(e) => setQuickBugSeverity(e.target.value as "blocker" | "critical" | "major" | "minor" | "trivial")}
+                className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-2.5 py-1.5 text-xs text-[#9CA3AF] outline-none transition-colors focus:border-[#F59E0B]/50"
+              >
+                <option value="blocker">Blocker</option>
+                <option value="critical">Critical</option>
+                <option value="major">Major</option>
+                <option value="minor">Minor</option>
+                <option value="trivial">Trivial</option>
+              </select>
+              <button
+                onClick={handleQuickBug}
+                disabled={!quickBugTitle.trim() || !quickBugProjectId}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-500 text-white transition-all hover:bg-red-500/90 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Bug className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          {quickBugConfirm && (
+            <div className="mt-1.5 flex items-center gap-1.5 pl-11">
+              <CheckCircle2 className="h-3.5 w-3.5 text-[#10B981]" />
+              <span className="text-xs text-[#10B981]">Bug filed in {quickBugConfirm}</span>
             </div>
           )}
         </div>
