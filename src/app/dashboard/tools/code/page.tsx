@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   Sparkles,
   ShieldCheck,
+  Download,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -369,6 +370,18 @@ export default function CodeSnippetPage() {
     setExplanation("");
     setActiveTab("generate");
   }, []);
+
+  const exportAllSnippets = useCallback(() => {
+    const data = { snippets: saved, exportedAt: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "code-snippets.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }, [saved]);
 
   const filteredSaved = saved.filter((s) => {
     if (!searchQuery) return true;
@@ -753,16 +766,25 @@ export default function CodeSnippetPage() {
       ) : (
         /* Saved Snippets Tab */
         <div className="space-y-4">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search saved snippets..."
-              className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2.5 pl-10 pr-4 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none transition-colors focus:border-[#F59E0B]/50"
-            />
+          {/* Search + Export */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search saved snippets..."
+                className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2.5 pl-10 pr-4 text-sm text-[#F5F5F5] placeholder-[#6B7280] outline-none transition-colors focus:border-[#F59E0B]/50"
+              />
+            </div>
+            <button
+              onClick={exportAllSnippets}
+              disabled={saved.length === 0}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-xs font-medium text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B] disabled:opacity-40 disabled:hover:text-[#9CA3AF]"
+            >
+              <Download className="h-3.5 w-3.5" /> Export All
+            </button>
           </div>
 
           {filteredSaved.length === 0 ? (

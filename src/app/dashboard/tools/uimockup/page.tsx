@@ -1058,7 +1058,7 @@ export default function UIMockupPage() {
     setSelectedId(el.id);
   };
 
-  const exportJSON = () => {
+  const getLayoutJSON = () => {
     const data = {
       version: 1,
       background: canvasBg,
@@ -1074,7 +1074,11 @@ export default function UIMockupPage() {
         })
       ),
     };
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
+    return JSON.stringify(data, null, 2);
+  };
+
+  const exportJSON = () => {
+    const blob = new Blob([getLayoutJSON()], {
       type: "application/json",
     });
     const a = document.createElement("a");
@@ -1082,6 +1086,12 @@ export default function UIMockupPage() {
     a.download = "ui-mockup.json";
     a.click();
     URL.revokeObjectURL(a.href);
+  };
+
+  const copyLayout = async () => {
+    try {
+      await navigator.clipboard.writeText(getLayoutJSON());
+    } catch {}
   };
 
   const startMove = (e: React.MouseEvent, id: string) => {
@@ -1161,6 +1171,12 @@ export default function UIMockupPage() {
             className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-xs font-medium text-[#9CA3AF] transition-colors hover:border-[#EF4444]/30 hover:text-[#EF4444]"
           >
             <RotateCcw className="h-3 w-3" /> Clear
+          </button>
+          <button
+            onClick={copyLayout}
+            className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-xs font-medium text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+          >
+            <Copy className="h-3.5 w-3.5" /> Copy Layout
           </button>
           <button
             onClick={exportJSON}
