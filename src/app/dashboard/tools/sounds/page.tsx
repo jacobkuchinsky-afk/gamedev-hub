@@ -24,6 +24,9 @@ import {
   ListMusic,
   Check,
   ChevronDown,
+  Save,
+  Trash2,
+  FileDown,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -53,6 +56,13 @@ interface SoundAdviceItem {
 interface SoundAdvice {
   category: string;
   items: SoundAdviceItem[];
+}
+
+interface SavedSound {
+  id: string;
+  name: string;
+  params: SoundParams;
+  createdAt: number;
 }
 
 const WAVE_TYPES: WaveType[] = ["sine", "square", "sawtooth", "triangle"];
@@ -191,6 +201,10 @@ export default function SoundsPage() {
   const [advisorMood, setAdvisorMood] = useState("");
   const [advisorLoading, setAdvisorLoading] = useState(false);
   const [advisorResults, setAdvisorResults] = useState<SoundAdvice[]>([]);
+
+  const [savedSounds, setSavedSounds] = useState<SavedSound[]>([]);
+  const [saveName, setSaveName] = useState("");
+  const [showLibrary, setShowLibrary] = useState(true);
 
   const toggleAdvisorCheck = (catIdx: number, itemIdx: number) => {
     setAdvisorResults((prev) =>
@@ -396,6 +410,50 @@ export default function SoundsPage() {
     drawIdle();
     return () => cancelAnimationFrame(animFrameRef.current);
   }, [drawIdle]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("gameforge-sound-library");
+      if (stored) setSavedSounds(JSON.parse(stored));
+    } catch {}
+  }, []);
+
+  const persistSounds = useCallback((sounds: SavedSound[]) => {
+    setSavedSounds(sounds);
+    localStorage.setItem("gameforge-sound-library", JSON.stringify(sounds));
+  }, []);
+
+  const saveCurrentSound = useCallback(() => {
+    if (!saveName.trim()) return;
+    const newSound: SavedSound = {
+      id: Date.now().toString(),
+      name: saveName.trim(),
+      params: { ...params },
+      createdAt: Date.now(),
+    };
+    persistSounds([newSound, ...savedSounds]);
+    setSaveName("");
+  }, [saveName, params, savedSounds, persistSounds]);
+
+  const deleteSavedSound = useCallback(
+    (id: string) => {
+      persistSounds(savedSounds.filter((s) => s.id !== id));
+    },
+    [savedSounds, persistSounds]
+  );
+
+  const exportSoundLibrary = useCallback(() => {
+    if (savedSounds.length === 0) return;
+    const blob = new Blob([JSON.stringify(savedSounds, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sound-library-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [savedSounds]);
 
   const playSound = useCallback(
     (p: SoundParams) => {
@@ -828,6 +886,105 @@ export default function SoundsPage() {
             </ul>
           </div>
         </div>
+      </div>
+
+      {/* Sound Library */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+        <button
+          onClick={() => setShowLibrary(!showLibrary)}
+          className="flex w-full items-center justify-between"
+        >
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-[#9CA3AF]">
+            <ListMusic className="h-4 w-4 text-[#F59E0B]" />
+            Sound Library
+            {savedSounds.length > 0 && (
+              <span className="ml-1 rounded-full bg-[#F59E0B]/15 px-2 py-0.5 text-[10px] font-bold text-[#F59E0B]">
+                {savedSounds.length}
+              </span>
+            )}
+          </h2>
+          <ChevronDown
+            className={`h-4 w-4 text-[#6B7280] transition-transform ${showLibrary ? "rotate-180" : ""}`}
+          />
+        </button>
+
+        {showLibrary && (
+          <div className="mt-4 space-y-4">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && saveCurrentSound()}
+                placeholder="Name this sound..."
+                className="flex-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/40"
+              />
+              <button
+                onClick={saveCurrentSound}
+                disabled={!saveName.trim()}
+                className="flex shrink-0 items-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-semibold text-[#0F0F0F] transition-all hover:bg-[#D97706] active:scale-[0.97] disabled:opacity-40"
+              >
+                <Save className="h-3.5 w-3.5" />
+                Save
+              </button>
+            </div>
+
+            {savedSounds.length === 0 ? (
+              <p className="py-8 text-center text-sm text-[#4B5563]">
+                No saved sounds yet. Tweak a sound and save it to build your
+                library.
+              </p>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  {savedSounds.map((sound) => (
+                    <div
+                      key={sound.id}
+                      className="group flex items-center gap-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 transition-colors hover:border-[#F59E0B]/20"
+                    >
+                      <button
+                        onClick={() => playSound(sound.params)}
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#F59E0B]/10 text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/25"
+                      >
+                        <Play className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setParams(sound.params)}
+                        className="flex flex-1 items-center gap-3 text-left"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-[#F5F5F5]">
+                            {sound.name}
+                          </p>
+                          <p className="text-[11px] text-[#6B7280]">
+                            {sound.params.waveType} &middot;{" "}
+                            {Math.round(sound.params.freqStart)}Hz &rarr;{" "}
+                            {Math.round(sound.params.freqEnd)}Hz &middot;{" "}
+                            {sound.params.duration.toFixed(2)}s
+                          </p>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => deleteSavedSound(sound.id)}
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#4B5563] opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={exportSoundLibrary}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm font-medium text-[#9CA3AF] transition-all hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                >
+                  <FileDown className="h-4 w-4" />
+                  Export Library as JSON
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

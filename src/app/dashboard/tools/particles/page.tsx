@@ -14,6 +14,8 @@ import {
   Circle,
   Minus,
   Crosshair,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 
 interface ParticleConfig {
@@ -199,6 +201,9 @@ export default function ParticlesPage() {
   const playingRef = useRef(playing);
   playingRef.current = playing;
 
+  const [aiDescription, setAiDescription] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+
   const updateConfig = useCallback(
     (key: keyof ParticleConfig, value: number | string) => {
       setConfig((prev) => ({ ...prev, [key]: value }));
@@ -360,6 +365,70 @@ export default function ParticlesPage() {
     setTimeout(() => setCopied(false), 1500);
   }, [config]);
 
+  const handleAISuggest = async () => {
+    if (!aiDescription.trim() || aiLoading) return;
+    setAiLoading(true);
+    try {
+      const prompt = `Suggest particle effect parameters for: '${aiDescription.trim()}'. Return a JSON object with: emissionRate (1-100), lifetime (0.1-5), speed (10-500), spread (0-360), direction (0-360), size (1-20), gravity (-100 to 100), shape ('point'|'circle'|'line'), startColor (hex), endColor (hex), sizeOverLifetime ('constant'|'shrink'|'grow'). Only JSON, no explanation.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization:
+            "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content =
+        data.choices?.[0]?.message?.content ||
+        data.choices?.[0]?.message?.reasoning ||
+        "";
+      const jsonMatch = content.match(/\{[\s\S]*?\}/);
+      if (!jsonMatch) throw new Error("No JSON");
+      const parsed = JSON.parse(jsonMatch[0]);
+      const newConfig: ParticleConfig = {
+        emissionRate: Math.max(1, Math.min(100, Number(parsed.emissionRate) || 50)),
+        lifetime: Math.max(0.1, Math.min(5, Number(parsed.lifetime) || 1)),
+        speed: Math.max(10, Math.min(500, Number(parsed.speed) || 100)),
+        spreadAngle: Math.max(0, Math.min(360, Number(parsed.spread) || 30)),
+        direction: Math.max(0, Math.min(360, Number(parsed.direction) || 270)),
+        size: Math.max(1, Math.min(20, Number(parsed.size) || 5)),
+        sizeOverLifetime: ["constant", "shrink", "grow"].includes(
+          parsed.sizeOverLifetime
+        )
+          ? parsed.sizeOverLifetime
+          : "shrink",
+        startColor: parsed.startColor?.startsWith("#")
+          ? parsed.startColor.slice(0, 7)
+          : "#FF6600",
+        endColor: parsed.endColor?.startsWith("#")
+          ? parsed.endColor.slice(0, 7)
+          : "#FF000000",
+        gravity: Math.max(-100, Math.min(100, Number(parsed.gravity) || 0)),
+        shape: ["point", "circle", "line"].includes(parsed.shape)
+          ? parsed.shape
+          : "point",
+        shapeRadius:
+          parsed.shape === "line" ? 200 : parsed.shape === "circle" ? 20 : 0,
+      };
+      setConfig(newConfig);
+      setActivePreset(null);
+      particlesRef.current = [];
+      setPlaying(true);
+    } catch {
+      // silently fail
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-7xl space-y-4">
       <div className="flex items-center gap-3">
@@ -393,6 +462,32 @@ export default function ParticlesPage() {
             {name}
           </button>
         ))}
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={aiDescription}
+          onChange={(e) => setAiDescription(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleAISuggest()}
+          placeholder="Describe an effect... (e.g. magical healing aura, sword impact sparks)"
+          className="flex-1 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none focus:border-[#F59E0B]/40"
+        />
+        <button
+          onClick={handleAISuggest}
+          disabled={aiLoading || !aiDescription.trim()}
+          className="flex shrink-0 items-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-4 py-2 text-sm font-medium text-[#F59E0B] transition-all hover:bg-[#F59E0B]/20 active:scale-[0.97] disabled:opacity-50"
+        >
+          {aiLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> Generating...
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4" /> AI Suggest
+            </>
+          )}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
