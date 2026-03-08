@@ -13,6 +13,10 @@ import {
   Info,
   Sparkles,
   Loader2,
+  Gem,
+  Clock,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -79,6 +83,28 @@ interface EconomyConfig {
   targetPlaytime: number;
 }
 
+interface DesignerCurrency {
+  id: string;
+  name: string;
+  symbol: string;
+  exchangeRate: number;
+}
+
+interface DesignerItem {
+  id: string;
+  name: string;
+  cost: number;
+  sellPrice: number;
+  rarity: string;
+}
+
+interface DesignerIncome {
+  id: string;
+  source: string;
+  amount: number;
+  frequency: string;
+}
+
 // ── Constants ──
 
 const TABS = [
@@ -86,6 +112,7 @@ const TABS = [
   { id: "scaling", label: "Scaling", icon: TrendingUp },
   { id: "ttk", label: "TTK", icon: Crosshair },
   { id: "economy", label: "Economy", icon: Coins },
+  { id: "economy-designer", label: "Economy Designer", icon: Gem },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -1465,6 +1492,696 @@ function EconomyBalance() {
   );
 }
 
+// ── Economy Designer Tab ──
+
+const RARITY_COLORS: Record<string, string> = {
+  common: "text-neutral-400",
+  uncommon: "text-green-400",
+  rare: "text-blue-400",
+  epic: "text-purple-400",
+  legendary: "text-amber-400",
+};
+
+const GENRE_OPTIONS = [
+  "RPG",
+  "MMORPG",
+  "Idle / Clicker",
+  "Roguelike",
+  "Survival",
+  "Strategy",
+  "Mobile Gacha",
+  "Sandbox",
+  "Action RPG",
+  "City Builder",
+];
+
+function EconomyDesigner() {
+  const [genre, setGenre] = useState("RPG");
+  const [currencies, setCurrencies] = useState<DesignerCurrency[]>([
+    { id: uid(), name: "Gold", symbol: "G", exchangeRate: 1 },
+  ]);
+  const [items, setItems] = useState<DesignerItem[]>([
+    { id: uid(), name: "Health Potion", cost: 50, sellPrice: 20, rarity: "common" },
+  ]);
+  const [income, setIncome] = useState<DesignerIncome[]>([
+    { id: uid(), source: "Quest Reward", amount: 100, frequency: "per quest" },
+  ]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [expandedSection, setExpandedSection] = useState<string | null>("currencies");
+  const [primaryCurrency, setPrimaryCurrency] = useState("Gold");
+
+  const toggleSection = (s: string) =>
+    setExpandedSection((prev) => (prev === s ? null : s));
+
+  const addCurrency = () =>
+    setCurrencies((p) => [...p, { id: uid(), name: "", symbol: "", exchangeRate: 1 }]);
+  const removeCurrency = (id: string) => {
+    if (currencies.length <= 1) return;
+    setCurrencies((p) => p.filter((c) => c.id !== id));
+  };
+  const updateCurrency = (id: string, field: keyof DesignerCurrency, val: string | number) =>
+    setCurrencies((p) => p.map((c) => (c.id === id ? { ...c, [field]: val } : c)));
+
+  const addItem = () =>
+    setItems((p) => [...p, { id: uid(), name: "", cost: 0, sellPrice: 0, rarity: "common" }]);
+  const removeItem = (id: string) => {
+    if (items.length <= 1) return;
+    setItems((p) => p.filter((i) => i.id !== id));
+  };
+  const updateItem = (id: string, field: keyof DesignerItem, val: string | number) =>
+    setItems((p) => p.map((i) => (i.id === id ? { ...i, [field]: val } : i)));
+
+  const addIncome = () =>
+    setIncome((p) => [...p, { id: uid(), source: "", amount: 0, frequency: "per hour" }]);
+  const removeIncome = (id: string) => {
+    if (income.length <= 1) return;
+    setIncome((p) => p.filter((i) => i.id !== id));
+  };
+  const updateIncome = (id: string, field: keyof DesignerIncome, val: string | number) =>
+    setIncome((p) => p.map((i) => (i.id === id ? { ...i, [field]: val } : i)));
+
+  const avgIncomePerHour = useMemo(() => {
+    let total = 0;
+    for (const src of income) {
+      const freq = src.frequency.toLowerCase();
+      if (freq.includes("hour")) total += src.amount;
+      else if (freq.includes("minute")) total += src.amount * 60;
+      else if (freq.includes("day") || freq.includes("daily") || freq.includes("login"))
+        total += src.amount / 24;
+      else if (freq.includes("quest") || freq.includes("kill") || freq.includes("drop"))
+        total += src.amount * 4;
+      else total += src.amount;
+    }
+    return total;
+  }, [income]);
+
+  const timeToEarn = useMemo(() => {
+    if (avgIncomePerHour <= 0) return items.map((i) => ({ ...i, hours: Infinity }));
+    return items.map((i) => ({
+      ...i,
+      hours: i.cost / avgIncomePerHour,
+    }));
+  }, [items, avgIncomePerHour]);
+
+  const designEconomy = async () => {
+    if (aiLoading) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const prompt = `Design a balanced game economy for a ${genre} game. Include: 3 currencies with exchange rates, 10 items with prices across currencies, 5 income sources with amounts. Make it feel rewarding but not too easy. Format as JSON: {"currencies": [{"name": "string", "symbol": "string", "exchangeRate": number}], "items": [{"name": "string", "cost": number, "sellPrice": number, "rarity": "common"|"uncommon"|"rare"|"epic"|"legendary"}], "income": [{"source": "string", "amount": number, "frequency": "string"}]}.`;
+
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization:
+            "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 1024,
+          temperature: 0.7,
+        }),
+      });
+
+      const data = await response.json();
+      const content =
+        data.choices?.[0]?.message?.content ||
+        data.choices?.[0]?.message?.reasoning ||
+        "";
+
+      if (!content) {
+        setAiError("No response from AI. Try again.");
+        return;
+      }
+
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        setAiError("AI returned a response but it wasn't valid JSON. Try again.");
+        return;
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+
+      if (parsed.currencies?.length) {
+        setCurrencies(
+          parsed.currencies.map((c: { name: string; symbol: string; exchangeRate: number }) => ({
+            id: uid(),
+            name: c.name || "",
+            symbol: c.symbol || "",
+            exchangeRate: c.exchangeRate ?? 1,
+          }))
+        );
+        setPrimaryCurrency(parsed.currencies[0]?.name || "Gold");
+      }
+
+      if (parsed.items?.length) {
+        setItems(
+          parsed.items.map((i: { name: string; cost: number; sellPrice: number; rarity: string }) => ({
+            id: uid(),
+            name: i.name || "",
+            cost: i.cost ?? 0,
+            sellPrice: i.sellPrice ?? 0,
+            rarity: (i.rarity || "common").toLowerCase(),
+          }))
+        );
+      }
+
+      if (parsed.income?.length) {
+        setIncome(
+          parsed.income.map((inc: { source: string; amount: number; frequency: string }) => ({
+            id: uid(),
+            source: inc.source || "",
+            amount: inc.amount ?? 0,
+            frequency: inc.frequency || "per hour",
+          }))
+        );
+      }
+
+      setExpandedSection(null);
+    } catch {
+      setAiError("Failed to parse AI response. Try again.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Genre + AI Button */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex-1">
+          <label className="mb-1 block text-xs text-neutral-400">Game Genre</label>
+          <div className="flex flex-wrap gap-2">
+            {GENRE_OPTIONS.map((g) => (
+              <button
+                key={g}
+                onClick={() => setGenre(g)}
+                className={`rounded-lg border px-3 py-1.5 text-xs transition ${
+                  genre === g
+                    ? "border-amber-500/50 bg-amber-500/10 text-amber-400"
+                    : "border-[#2A2A2A] text-neutral-400 hover:border-neutral-600"
+                }`}
+              >
+                {g}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button
+          onClick={designEconomy}
+          disabled={aiLoading}
+          className="flex shrink-0 items-center gap-2 rounded-xl bg-amber-500/10 px-5 py-2.5 text-sm font-medium text-amber-400 transition hover:bg-amber-500/20 disabled:opacity-40"
+        >
+          {aiLoading ? (
+            <>
+              <Loader2 size={16} className="animate-spin" /> Designing...
+            </>
+          ) : (
+            <>
+              <Sparkles size={16} /> Design Economy
+            </>
+          )}
+        </button>
+      </div>
+
+      {aiError && (
+        <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/5 p-3">
+          <AlertTriangle size={16} className="text-red-400" />
+          <p className="text-xs text-red-400">{aiError}</p>
+        </div>
+      )}
+
+      {aiLoading && (
+        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-12">
+          <Loader2 size={32} className="animate-spin text-amber-400" />
+          <p className="text-sm text-neutral-400">
+            AI is designing a {genre} economy...
+          </p>
+          <p className="text-xs text-neutral-600">
+            This may take a few seconds
+          </p>
+        </div>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+        {/* Left Column: Definitions */}
+        <div className="space-y-4">
+          {/* Currencies */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+            <button
+              onClick={() => toggleSection("currencies")}
+              className="flex w-full items-center justify-between p-4"
+            >
+              <div className="flex items-center gap-2">
+                <Coins size={16} className="text-amber-400" />
+                <h3 className="text-sm font-medium text-neutral-300">
+                  Currencies
+                </h3>
+                <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[10px] text-neutral-500">
+                  {currencies.length}
+                </span>
+              </div>
+              {expandedSection === "currencies" ? (
+                <ChevronUp size={16} className="text-neutral-500" />
+              ) : (
+                <ChevronDown size={16} className="text-neutral-500" />
+              )}
+            </button>
+            {expandedSection === "currencies" && (
+              <div className="border-t border-[#2A2A2A] p-4 space-y-3">
+                {currencies.map((c) => (
+                  <div
+                    key={c.id}
+                    className="grid grid-cols-[1fr_60px_80px_32px] items-end gap-2"
+                  >
+                    <TextInput
+                      label="Name"
+                      value={c.name}
+                      onChange={(v) => updateCurrency(c.id, "name", v)}
+                      placeholder="Gold"
+                    />
+                    <TextInput
+                      label="Symbol"
+                      value={c.symbol}
+                      onChange={(v) => updateCurrency(c.id, "symbol", v)}
+                      placeholder="G"
+                    />
+                    <NumInput
+                      label="Rate"
+                      value={c.exchangeRate}
+                      onChange={(v) => updateCurrency(c.id, "exchangeRate", v)}
+                      min={0}
+                      step={0.01}
+                    />
+                    <button
+                      onClick={() => removeCurrency(c.id)}
+                      className="mb-0.5 self-end p-2 text-neutral-500 transition hover:text-red-400 disabled:opacity-30"
+                      disabled={currencies.length <= 1}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={addCurrency}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#2A2A2A] py-2 text-xs text-neutral-500 transition hover:border-amber-500/40 hover:text-amber-400"
+                >
+                  <Plus size={14} /> Add Currency
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Items */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+            <button
+              onClick={() => toggleSection("items")}
+              className="flex w-full items-center justify-between p-4"
+            >
+              <div className="flex items-center gap-2">
+                <Gem size={16} className="text-purple-400" />
+                <h3 className="text-sm font-medium text-neutral-300">Items</h3>
+                <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[10px] text-neutral-500">
+                  {items.length}
+                </span>
+              </div>
+              {expandedSection === "items" ? (
+                <ChevronUp size={16} className="text-neutral-500" />
+              ) : (
+                <ChevronDown size={16} className="text-neutral-500" />
+              )}
+            </button>
+            {expandedSection === "items" && (
+              <div className="border-t border-[#2A2A2A] p-4 space-y-3">
+                {items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-lg border border-[#2A2A2A] bg-[#111] p-3 space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <input
+                        type="text"
+                        value={item.name}
+                        onChange={(e) =>
+                          updateItem(item.id, "name", e.target.value)
+                        }
+                        placeholder="Item name"
+                        className="border-none bg-transparent text-sm font-medium text-white outline-none"
+                      />
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={item.rarity}
+                          onChange={(e) =>
+                            updateItem(item.id, "rarity", e.target.value)
+                          }
+                          className={`rounded-md border border-[#2A2A2A] bg-[#1A1A1A] px-2 py-1 text-xs capitalize outline-none ${RARITY_COLORS[item.rarity] || "text-neutral-400"}`}
+                        >
+                          {Object.keys(RARITY_COLORS).map((r) => (
+                            <option key={r} value={r}>
+                              {r}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => removeItem(item.id)}
+                          className="text-neutral-500 transition hover:text-red-400 disabled:opacity-30"
+                          disabled={items.length <= 1}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <NumInput
+                        label={`Cost (${primaryCurrency})`}
+                        value={item.cost}
+                        onChange={(v) => updateItem(item.id, "cost", v)}
+                        min={0}
+                      />
+                      <NumInput
+                        label="Sell Price"
+                        value={item.sellPrice}
+                        onChange={(v) => updateItem(item.id, "sellPrice", v)}
+                        min={0}
+                      />
+                    </div>
+                  </div>
+                ))}
+                <button
+                  onClick={addItem}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#2A2A2A] py-2 text-xs text-neutral-500 transition hover:border-amber-500/40 hover:text-amber-400"
+                >
+                  <Plus size={14} /> Add Item
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Income Sources */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+            <button
+              onClick={() => toggleSection("income")}
+              className="flex w-full items-center justify-between p-4"
+            >
+              <div className="flex items-center gap-2">
+                <TrendingUp size={16} className="text-green-400" />
+                <h3 className="text-sm font-medium text-neutral-300">
+                  Income Sources
+                </h3>
+                <span className="rounded-full bg-[#2A2A2A] px-2 py-0.5 text-[10px] text-neutral-500">
+                  {income.length}
+                </span>
+              </div>
+              {expandedSection === "income" ? (
+                <ChevronUp size={16} className="text-neutral-500" />
+              ) : (
+                <ChevronDown size={16} className="text-neutral-500" />
+              )}
+            </button>
+            {expandedSection === "income" && (
+              <div className="border-t border-[#2A2A2A] p-4 space-y-3">
+                {income.map((src) => (
+                  <div
+                    key={src.id}
+                    className="grid grid-cols-[1fr_80px_100px_32px] items-end gap-2"
+                  >
+                    <TextInput
+                      label="Source"
+                      value={src.source}
+                      onChange={(v) => updateIncome(src.id, "source", v)}
+                      placeholder="Quest reward"
+                    />
+                    <NumInput
+                      label="Amount"
+                      value={src.amount}
+                      onChange={(v) => updateIncome(src.id, "amount", v)}
+                      min={0}
+                    />
+                    <TextInput
+                      label="Frequency"
+                      value={src.frequency}
+                      onChange={(v) => updateIncome(src.id, "frequency", v)}
+                      placeholder="per hour"
+                    />
+                    <button
+                      onClick={() => removeIncome(src.id)}
+                      className="mb-0.5 self-end p-2 text-neutral-500 transition hover:text-red-400 disabled:opacity-30"
+                      disabled={income.length <= 1}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={addIncome}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#2A2A2A] py-2 text-xs text-neutral-500 transition hover:border-amber-500/40 hover:text-amber-400"
+                >
+                  <Plus size={14} /> Add Income Source
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: Overview + Time to Earn */}
+        <div className="space-y-4">
+          {/* Economy Overview */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            <h3 className="mb-3 text-sm font-medium text-neutral-300">
+              Economy Overview
+            </h3>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg bg-[#111] p-3 text-center">
+                <p className="font-mono text-lg font-semibold text-amber-400">
+                  {currencies.length}
+                </p>
+                <p className="text-[10px] text-neutral-500">Currencies</p>
+              </div>
+              <div className="rounded-lg bg-[#111] p-3 text-center">
+                <p className="font-mono text-lg font-semibold text-purple-400">
+                  {items.length}
+                </p>
+                <p className="text-[10px] text-neutral-500">Items</p>
+              </div>
+              <div className="rounded-lg bg-[#111] p-3 text-center">
+                <p className="font-mono text-lg font-semibold text-green-400">
+                  {income.length}
+                </p>
+                <p className="text-[10px] text-neutral-500">Income Sources</p>
+              </div>
+            </div>
+            <div className="mt-3 rounded-lg bg-[#111] p-3 text-center">
+              <p className="font-mono text-sm text-neutral-300">
+                ~<span className="text-amber-400">{fmt(avgIncomePerHour)}</span>{" "}
+                {primaryCurrency}/hr estimated income
+              </p>
+            </div>
+          </div>
+
+          {/* Currency Exchange Rates */}
+          {currencies.length > 1 && (
+            <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+              <h3 className="mb-3 text-sm font-medium text-neutral-300">
+                Exchange Rates
+              </h3>
+              <div className="space-y-2">
+                {currencies.map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center justify-between rounded-lg bg-[#111] px-3 py-2"
+                  >
+                    <span className="text-sm text-neutral-300">
+                      1 {currencies[0]?.name || "Base"}
+                    </span>
+                    <span className="font-mono text-sm text-amber-400">
+                      = {c.exchangeRate} {c.symbol || c.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Item Table */}
+          {items.length > 0 && (
+            <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+              <h3 className="mb-3 text-sm font-medium text-neutral-300">
+                Item Summary
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-[#2A2A2A] text-neutral-500">
+                      <th className="pb-2 pr-4 font-medium">Item</th>
+                      <th className="pb-2 pr-4 font-medium">Cost</th>
+                      <th className="pb-2 pr-4 font-medium">Sell</th>
+                      <th className="pb-2 pr-4 font-medium">Margin</th>
+                      <th className="pb-2 font-medium">Rarity</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item) => {
+                      const margin =
+                        item.cost > 0
+                          ? (((item.cost - item.sellPrice) / item.cost) * 100).toFixed(0)
+                          : "0";
+                      return (
+                        <tr
+                          key={item.id}
+                          className="border-b border-[#2A2A2A]/50 last:border-0"
+                        >
+                          <td className="py-2 pr-4 text-neutral-300">
+                            {item.name || "—"}
+                          </td>
+                          <td className="py-2 pr-4 font-mono text-white">
+                            {fmt(item.cost)}
+                          </td>
+                          <td className="py-2 pr-4 font-mono text-neutral-400">
+                            {fmt(item.sellPrice)}
+                          </td>
+                          <td className="py-2 pr-4 font-mono text-red-400">
+                            {margin}%
+                          </td>
+                          <td
+                            className={`py-2 capitalize ${RARITY_COLORS[item.rarity] || "text-neutral-400"}`}
+                          >
+                            {item.rarity}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Time to Earn */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Clock size={16} className="text-amber-400" />
+              <h3 className="text-sm font-medium text-neutral-300">
+                Time to Earn
+              </h3>
+            </div>
+            {avgIncomePerHour <= 0 ? (
+              <p className="text-xs text-neutral-500">
+                Add income sources to see time-to-earn estimates.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {timeToEarn
+                  .sort((a, b) => a.hours - b.hours)
+                  .map((item) => {
+                    const maxHours = Math.max(
+                      ...timeToEarn.map((t) => (isFinite(t.hours) ? t.hours : 0))
+                    );
+                    const pct =
+                      maxHours > 0 && isFinite(item.hours)
+                        ? (item.hours / maxHours) * 100
+                        : 0;
+
+                    let timeLabel: string;
+                    if (!isFinite(item.hours)) {
+                      timeLabel = "Never";
+                    } else if (item.hours < 1) {
+                      timeLabel = `${Math.round(item.hours * 60)}m`;
+                    } else {
+                      timeLabel = `${item.hours.toFixed(1)}h`;
+                    }
+
+                    return (
+                      <div key={item.id}>
+                        <div className="mb-1 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`text-xs capitalize ${RARITY_COLORS[item.rarity] || "text-neutral-400"}`}
+                            >
+                              {item.name || "—"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-neutral-400">
+                              {fmt(item.cost)} {primaryCurrency}
+                            </span>
+                            <span className="font-mono text-xs text-amber-400">
+                              {timeLabel}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-[#2A2A2A]">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              item.rarity === "legendary"
+                                ? "bg-amber-500"
+                                : item.rarity === "epic"
+                                  ? "bg-purple-500"
+                                  : item.rarity === "rare"
+                                    ? "bg-blue-500"
+                                    : item.rarity === "uncommon"
+                                      ? "bg-green-500"
+                                      : "bg-neutral-500"
+                            }`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+
+          {/* Income Breakdown */}
+          {income.length > 0 && (
+            <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+              <h3 className="mb-3 text-sm font-medium text-neutral-300">
+                Income Breakdown
+              </h3>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={income.map((src) => ({
+                      name:
+                        src.source.length > 12
+                          ? src.source.slice(0, 12) + "..."
+                          : src.source,
+                      amount: src.amount,
+                    }))}
+                  >
+                    <CartesianGrid stroke="#2A2A2A" strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fill: "#737373", fontSize: 10 }}
+                      axisLine={{ stroke: "#2A2A2A" }}
+                    />
+                    <YAxis
+                      tick={{ fill: "#737373", fontSize: 11 }}
+                      axisLine={{ stroke: "#2A2A2A" }}
+                      tickFormatter={(v) => fmt(v)}
+                    />
+                    <Tooltip content={<ChartTooltipContent />} />
+                    <Bar
+                      dataKey="amount"
+                      name="Amount"
+                      fill="#F59E0B"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ──
 
 export default function BalanceCalculatorPage() {
@@ -1516,6 +2233,7 @@ export default function BalanceCalculatorPage() {
         {activeTab === "scaling" && <ScalingCurves />}
         {activeTab === "ttk" && <TTKCalculator />}
         {activeTab === "economy" && <EconomyBalance />}
+        {activeTab === "economy-designer" && <EconomyDesigner />}
       </div>
     </div>
   );
