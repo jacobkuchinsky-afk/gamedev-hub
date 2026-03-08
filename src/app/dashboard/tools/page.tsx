@@ -449,7 +449,8 @@ export default function ToolsPage() {
               <Link
                 key={tool.href}
                 href={tool.href}
-                className="group relative rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6 transition-all hover:border-[#F59E0B]/30"
+                style={{ ["--tool-color"]: tool.color } as React.CSSProperties}
+                className="group relative rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-6 transition-all duration-200 ease-out hover:scale-[1.02] hover:border-[#F59E0B]/30 hover:shadow-[0_0_24px_color-mix(in_srgb,var(--tool-color)_25%,transparent)]"
               >
                 <button
                   onClick={(e) => toggleFavorite(tool.href, e)}
@@ -468,7 +469,7 @@ export default function ToolsPage() {
                     style={{ backgroundColor: `${tool.color}15` }}
                   >
                     <tool.icon
-                      className="h-6 w-6"
+                      className="h-6 w-6 transition-transform duration-200 group-hover:scale-110"
                       style={{ color: tool.color }}
                     />
                   </div>
