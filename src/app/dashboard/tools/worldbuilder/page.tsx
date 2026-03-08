@@ -222,6 +222,7 @@ export default function WorldBuilderPage() {
   const [relTo, setRelTo] = useState("");
   const [relType, setRelType] = useState<RelationshipType>("ally");
   const [charGenLoading, setCharGenLoading] = useState(false);
+  const [factionGenLoading, setFactionGenLoading] = useState(false);
 
   const [placeNames, setPlaceNames] = useState<{ name: string; desc: string }[]>([]);
   const [placeNamesLoading, setPlaceNamesLoading] = useState(false);
@@ -297,6 +298,33 @@ export default function WorldBuilderPage() {
   const saveRelsToStorage = useCallback((rels: Relationship[]) => {
     localStorage.setItem(REL_STORAGE_KEY, JSON.stringify(rels));
   }, []);
+
+  const generateFactionName = useCallback(async () => {
+    setFactionGenLoading(true);
+    try {
+      const prompt = `Suggest a creative faction name for a ${setting} game world with ${tone} tone. Just the faction name, max 3 words.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 128,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const cleaned = content.replace(/[*"'\n]/g, "").trim();
+      if (cleaned) setCharFaction(cleaned);
+    } catch {} finally {
+      setFactionGenLoading(false);
+    }
+  }, [setting, tone]);
 
   const addCharacter = useCallback(() => {
     if (!charName.trim()) return;
@@ -570,13 +598,27 @@ export default function WorldBuilderPage() {
                   placeholder="Role (e.g. Warrior)"
                   className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#555] outline-none focus:border-[#F59E0B]/40 transition-colors"
                 />
-                <input
-                  type="text"
-                  value={charFaction}
-                  onChange={(e) => setCharFaction(e.target.value)}
-                  placeholder="Faction (e.g. The Order)"
-                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2.5 text-sm text-[#F5F5F5] placeholder-[#555] outline-none focus:border-[#F59E0B]/40 transition-colors"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={charFaction}
+                    onChange={(e) => setCharFaction(e.target.value)}
+                    placeholder="Faction (e.g. The Order)"
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2.5 pr-8 text-sm text-[#F5F5F5] placeholder-[#555] outline-none focus:border-[#F59E0B]/40 transition-colors"
+                  />
+                  <button
+                    onClick={generateFactionName}
+                    disabled={factionGenLoading}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-[#555] hover:text-[#F59E0B] transition-colors disabled:opacity-40"
+                    title="AI Faction Name"
+                  >
+                    {factionGenLoading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F59E0B]" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </div>
               </div>
               <button
                 onClick={addCharacter}

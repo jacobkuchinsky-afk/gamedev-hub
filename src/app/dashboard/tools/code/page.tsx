@@ -15,6 +15,7 @@ import {
   X,
   ChevronDown,
   AlertTriangle,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -32,6 +33,7 @@ type CodeCategory =
 
 interface SavedSnippet {
   id: string;
+  name?: string;
   language: Language;
   engine: Engine;
   category: CodeCategory;
@@ -139,6 +141,8 @@ export default function CodeSnippetPage() {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"generate" | "saved">("generate");
   const [expandedSnippet, setExpandedSnippet] = useState<string | null>(null);
+  const [snippetName, setSnippetName] = useState("");
+  const [nameGenLoading, setNameGenLoading] = useState(false);
   const codeRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
@@ -254,10 +258,41 @@ export default function CodeSnippetPage() {
     setTimeout(() => setCopied(false), 1500);
   }, [generatedCode]);
 
+  const generateSnippetName = useCallback(async () => {
+    if (!description.trim()) return;
+    setNameGenLoading(true);
+    try {
+      const langLabel = LANGUAGES.find((l) => l.id === language)?.label || language;
+      const catLabel = CATEGORIES.find((c) => c.id === category)?.label || category;
+      const prompt = `Name this game code snippet: language=${langLabel}, category=${catLabel}. Description: '${description.trim()}'. Suggest a file-naming-style name like 'player_jump' or 'inventory_system'. Just the name.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 128,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const cleaned = content.replace(/[*"'\n`]/g, "").trim();
+      if (cleaned) setSnippetName(cleaned);
+    } catch {} finally {
+      setNameGenLoading(false);
+    }
+  }, [description, language, category]);
+
   const saveSnippet = useCallback(() => {
     if (!generatedCode) return;
     const snippet: SavedSnippet = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      name: snippetName.trim() || undefined,
       language,
       engine,
       category,
@@ -267,8 +302,9 @@ export default function CodeSnippetPage() {
     };
     setSaved((prev) => [snippet, ...prev]);
     setSavedNotice(true);
+    setSnippetName("");
     setTimeout(() => setSavedNotice(false), 1500);
-  }, [generatedCode, language, engine, category, description]);
+  }, [generatedCode, language, engine, category, description, snippetName]);
 
   const deleteSnippet = useCallback((id: string) => {
     setSaved((prev) => prev.filter((s) => s.id !== id));
@@ -293,6 +329,7 @@ export default function CodeSnippetPage() {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
+      (s.name || "").toLowerCase().includes(q) ||
       s.description.toLowerCase().includes(q) ||
       s.language.includes(q) ||
       s.engine.includes(q) ||
@@ -510,22 +547,6 @@ export default function CodeSnippetPage() {
                         </>
                       )}
                     </button>
-                    <button
-                      onClick={saveSnippet}
-                      className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-[#9CA3AF] transition-colors hover:bg-[#2A2A2A] hover:text-[#F59E0B]"
-                    >
-                      {savedNotice ? (
-                        <>
-                          <Check className="h-3.5 w-3.5 text-[#22C55E]" />
-                          Saved
-                        </>
-                      ) : (
-                        <>
-                          <Save className="h-3.5 w-3.5" />
-                          Save
-                        </>
-                      )}
-                    </button>
                   </div>
                 </div>
 
@@ -539,6 +560,47 @@ export default function CodeSnippetPage() {
                     }}
                   />
                 </div>
+              </div>
+
+              {/* Save row with AI name */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={snippetName}
+                    onChange={(e) => setSnippetName(e.target.value)}
+                    placeholder="Snippet name (optional)..."
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 pr-8 text-sm text-[#F5F5F5] placeholder-[#4B5563] outline-none transition-colors focus:border-[#F59E0B]/40"
+                  />
+                  <button
+                    onClick={generateSnippetName}
+                    disabled={nameGenLoading || !description.trim()}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-[#555] hover:text-[#F59E0B] transition-colors disabled:opacity-40"
+                    title="AI Name"
+                  >
+                    {nameGenLoading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F59E0B]" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </div>
+                <button
+                  onClick={saveSnippet}
+                  className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B]/10 px-4 py-2 text-sm font-medium text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20"
+                >
+                  {savedNotice ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 text-[#22C55E]" />
+                      Saved!
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-3.5 w-3.5" />
+                      Save
+                    </>
+                  )}
+                </button>
               </div>
 
               {/* Explain button */}
@@ -619,7 +681,7 @@ export default function CodeSnippetPage() {
                     >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-[#F5F5F5]">
-                          {snippet.description}
+                          {snippet.name || snippet.description}
                         </p>
                         <div className="mt-1 flex items-center gap-2">
                           <span className="rounded bg-[#F59E0B]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#F59E0B]">
