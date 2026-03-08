@@ -11,6 +11,10 @@ import {
   ArrowRight,
   Wrench,
   AlertTriangle,
+  Lightbulb,
+  Clock,
+  CheckCircle2,
+  FileText,
 } from "lucide-react";
 import { useAuthContext } from "@/components/AuthProvider";
 import {
@@ -18,10 +22,14 @@ import {
   getTasks,
   getBugs,
   getDevlog,
+  getStatusColor,
   getPriorityColor,
   getSeverityColor,
+  getMoodEmoji,
+  type Project,
   type Task,
   type Bug as BugType,
+  type DevlogEntry,
 } from "@/lib/store";
 
 interface Stats {
@@ -29,6 +37,40 @@ interface Stats {
   openTasks: number;
   openBugs: number;
   devlogThisWeek: number;
+}
+
+interface ActivityEvent {
+  id: string;
+  type: "task" | "bug" | "devlog";
+  title: string;
+  projectName: string;
+  timestamp: string;
+  meta: string;
+}
+
+interface ProjectHealth {
+  id: string;
+  name: string;
+  status: Project["status"];
+  openBugs: number;
+  totalTasks: number;
+  doneTasks: number;
+}
+
+function relativeTime(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diff = now - then;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  return `${weeks}w ago`;
 }
 
 export default function DashboardPage() {
@@ -41,13 +83,16 @@ export default function DashboardPage() {
   });
   const [recentTasks, setRecentTasks] = useState<Task[]>([]);
   const [recentBugs, setRecentBugs] = useState<BugType[]>([]);
+  const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  const [projectHealth, setProjectHealth] = useState<ProjectHealth[]>([]);
 
   useEffect(() => {
-    console.log("[DashboardPage] rendered");
     const projects = getProjects();
     const tasks = getTasks();
     const bugs = getBugs();
     const devlog = getDevlog();
+
+    const projectMap = Object.fromEntries(projects.map((p) => [p.id, p.name]));
 
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -63,15 +108,71 @@ export default function DashboardPage() {
 
     setRecentTasks(
       [...tasks]
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
         .slice(0, 5)
     );
 
     setRecentBugs(
       [...bugs]
         .filter((b) => b.status !== "closed")
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
         .slice(0, 3)
+    );
+
+    const events: ActivityEvent[] = [
+      ...tasks.map((t) => ({
+        id: t.id,
+        type: "task" as const,
+        title: t.title,
+        projectName: projectMap[t.projectId] || "Unknown",
+        timestamp: t.created_at,
+        meta: `${t.priority} priority · ${t.status}`,
+      })),
+      ...bugs.map((b) => ({
+        id: b.id,
+        type: "bug" as const,
+        title: b.title,
+        projectName: projectMap[b.projectId] || "Unknown",
+        timestamp: b.created_at,
+        meta: `${b.severity} · ${b.status}`,
+      })),
+      ...devlog.map((d) => ({
+        id: d.id,
+        type: "devlog" as const,
+        title: d.title,
+        projectName: projectMap[d.projectId] || "Unknown",
+        timestamp: new Date(d.date).toISOString(),
+        meta: `${getMoodEmoji(d.mood)} ${d.mood}`,
+      })),
+    ];
+
+    events.sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+    setActivity(events.slice(0, 10));
+
+    setProjectHealth(
+      projects.map((p) => {
+        const pTasks = tasks.filter((t) => t.projectId === p.id);
+        const pBugs = bugs.filter(
+          (b) => b.projectId === p.id && b.status !== "closed"
+        );
+        return {
+          id: p.id,
+          name: p.name,
+          status: p.status,
+          openBugs: pBugs.length,
+          totalTasks: pTasks.length,
+          doneTasks: pTasks.filter((t) => t.status === "done").length,
+        };
+      })
     );
   }, []);
 
@@ -106,6 +207,37 @@ export default function DashboardPage() {
     },
   ];
 
+  const quickActions = [
+    {
+      label: "New Project",
+      desc: "Start a new game",
+      icon: Plus,
+      color: "#F59E0B",
+      href: "/dashboard/projects/new",
+    },
+    {
+      label: "Write Devlog",
+      desc: "Log your progress",
+      icon: FileText,
+      color: "#10B981",
+      href: "/dashboard/devlog",
+    },
+    {
+      label: "Open Tools",
+      desc: "Sprite, sound, more",
+      icon: Wrench,
+      color: "#8B5CF6",
+      href: "/dashboard/tools",
+    },
+    {
+      label: "Generate Ideas",
+      desc: "Brainstorm concepts",
+      icon: Lightbulb,
+      color: "#F97316",
+      href: "/dashboard/tools/ideas",
+    },
+  ];
+
   const taskStatusStyles: Record<string, string> = {
     todo: "bg-[#9CA3AF]/10 text-[#9CA3AF]",
     "in-progress": "bg-[#F59E0B]/10 text-[#F59E0B]",
@@ -113,14 +245,48 @@ export default function DashboardPage() {
     done: "bg-[#10B981]/10 text-[#10B981]",
   };
 
+  const statusBadge: Record<Project["status"], string> = {
+    concept: "bg-[#9CA3AF]/10 text-[#9CA3AF]",
+    prototype: "bg-[#3B82F6]/10 text-[#3B82F6]",
+    alpha: "bg-[#8B5CF6]/10 text-[#8B5CF6]",
+    beta: "bg-[#F59E0B]/10 text-[#F59E0B]",
+    gold: "bg-[#10B981]/10 text-[#10B981]",
+    released: "bg-[#22C55E]/10 text-[#22C55E]",
+  };
+
+  const activityIcon = (type: ActivityEvent["type"]) => {
+    switch (type) {
+      case "task":
+        return <ListTodo className="h-4 w-4 text-[#3B82F6]" />;
+      case "bug":
+        return <AlertTriangle className="h-4 w-4 text-[#EF4444]" />;
+      case "devlog":
+        return <BookOpen className="h-4 w-4 text-[#10B981]" />;
+    }
+  };
+
+  const activityLabel = (type: ActivityEvent["type"]) => {
+    switch (type) {
+      case "task":
+        return "Task";
+      case "bug":
+        return "Bug";
+      case "devlog":
+        return "Devlog";
+    }
+  };
+
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       {/* Welcome */}
       <div>
         <h1 className="text-2xl font-bold">
-          Welcome back, <span className="text-[#F59E0B]">{user?.username}</span>
+          Welcome back,{" "}
+          <span className="text-[#F59E0B]">{user?.username}</span>
         </h1>
-        <p className="mt-1 text-[#9CA3AF]">Here&apos;s what&apos;s happening with your games.</p>
+        <p className="mt-1 text-[#9CA3AF]">
+          Here&apos;s what&apos;s happening with your games.
+        </p>
       </div>
 
       {/* Stats */}
@@ -136,11 +302,40 @@ export default function DashboardPage() {
                 className="flex h-10 w-10 items-center justify-center rounded-lg"
                 style={{ backgroundColor: `${stat.color}15` }}
               >
-                <stat.icon className="h-5 w-5" style={{ color: stat.color }} />
+                <stat.icon
+                  className="h-5 w-5"
+                  style={{ color: stat.color }}
+                />
               </div>
               <span className="text-2xl font-bold">{stat.value}</span>
             </div>
             <p className="mt-3 text-sm text-[#9CA3AF]">{stat.label}</p>
+          </Link>
+        ))}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {quickActions.map((action) => (
+          <Link
+            key={action.label}
+            href={action.href}
+            className="group flex items-center gap-3 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 transition-all hover:border-[#F59E0B]/20"
+          >
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+              style={{ backgroundColor: `${action.color}15` }}
+            >
+              <action.icon
+                className="h-4 w-4"
+                style={{ color: action.color }}
+              />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">{action.label}</p>
+              <p className="text-xs text-[#6B7280]">{action.desc}</p>
+            </div>
+            <ArrowRight className="ml-auto h-3.5 w-3.5 shrink-0 text-[#6B7280] transition-transform group-hover:translate-x-0.5" />
           </Link>
         ))}
       </div>
@@ -167,11 +362,15 @@ export default function DashboardPage() {
                 >
                   <div
                     className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: getPriorityColor(task.priority) }}
+                    style={{
+                      backgroundColor: getPriorityColor(task.priority),
+                    }}
                   />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{task.title}</p>
-                    <p className="truncate text-xs text-[#6B7280]">{task.sprint}</p>
+                    <p className="truncate text-xs text-[#6B7280]">
+                      {task.sprint}
+                    </p>
                   </div>
                   <span
                     className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${
@@ -183,7 +382,9 @@ export default function DashboardPage() {
                 </div>
               ))}
               {recentTasks.length === 0 && (
-                <p className="px-5 py-8 text-center text-sm text-[#6B7280]">No tasks yet.</p>
+                <p className="px-5 py-8 text-center text-sm text-[#6B7280]">
+                  No tasks yet.
+                </p>
               )}
             </div>
           </div>
@@ -203,7 +404,10 @@ export default function DashboardPage() {
             </div>
             <div className="divide-y divide-[#2A2A2A]">
               {recentBugs.map((bug) => (
-                <div key={bug.id} className="px-5 py-3.5 transition-colors hover:bg-[#1F1F1F]">
+                <div
+                  key={bug.id}
+                  className="px-5 py-3.5 transition-colors hover:bg-[#1F1F1F]"
+                >
                   <div className="flex items-center gap-2">
                     <AlertTriangle
                       className="h-3.5 w-3.5 shrink-0"
@@ -221,62 +425,134 @@ export default function DashboardPage() {
                     >
                       {bug.severity}
                     </span>
-                    <span className="text-xs text-[#6B7280]">{bug.platform}</span>
+                    <span className="text-xs text-[#6B7280]">
+                      {bug.platform}
+                    </span>
                   </div>
                 </div>
               ))}
               {recentBugs.length === 0 && (
-                <p className="px-5 py-8 text-center text-sm text-[#6B7280]">No open bugs.</p>
+                <p className="px-5 py-8 text-center text-sm text-[#6B7280]">
+                  No open bugs.
+                </p>
               )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Link
-          href="/dashboard/projects"
-          className="group flex items-center gap-4 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 transition-all hover:border-[#F59E0B]/30"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#F59E0B]/10">
-            <Plus className="h-5 w-5 text-[#F59E0B]" />
-          </div>
-          <div>
-            <p className="font-semibold">New Project</p>
-            <p className="text-sm text-[#9CA3AF]">Start a new game</p>
-          </div>
-          <ArrowRight className="ml-auto h-4 w-4 text-[#6B7280] transition-transform group-hover:translate-x-0.5" />
-        </Link>
-
-        <Link
-          href="/dashboard/devlog"
-          className="group flex items-center gap-4 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 transition-all hover:border-[#10B981]/30"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#10B981]/10">
-            <BookOpen className="h-5 w-5 text-[#10B981]" />
-          </div>
-          <div>
-            <p className="font-semibold">Log Entry</p>
-            <p className="text-sm text-[#9CA3AF]">Write a devlog</p>
-          </div>
-          <ArrowRight className="ml-auto h-4 w-4 text-[#6B7280] transition-transform group-hover:translate-x-0.5" />
-        </Link>
-
-        <Link
-          href="/dashboard/tools"
-          className="group flex items-center gap-4 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 transition-all hover:border-[#8B5CF6]/30"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#8B5CF6]/10">
-            <Wrench className="h-5 w-5 text-[#8B5CF6]" />
-          </div>
-          <div>
-            <p className="font-semibold">Open Tools</p>
-            <p className="text-sm text-[#9CA3AF]">Sprite, sound, more</p>
-          </div>
-          <ArrowRight className="ml-auto h-4 w-4 text-[#6B7280] transition-transform group-hover:translate-x-0.5" />
-        </Link>
+      {/* Activity Feed */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+        <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-4">
+          <h2 className="font-semibold">Activity Feed</h2>
+          <span className="text-xs text-[#6B7280]">Latest 10 events</span>
+        </div>
+        <div className="divide-y divide-[#2A2A2A]">
+          {activity.map((event) => (
+            <div
+              key={event.id}
+              className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-[#1F1F1F]"
+            >
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1A1A1A] border border-[#2A2A2A]">
+                {activityIcon(event.type)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-[#F59E0B]">
+                    {activityLabel(event.type)}
+                  </span>
+                  <span className="text-xs text-[#6B7280]">
+                    in {event.projectName}
+                  </span>
+                </div>
+                <p className="mt-0.5 truncate text-sm font-medium">
+                  {event.title}
+                </p>
+                <p className="mt-0.5 text-xs text-[#6B7280]">{event.meta}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1 text-xs text-[#6B7280]">
+                <Clock className="h-3 w-3" />
+                {relativeTime(event.timestamp)}
+              </div>
+            </div>
+          ))}
+          {activity.length === 0 && (
+            <p className="px-5 py-8 text-center text-sm text-[#6B7280]">
+              No activity yet.
+            </p>
+          )}
+        </div>
       </div>
+
+      {/* Project Health */}
+      {projectHealth.length > 0 && (
+        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+          <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-4">
+            <h2 className="font-semibold">Project Health</h2>
+            <Link
+              href="/dashboard/projects"
+              className="text-xs text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
+            >
+              View all
+            </Link>
+          </div>
+          <div className="divide-y divide-[#2A2A2A]">
+            {projectHealth.map((ph) => {
+              const pct =
+                ph.totalTasks > 0
+                  ? Math.round((ph.doneTasks / ph.totalTasks) * 100)
+                  : 0;
+              return (
+                <Link
+                  key={ph.id}
+                  href={`/dashboard/projects/${ph.id}`}
+                  className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-[#1F1F1F]"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold">{ph.name}</p>
+                      <span
+                        className={`rounded-md px-2 py-0.5 text-xs font-medium capitalize ${statusBadge[ph.status]}`}
+                      >
+                        {ph.status}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center gap-3">
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#2A2A2A]">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${pct}%`,
+                            backgroundColor:
+                              pct === 100
+                                ? "#10B981"
+                                : pct >= 50
+                                  ? "#F59E0B"
+                                  : "#3B82F6",
+                          }}
+                        />
+                      </div>
+                      <span className="shrink-0 text-xs text-[#9CA3AF]">
+                        {pct}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5 text-xs text-[#9CA3AF]">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-[#10B981]" />
+                    {ph.doneTasks}/{ph.totalTasks}
+                  </div>
+                  {ph.openBugs > 0 && (
+                    <div className="flex shrink-0 items-center gap-1.5 text-xs text-[#EF4444]">
+                      <Bug className="h-3.5 w-3.5" />
+                      {ph.openBugs}
+                    </div>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
