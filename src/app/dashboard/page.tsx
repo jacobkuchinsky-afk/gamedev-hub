@@ -2094,7 +2094,7 @@ export default function DashboardPage() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <button
           onClick={() => { setQcName(""); setQcGenre(QC_GENRES[0]); setQcEngine(QC_ENGINES[0]); setQcCreating(false); setShowQuickCreate(true); }}
-          className="group flex items-center gap-3 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 transition-all hover:border-[#F59E0B]/20 text-left"
+          className="group flex items-center gap-3 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 text-left transition-all duration-200 ease-out hover:scale-[1.03] hover:border-[#F59E0B]"
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F59E0B]/10">
             <Plus className="h-4 w-4 text-[#F59E0B]" />
@@ -2103,13 +2103,13 @@ export default function DashboardPage() {
             <p className="text-sm font-semibold">New Project</p>
             <p className="text-xs text-[#6B7280]">Start a new game</p>
           </div>
-          <ArrowRight className="ml-auto h-3.5 w-3.5 shrink-0 text-[#6B7280] transition-transform group-hover:translate-x-0.5" />
+          <ArrowRight className="ml-auto h-3.5 w-3.5 shrink-0 text-[#6B7280] transition-transform duration-200 group-hover:translate-x-1" />
         </button>
         {quickActions.map((action) => (
           <Link
             key={action.label}
             href={action.href}
-            className="group flex items-center gap-3 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 transition-all hover:border-[#F59E0B]/20"
+            className="group flex items-center gap-3 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 transition-all duration-200 ease-out hover:scale-[1.03] hover:border-[#F59E0B]"
           >
             <div
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
@@ -2124,7 +2124,7 @@ export default function DashboardPage() {
               <p className="text-sm font-semibold">{action.label}</p>
               <p className="text-xs text-[#6B7280]">{action.desc}</p>
             </div>
-            <ArrowRight className="ml-auto h-3.5 w-3.5 shrink-0 text-[#6B7280] transition-transform group-hover:translate-x-0.5" />
+            <ArrowRight className="ml-auto h-3.5 w-3.5 shrink-0 text-[#6B7280] transition-transform duration-200 group-hover:translate-x-1" />
           </Link>
         ))}
       </div>
