@@ -1309,7 +1309,7 @@ export default function DashboardPage() {
   }, [user]);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
+    <div className="mx-auto max-w-5xl space-y-8 animate-slide-up">
       {showWelcomeBanner ? (
         <div className="space-y-6">
           <div className="relative overflow-hidden rounded-2xl border border-[#F59E0B]/20 bg-gradient-to-br from-[#F59E0B]/5 via-[#1A1A1A] to-[#1A1A1A] p-8">
