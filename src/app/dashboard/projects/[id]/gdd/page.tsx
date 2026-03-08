@@ -628,6 +628,11 @@ export default function GDDPage() {
   const [showEnemies, setShowEnemies] = useState(false);
   const [enemiesCopied, setEnemiesCopied] = useState(false);
 
+  const [mechanicsLoading, setMechanicsLoading] = useState(false);
+  const [mechanicsResult, setMechanicsResult] = useState("");
+  const [showMechanics, setShowMechanics] = useState(false);
+  const [mechanicsCopied, setMechanicsCopied] = useState(false);
+
   const [showWiki, setShowWiki] = useState(false);
   const [wikiTopic, setWikiTopic] = useState("");
   const [wikiLoading, setWikiLoading] = useState(false);
@@ -914,6 +919,46 @@ export default function GDDPage() {
       setToast({ message: "Failed to generate levels — try again", type: "error" });
     } finally {
       setScenePlannerLoading(false);
+    }
+  }, [project, data]);
+
+  const handleMechanicsAdvisor = useCallback(async () => {
+    if (!project) return;
+    setMechanicsLoading(true);
+    setShowMechanics(true);
+
+    const genre = data.genre || project.genre || "unspecified";
+    const name = data.gameTitle || project.name || "Untitled";
+
+    const prompt = `Suggest 5 game mechanics for a ${genre} game called '${name}'. For each: name, how it works (2 sentences), why it's fun, complexity level (Simple/Medium/Complex), and which genre conventions it follows or breaks. Format with bold headers.`;
+
+    try {
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 1024,
+          temperature: 0.8,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+      const apiData = await response.json();
+      const content = apiData.choices?.[0]?.message?.content || apiData.choices?.[0]?.message?.reasoning || "";
+      setMechanicsResult(content);
+      setToast({ message: "Generated 5 game mechanics!", type: "success" });
+    } catch (err) {
+      console.error("[GDD Mechanics Advisor]", err);
+      setMechanicsResult("Failed to generate mechanics. Please try again.");
+      setToast({ message: "Failed to generate mechanics — try again", type: "error" });
+    } finally {
+      setMechanicsLoading(false);
     }
   }, [project, data]);
 
@@ -1484,6 +1529,18 @@ export default function GDDPage() {
                 AI Enemies
               </button>
               <button
+                onClick={handleMechanicsAdvisor}
+                disabled={mechanicsLoading}
+                className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {mechanicsLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Puzzle className="h-3.5 w-3.5" />
+                )}
+                AI Mechanics
+              </button>
+              <button
                 onClick={() => { setShowWiki(true); setCodexView(false); }}
                 className="flex items-center gap-1.5 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2 text-sm text-[#F59E0B] transition-colors hover:border-[#F59E0B]/50 hover:bg-[#F59E0B]/10"
               >
@@ -1942,6 +1999,82 @@ export default function GDDPage() {
                 <button
                   onClick={handleScenePlanner}
                   disabled={scenePlannerLoading}
+                  className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black hover:bg-[#F59E0B]/90 disabled:opacity-50"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Regenerate
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* AI Mechanics Advisor Panel */}
+        {showMechanics && (
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                  <Puzzle className="h-4 w-4 text-[#F59E0B]" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">AI Game Mechanics Advisor</h3>
+                  <p className="text-xs text-[#6B7280]">
+                    5 mechanics suggested for {project?.name}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {mechanicsResult && !mechanicsLoading && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(mechanicsResult);
+                      setMechanicsCopied(true);
+                      setTimeout(() => setMechanicsCopied(false), 2000);
+                    }}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                      mechanicsCopied
+                        ? "bg-[#10B981] text-white"
+                        : "border border-[#2A2A2A] text-[#9CA3AF] hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                    }`}
+                  >
+                    {mechanicsCopied ? (
+                      <><CheckCircle2 className="h-3.5 w-3.5" /> Copied!</>
+                    ) : (
+                      <><Copy className="h-3.5 w-3.5" /> Copy</>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowMechanics(false)}
+                  className="rounded-lg p-1 text-[#9CA3AF] hover:text-[#F5F5F5]"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5">
+              {mechanicsLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#F59E0B]" />
+                  <p className="text-sm text-[#6B7280]">Brainstorming mechanics...</p>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4">
+                  <pre className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB] font-sans">
+                    {mechanicsResult}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            {mechanicsResult && !mechanicsLoading && (
+              <div className="flex items-center justify-between border-t border-[#2A2A2A] px-5 py-3">
+                <p className="text-xs text-[#6B7280]">Based on your game genre and title</p>
+                <button
+                  onClick={handleMechanicsAdvisor}
+                  disabled={mechanicsLoading}
                   className="flex items-center gap-1.5 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-medium text-black hover:bg-[#F59E0B]/90 disabled:opacity-50"
                 >
                   <Sparkles className="h-3.5 w-3.5" />

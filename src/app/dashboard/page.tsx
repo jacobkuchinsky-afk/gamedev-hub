@@ -85,10 +85,13 @@ interface ActivityEvent {
 interface ProjectHealth {
   id: string;
   name: string;
+  color: string;
   status: Project["status"];
   openBugs: number;
   totalTasks: number;
   doneTasks: number;
+  sprintName: string;
+  sprintStatus: "active" | "planned" | "completed" | "none";
 }
 
 interface FocusItem {
@@ -721,13 +724,19 @@ export default function DashboardPage() {
         const pBugs = bugs.filter(
           (b) => b.projectId === p.id && b.status !== "closed"
         );
+        const pSprints = sprints.filter((s) => s.projectId === p.id);
+        const activeSprint = pSprints.find((s) => s.status === "active");
+        const plannedSprint = pSprints.find((s) => s.status === "planned");
         return {
           id: p.id,
           name: p.name,
+          color: p.coverColor || "#F59E0B",
           status: p.status,
           openBugs: pBugs.length,
           totalTasks: pTasks.length,
           doneTasks: pTasks.filter((t) => t.status === "done").length,
+          sprintName: activeSprint?.name || plannedSprint?.name || "",
+          sprintStatus: activeSprint ? "active" : plannedSprint ? "planned" : pSprints.some((s) => s.status === "completed") ? "completed" : "none" as const,
         };
       })
     );
@@ -2217,10 +2226,18 @@ export default function DashboardPage() {
       </div>
 
       {/* Project Health */}
-      {projectHealth.length > 0 && (
+      {projectHealth.length >= 2 && (
         <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
           <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-4">
-            <h2 className="font-semibold">Project Health</h2>
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F59E0B]/10">
+                <Activity className="h-4 w-4 text-[#F59E0B]" />
+              </div>
+              <div>
+                <h2 className="font-semibold">Project Health</h2>
+                <p className="text-xs text-[#6B7280]">{projectHealth.length} projects at a glance</p>
+              </div>
+            </div>
             <Link
               href="/dashboard/projects"
               className="text-xs text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
@@ -2234,17 +2251,34 @@ export default function DashboardPage() {
                 ph.totalTasks > 0
                   ? Math.round((ph.doneTasks / ph.totalTasks) * 100)
                   : 0;
+              const healthColor =
+                ph.openBugs >= 5 || pct < 20
+                  ? "#EF4444"
+                  : ph.openBugs >= 2 || pct < 60
+                    ? "#F59E0B"
+                    : "#10B981";
+              const sprintLabel: Record<string, string> = {
+                active: "In Sprint",
+                planned: "Sprint Planned",
+                completed: "Sprint Done",
+                none: "",
+              };
               return (
                 <Link
                   key={ph.id}
                   href={`/dashboard/projects/${ph.id}`}
-                  className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-[#1F1F1F]"
+                  className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-[#1F1F1F]"
                 >
+                  <div
+                    className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-offset-1 ring-offset-[#1A1A1A]"
+                    style={{ backgroundColor: healthColor, boxShadow: `0 0 6px ${healthColor}40`, ringColor: healthColor }}
+                  />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold">{ph.name}</p>
+                      <div className="h-1 w-1 rounded-full shrink-0" style={{ backgroundColor: ph.color }} />
+                      <p className="truncate text-sm font-semibold">{ph.name}</p>
                       <span
-                        className={`rounded-md px-2 py-0.5 text-xs font-medium capitalize ${statusBadge[ph.status]}`}
+                        className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-medium capitalize ${statusBadge[ph.status]}`}
                       >
                         {ph.status}
                       </span>
@@ -2253,32 +2287,38 @@ export default function DashboardPage() {
                       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#2A2A2A]">
                         <div
                           className="h-full rounded-full transition-all"
-                          style={{
-                            width: `${pct}%`,
-                            backgroundColor:
-                              pct === 100
-                                ? "#10B981"
-                                : pct >= 50
-                                  ? "#F59E0B"
-                                  : "#3B82F6",
-                          }}
+                          style={{ width: `${pct}%`, backgroundColor: healthColor }}
                         />
                       </div>
-                      <span className="shrink-0 text-xs text-[#9CA3AF]">
+                      <span className="shrink-0 text-xs tabular-nums text-[#9CA3AF]">
                         {pct}%
                       </span>
                     </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1.5 text-xs text-[#9CA3AF]">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-[#10B981]" />
-                    {ph.doneTasks}/{ph.totalTasks}
-                  </div>
-                  {ph.openBugs > 0 && (
-                    <div className="flex shrink-0 items-center gap-1.5 text-xs text-[#EF4444]">
-                      <Bug className="h-3.5 w-3.5" />
-                      {ph.openBugs}
+                  <div className="flex shrink-0 items-center gap-3">
+                    {ph.sprintStatus !== "none" && (
+                      <span className={`hidden sm:inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-medium ${
+                        ph.sprintStatus === "active"
+                          ? "bg-[#F59E0B]/10 text-[#F59E0B]"
+                          : ph.sprintStatus === "planned"
+                            ? "bg-[#3B82F6]/10 text-[#3B82F6]"
+                            : "bg-[#10B981]/10 text-[#10B981]"
+                      }`}>
+                        {sprintLabel[ph.sprintStatus]}
+                      </span>
+                    )}
+                    <div className="flex items-center gap-1.5 text-xs text-[#9CA3AF]">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-[#10B981]" />
+                      {ph.doneTasks}/{ph.totalTasks}
                     </div>
-                  )}
+                    {ph.openBugs > 0 && (
+                      <div className="flex items-center gap-1.5 text-xs text-[#EF4444]">
+                        <Bug className="h-3.5 w-3.5" />
+                        {ph.openBugs}
+                      </div>
+                    )}
+                    <ChevronRight className="h-3.5 w-3.5 text-[#3A3A3A] transition-colors group-hover:text-[#F59E0B]" />
+                  </div>
                 </Link>
               );
             })}
