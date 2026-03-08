@@ -894,6 +894,12 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       <aside
         role="navigation"
         aria-label="Main navigation"
+        onDoubleClick={() => {
+          if (sidebarCollapsed) {
+            setSidebarCollapsed(false);
+            try { localStorage.setItem("gameforge_sidebar_collapsed", "0"); } catch {}
+          }
+        }}
         className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-[#2A2A2A] bg-[#0F0F0F] transition-all duration-300 ease-out md:relative md:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         } w-60 ${sidebarCollapsed ? "md:w-[60px] md:overflow-hidden" : ""}`}
