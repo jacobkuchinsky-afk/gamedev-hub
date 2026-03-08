@@ -9,6 +9,7 @@ import {
   ScrollText,
   Calculator,
   MessageSquare,
+  Lightbulb,
   ArrowRight,
 } from "lucide-react";
 
@@ -60,6 +61,14 @@ const TOOLS = [
     description:
       "Build branching dialogue with conditions, variables, and NPC personality.",
     color: "#EC4899",
+  },
+  {
+    href: "/dashboard/tools/ideas",
+    icon: Lightbulb,
+    name: "AI Idea Generator",
+    description:
+      "Generate unique game concepts with AI — get titles, mechanics, hooks, and full pitches instantly.",
+    color: "#F59E0B",
   },
 ];
 

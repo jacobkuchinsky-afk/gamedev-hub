@@ -11,6 +11,10 @@ import {
   Plus,
   AlertTriangle,
   ChevronRight,
+  Package,
+  FileText,
+  Rocket,
+  Gamepad2,
 } from "lucide-react";
 import {
   getProject,
@@ -42,7 +46,7 @@ const TASK_STATUS_STYLES: Record<string, string> = {
   done: "bg-[#10B981]/10 text-[#10B981]",
 };
 
-type Tab = "overview" | "tasks" | "bugs" | "devlog";
+type Tab = "overview" | "tasks" | "bugs" | "assets" | "devlog" | "gdd" | "launch" | "playtest";
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -86,23 +90,15 @@ export default function ProjectDetailPage() {
     )
     .slice(0, 3);
 
-  const tabs: { key: Tab; label: string; href?: string }[] = [
-    { key: "overview", label: "Overview" },
-    {
-      key: "tasks",
-      label: "Tasks",
-      href: `/dashboard/projects/${projectId}/tasks`,
-    },
-    {
-      key: "bugs",
-      label: "Bugs",
-      href: `/dashboard/projects/${projectId}/bugs`,
-    },
-    {
-      key: "devlog",
-      label: "Devlog",
-      href: `/dashboard/projects/${projectId}/devlog`,
-    },
+  const tabs: { key: Tab; label: string; href?: string; icon: typeof ListTodo }[] = [
+    { key: "overview", label: "Overview", icon: ChevronRight },
+    { key: "tasks", label: "Tasks", href: `/dashboard/projects/${projectId}/tasks`, icon: ListTodo },
+    { key: "bugs", label: "Bugs", href: `/dashboard/projects/${projectId}/bugs`, icon: Bug },
+    { key: "assets", label: "Assets", href: `/dashboard/projects/${projectId}/assets`, icon: Package },
+    { key: "devlog", label: "Devlog", href: `/dashboard/projects/${projectId}/devlog`, icon: BookOpen },
+    { key: "gdd", label: "GDD", href: `/dashboard/projects/${projectId}/gdd`, icon: FileText },
+    { key: "launch", label: "Launch", href: `/dashboard/projects/${projectId}/launch`, icon: Rocket },
+    { key: "playtest", label: "Playtest", href: `/dashboard/projects/${projectId}/playtest`, icon: Gamepad2 },
   ];
 
   const stats = [
@@ -190,30 +186,39 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-[#2A2A2A]">
-        {tabs.map((tab) =>
-          tab.href && tab.key !== "overview" ? (
+      <div className="flex gap-1 overflow-x-auto border-b border-[#2A2A2A] scrollbar-none">
+        {tabs.map((tab) => {
+          const isOverview = tab.key === "overview";
+          const isActive = isOverview && activeTab === "overview";
+          const TabIcon = tab.icon;
+
+          if (isOverview) {
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab("overview")}
+                className={`flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                  isActive
+                    ? "border-[#F59E0B] text-[#F59E0B]"
+                    : "border-transparent text-[#9CA3AF] hover:text-[#F5F5F5]"
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          }
+
+          return (
             <Link
               key={tab.key}
-              href={tab.href}
-              className="border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-[#9CA3AF] transition-colors hover:text-[#F5F5F5]"
+              href={tab.href!}
+              className="flex shrink-0 items-center gap-1.5 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
             >
+              <TabIcon className="h-3.5 w-3.5" />
               {tab.label}
             </Link>
-          ) : (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-                activeTab === tab.key
-                  ? "border-[#F59E0B] text-[#F59E0B]"
-                  : "border-transparent text-[#9CA3AF] hover:text-[#F5F5F5]"
-              }`}
-            >
-              {tab.label}
-            </button>
-          )
-        )}
+          );
+        })}
       </div>
 
       {/* Stats Row */}
