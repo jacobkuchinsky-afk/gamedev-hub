@@ -104,6 +104,8 @@ export default function TilemapPage() {
   const [aiDecorateResult, setAiDecorateResult] = useState("");
   const [aiPacingLoading, setAiPacingLoading] = useState(false);
   const [aiPacingResult, setAiPacingResult] = useState("");
+  const [aiCollisionLoading, setAiCollisionLoading] = useState(false);
+  const [aiCollisionResult, setAiCollisionResult] = useState("");
 
   const layersRef = useRef(layers);
   layersRef.current = layers;
@@ -342,6 +344,84 @@ export default function TilemapPage() {
       setAiPacingResult("Failed to analyze pacing. Try again.");
     } finally {
       setAiPacingLoading(false);
+    }
+  };
+
+  const aiSuggestCollisions = async () => {
+    if (aiCollisionLoading) return;
+    setAiCollisionLoading(true);
+    setAiCollisionResult("");
+    pushUndo();
+    try {
+      const groundLayer = layers.Ground;
+      const tileNames: Record<number, string> = {};
+      TILE_TYPES.forEach((t) => { tileNames[t.id] = t.name; });
+
+      const present = new Set<string>();
+      for (let y = 0; y < gridH; y++) {
+        for (let x = 0; x < gridW; x++) {
+          const id = groundLayer[y]?.[x] ?? 0;
+          if (id !== 0) present.add(tileNames[id] || "Empty");
+        }
+      }
+
+      const available = "Grass, Water, Sand, Stone, Lava, Ice, Path, Wall, Tree, Flowers, Bridge, Door";
+      const prompt = `Based on this tilemap ground layer, which tiles should be collidable (solid)? The map contains: ${[...present].join(", ")}. Available types: ${available}. List the collidable ones. Just the names, comma-separated.`;
+
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 128,
+          temperature: 0.7,
+        }),
+      });
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+
+      const collidableNames = content
+        .split(",")
+        .map((s: string) => s.trim().toLowerCase())
+        .filter(Boolean);
+
+      const collidableIds = new Set<number>();
+      TILE_TYPES.forEach((t) => {
+        if (collidableNames.includes(t.name.toLowerCase())) collidableIds.add(t.id);
+      });
+
+      if (collidableIds.size === 0) throw new Error("No collidable tiles identified");
+
+      setLayers((prev) => {
+        const collisionGrid = prev.Collision.map((r) => [...r]);
+        let marked = 0;
+        for (let y = 0; y < gridH; y++) {
+          for (let x = 0; x < gridW; x++) {
+            const groundId = prev.Ground[y]?.[x] ?? 0;
+            if (collidableIds.has(groundId)) {
+              collisionGrid[y][x] = 1;
+              marked++;
+            }
+          }
+        }
+        setAiCollisionResult(
+          `Marked ${marked} tiles. Collidable: ${[...collidableIds].map((id) => TILE_TYPES[id]?.name).filter(Boolean).join(", ")}`
+        );
+        return { ...prev, Collision: collisionGrid };
+      });
+
+      setActiveLayer("Collision");
+      setLayerVisibility((prev) => ({ ...prev, Collision: true }));
+    } catch {
+      setAiCollisionResult("Failed to suggest collisions. Try again.");
+    } finally {
+      setAiCollisionLoading(false);
     }
   };
 
@@ -816,6 +896,38 @@ export default function TilemapPage() {
             {aiPacingResult && (
               <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-2">
                 <p className="text-[11px] text-[#D1D5DB] whitespace-pre-wrap leading-relaxed">{aiPacingResult}</p>
+              </div>
+            )}
+          </div>
+
+          {/* AI Collisions */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-3">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              <Sparkles className="inline h-3 w-3 mr-1" /> AI Collisions
+            </h3>
+            <p className="mb-2 text-[10px] text-[#6B7280]">
+              Auto-mark solid tiles on the Collision layer based on your ground terrain.
+            </p>
+            <button
+              onClick={aiSuggestCollisions}
+              disabled={aiCollisionLoading}
+              className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-3 py-2 text-xs font-semibold text-[#F59E0B] hover:bg-[#F59E0B]/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {aiCollisionLoading ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3.5 w-3.5" />
+                  AI Collisions
+                </>
+              )}
+            </button>
+            {aiCollisionResult && (
+              <div className="mt-2 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-3 py-2">
+                <p className="text-[11px] text-[#F59E0B]">{aiCollisionResult}</p>
               </div>
             )}
           </div>

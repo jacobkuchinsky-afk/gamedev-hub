@@ -178,6 +178,8 @@ export default function ColorsPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [colorStory, setColorStory] = useState("");
   const [colorStoryLoading, setColorStoryLoading] = useState(false);
+  const [aiHarmonyScore, setAiHarmonyScore] = useState("");
+  const [aiHarmonyLoading, setAiHarmonyLoading] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -322,6 +324,39 @@ export default function ColorsPage() {
       setColorStory("Failed to generate color story. Try again.");
     } finally {
       setColorStoryLoading(false);
+    }
+  };
+
+  const aiCheckHarmony = async () => {
+    if (aiHarmonyLoading) return;
+    setAiHarmonyLoading(true);
+    setAiHarmonyScore("");
+    try {
+      const hexList = colors.map((c) => c.hex).join(", ");
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{
+            role: "user",
+            content: `Rate this color palette's harmony: ${hexList}. Score 1-10 and explain in 1 sentence. Just the score and reason.`,
+          }],
+          stream: false,
+          max_tokens: 128,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
+      setAiHarmonyScore(content || "No response. Try again.");
+    } catch {
+      setAiHarmonyScore("Failed to check harmony. Try again.");
+    } finally {
+      setAiHarmonyLoading(false);
     }
   };
 
@@ -574,6 +609,39 @@ export default function ColorsPage() {
                 </div>
                 <div className="h-px bg-[#F59E0B]/10" />
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">{colorStory}</p>
+              </div>
+            )}
+          </div>
+
+          {/* AI Harmony Check */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-5">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-[#9CA3AF]">
+              <Sparkles className="h-4 w-4 text-[#F59E0B]" />
+              AI Harmony Check
+            </h2>
+            <p className="mb-3 text-xs text-[#6B7280]">
+              Get an instant harmony score for your current palette.
+            </p>
+            <button
+              onClick={aiCheckHarmony}
+              disabled={aiHarmonyLoading}
+              className="flex items-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-4 py-2.5 text-sm font-bold text-[#F59E0B] transition-all hover:bg-[#F59E0B]/20 active:scale-[0.97] disabled:opacity-50"
+            >
+              {aiHarmonyLoading ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Checking...</>
+              ) : (
+                <><Sparkles className="h-4 w-4" /> AI Harmony</>
+              )}
+            </button>
+            {aiHarmonyScore && !aiHarmonyLoading && (
+              <div className="mt-3 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-4">
+                <p className="text-sm leading-relaxed text-[#D1D5DB]">{aiHarmonyScore}</p>
+              </div>
+            )}
+            {aiHarmonyLoading && (
+              <div className="mt-3 flex items-center gap-3 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-4 py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-[#F59E0B]" />
+                <span className="text-xs text-[#9CA3AF]">Evaluating harmony...</span>
               </div>
             )}
           </div>
