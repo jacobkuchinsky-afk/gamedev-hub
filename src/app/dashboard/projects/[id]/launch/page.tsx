@@ -24,6 +24,7 @@ import {
   Sparkles,
   Loader2,
   Copy,
+  Mic,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -211,6 +212,9 @@ export default function LaunchChecklistPage() {
   const [aiMarketingLoading, setAiMarketingLoading] = useState(false);
   const [aiMarketingOpen, setAiMarketingOpen] = useState(false);
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
+  const [aiPitch, setAiPitch] = useState<string>("");
+  const [aiPitchLoading, setAiPitchLoading] = useState(false);
+  const [aiPitchOpen, setAiPitchOpen] = useState(false);
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -303,6 +307,46 @@ export default function LaunchChecklistPage() {
       setAiMarketingLoading(false);
     }
   }, [project, aiMarketingLoading]);
+
+  const generatePitch = useCallback(async () => {
+    if (!project || aiPitchLoading) return;
+    setAiPitchLoading(true);
+    setAiPitchOpen(true);
+    setAiPitch("");
+    try {
+      const gddRaw = localStorage.getItem(`gameforge_gdd_${projectId}`);
+      const gddData: Record<string, string> | null = gddRaw ? JSON.parse(gddRaw) : null;
+      const description = gddData?.elevatorPitch || gddData?.tagline || project.description || "An indie game in development.";
+      const features = gddData
+        ? [gddData.coreVerbs, gddData.gameplayLoop, gddData.visualStyle, gddData.setting]
+            .filter(Boolean)
+            .map((v) => v!.slice(0, 100))
+            .join(". ")
+        : "";
+      const prompt = `Write a game pitch for '${project.name}', a ${project.genre || "unknown genre"} game. Description: ${description}. ${features ? `Key features: ${features}.` : ""} Include: 1) A 30-second elevator pitch, 2) Unique selling points (3 bullets), 3) Target audience, 4) Comparable games ('X meets Y'). Format with bold headers.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 1024,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "Could not generate a pitch. Please try again.";
+      setAiPitch(content);
+    } catch {
+      setAiPitch("Failed to generate pitch. Check your API key and try again.");
+    } finally {
+      setAiPitchLoading(false);
+    }
+  }, [project, aiPitchLoading, projectId]);
 
   const copyToClipboard = useCallback((text: string, sectionTitle: string) => {
     navigator.clipboard.writeText(text);
@@ -432,6 +476,18 @@ export default function LaunchChecklistPage() {
               {aiPlanLoading ? "Generating..." : "AI Launch Plan"}
             </button>
             <button
+              onClick={generatePitch}
+              disabled={aiPitchLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#06B6D4]/40 bg-[#06B6D4]/10 px-3 py-2 text-sm font-medium text-[#06B6D4] transition-colors hover:bg-[#06B6D4]/20 disabled:opacity-50"
+            >
+              {aiPitchLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Mic className="h-3.5 w-3.5" />
+              )}
+              {aiPitchLoading ? "Generating..." : "AI Pitch"}
+            </button>
+            <button
               onClick={generateMarketingCopy}
               disabled={aiMarketingLoading}
               className="flex items-center gap-1.5 rounded-lg border border-[#EC4899]/40 bg-[#EC4899]/10 px-3 py-2 text-sm font-medium text-[#EC4899] transition-colors hover:bg-[#EC4899]/20 disabled:opacity-50"
@@ -542,6 +598,71 @@ export default function LaunchChecklistPage() {
                           <Copy className="h-3 w-3" />
                         )}
                         {copiedSection === section.title ? "Copied!" : "Copy"}
+                      </button>
+                    </div>
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">
+                      {section.content}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AI Pitch Panel */}
+      {aiPitchOpen && (
+        <div className="rounded-xl border border-[#06B6D4]/30 bg-[#1A1A1A] overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3">
+            <div className="flex items-center gap-2">
+              <Mic className="h-4 w-4 text-[#06B6D4]" />
+              <h3 className="text-sm font-semibold text-[#06B6D4]">AI Game Pitch</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              {!aiPitchLoading && aiPitch && (
+                <button
+                  onClick={() => copyToClipboard(aiPitch, "__pitch_all__")}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#9CA3AF] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                >
+                  {copiedSection === "__pitch_all__" ? (
+                    <Check className="h-3 w-3 text-[#10B981]" />
+                  ) : (
+                    <Copy className="h-3 w-3" />
+                  )}
+                  {copiedSection === "__pitch_all__" ? "Copied!" : "Copy All"}
+                </button>
+              )}
+              <button
+                onClick={() => setAiPitchOpen(false)}
+                className="rounded-md p-1 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          <div className="px-5 py-4">
+            {aiPitchLoading ? (
+              <div className="flex items-center gap-3 py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-[#06B6D4]" />
+                <p className="text-sm text-[#9CA3AF]">Crafting the perfect pitch for {project.name}...</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {parseMarketingSections(aiPitch).map((section) => (
+                  <div key={section.title} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-[#06B6D4]">{section.title}</h4>
+                      <button
+                        onClick={() => copyToClipboard(section.content, `pitch_${section.title}`)}
+                        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+                      >
+                        {copiedSection === `pitch_${section.title}` ? (
+                          <Check className="h-3 w-3 text-[#10B981]" />
+                        ) : (
+                          <Copy className="h-3 w-3" />
+                        )}
+                        {copiedSection === `pitch_${section.title}` ? "Copied!" : "Copy"}
                       </button>
                     </div>
                     <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">

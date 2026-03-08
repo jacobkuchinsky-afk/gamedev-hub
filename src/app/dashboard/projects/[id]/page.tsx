@@ -38,6 +38,8 @@ import {
   ShieldAlert,
   Settings,
   Tag,
+  ChevronLeft,
+  CalendarDays,
 } from "lucide-react";
 import {
   getProject,
@@ -1052,6 +1054,171 @@ function ProductivitySection({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+const CAL_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const CAL_DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+function ProjectCalendar({
+  tasks,
+  bugs,
+  devlog,
+  sprints,
+  milestones,
+}: {
+  tasks: Task[];
+  bugs: BugType[];
+  devlog: DevlogEntry[];
+  sprints: Sprint[];
+  milestones: Milestone[];
+}) {
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth());
+  const [year, setYear] = useState(now.getFullYear());
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDow = new Date(year, month, 1).getDay();
+  const isCurrentMonth = month === now.getMonth() && year === now.getFullYear();
+
+  const eventMap = useMemo(() => {
+    const map: Record<number, { type: string; color: string; label: string }[]> = {};
+    const add = (dateStr: string, type: string, color: string, label: string) => {
+      const d = new Date(dateStr);
+      if (d.getMonth() === month && d.getFullYear() === year) {
+        const day = d.getDate();
+        if (!map[day]) map[day] = [];
+        map[day].push({ type, color, label });
+      }
+    };
+    tasks.filter((t) => t.status === "done").forEach((t) => add(t.created_at, "task", "#10B981", t.title));
+    bugs.forEach((b) => add(b.created_at, "bug", "#EF4444", b.title));
+    devlog.forEach((d) => add(d.date, "devlog", "#F59E0B", d.title));
+    sprints.forEach((s) => {
+      add(s.startDate, "sprint", "#3B82F6", `${s.name} starts`);
+      add(s.endDate, "sprint", "#3B82F6", `${s.name} ends`);
+    });
+    milestones.forEach((m) => add(m.targetDate, "milestone", "#8B5CF6", m.name));
+    return map;
+  }, [tasks, bugs, devlog, sprints, milestones, month, year]);
+
+  const prevMonth = () => {
+    if (month === 0) { setMonth(11); setYear((y) => y - 1); }
+    else setMonth((m) => m - 1);
+    setSelectedDay(null);
+  };
+  const nextMonth = () => {
+    if (month === 11) { setMonth(0); setYear((y) => y + 1); }
+    else setMonth((m) => m + 1);
+    setSelectedDay(null);
+  };
+
+  const selectedEvents = selectedDay ? eventMap[selectedDay] || [] : [];
+
+  return (
+    <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+      <div className="flex items-center justify-between border-b border-[#2A2A2A] px-4 py-3">
+        <div className="flex items-center gap-2">
+          <CalendarDays className="h-4 w-4 text-[#F59E0B]" />
+          <h2 className="text-sm font-semibold">Calendar</h2>
+        </div>
+        <div className="flex items-center gap-1">
+          <button onClick={prevMonth} className="rounded-md p-1 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]">
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+          <span className="min-w-[110px] text-center text-xs font-medium text-[#D1D5DB]">
+            {CAL_MONTHS[month]} {year}
+          </span>
+          <button onClick={nextMonth} className="rounded-md p-1 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]">
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 border-b border-[#2A2A2A]/50 px-3 py-1.5">
+        {CAL_DAYS.map((d) => (
+          <div key={d} className="text-center text-[10px] font-medium text-[#6B7280]">{d}</div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 px-3 py-1.5">
+        {Array.from({ length: firstDow }).map((_, i) => (
+          <div key={`e-${i}`} className="h-8" />
+        ))}
+        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
+          const events = eventMap[day] || [];
+          const isToday = isCurrentMonth && day === now.getDate();
+          const isSelected = selectedDay === day;
+          const colors = [...new Set(events.map((e) => e.color))];
+          return (
+            <button
+              key={day}
+              onClick={() => setSelectedDay(isSelected ? null : day)}
+              className={`relative flex h-8 w-full flex-col items-center justify-center rounded-md text-xs transition-colors ${
+                isSelected
+                  ? "bg-[#F59E0B]/15 text-[#F59E0B] font-semibold"
+                  : isToday
+                    ? "bg-[#F59E0B]/10 font-semibold text-[#F59E0B]"
+                    : events.length > 0
+                      ? "text-[#F5F5F5] hover:bg-[#2A2A2A]"
+                      : "text-[#6B7280] hover:bg-[#1F1F1F]"
+              }`}
+            >
+              <span>{day}</span>
+              {colors.length > 0 && (
+                <div className="absolute bottom-0.5 flex gap-0.5">
+                  {colors.slice(0, 3).map((c, i) => (
+                    <div key={i} className="h-1 w-1 rounded-full" style={{ backgroundColor: c }} />
+                  ))}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-[#2A2A2A]/50 px-4 py-2">
+        {[
+          { color: "#10B981", label: "Tasks" },
+          { color: "#EF4444", label: "Bugs" },
+          { color: "#F59E0B", label: "Devlog" },
+          { color: "#3B82F6", label: "Sprints" },
+          { color: "#8B5CF6", label: "Milestones" },
+        ].map((item) => (
+          <div key={item.label} className="flex items-center gap-1">
+            <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: item.color }} />
+            <span className="text-[10px] text-[#6B7280]">{item.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {selectedDay !== null && (
+        <div className="border-t border-[#2A2A2A] px-4 py-3">
+          <p className="mb-2 text-xs font-medium text-[#9CA3AF]">
+            {CAL_MONTHS[month]} {selectedDay}, {year}
+          </p>
+          {selectedEvents.length > 0 ? (
+            <div className="space-y-1.5">
+              {selectedEvents.map((event, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: event.color }} />
+                  <span className="truncate text-xs text-[#D1D5DB]">{event.label}</span>
+                  <span
+                    className="ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] capitalize"
+                    style={{ backgroundColor: `${event.color}15`, color: event.color }}
+                  >
+                    {event.type}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-[#6B7280]">No events on this day</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -2500,6 +2667,15 @@ export default function ProjectDetailPage() {
               )}
             </div>
           </div>
+
+          {/* Project Calendar */}
+          <ProjectCalendar
+            tasks={tasks}
+            bugs={bugs}
+            devlog={devlog}
+            sprints={sprints}
+            milestones={milestones}
+          />
 
           {/* Quick Links */}
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
