@@ -24,6 +24,7 @@ import {
   MessageCircle,
   Heart,
   ChevronDown,
+  Check,
 } from "lucide-react";
 
 const features = [
@@ -425,6 +426,51 @@ export default function LandingPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section className="border-t border-[#2A2A2A] py-24">
+        <div className="mx-auto max-w-6xl px-6">
+          <p className="mb-4 text-center text-lg font-medium text-[#F59E0B]">
+            One plan. Everything included.
+          </p>
+          <div className="mx-auto max-w-md">
+            <div className="relative rounded-2xl border-2 border-[#F59E0B]/50 bg-[#1A1A1A] p-8 shadow-[0_0_40px_rgba(245,158,11,0.15)] transition-all hover:border-[#F59E0B] hover:shadow-[0_0_50px_rgba(245,158,11,0.2)]">
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#F59E0B]/[0.03] to-transparent" />
+              <div className="relative">
+                <h3 className="text-2xl font-bold text-[#F5F5F5]">Free Forever</h3>
+                <div className="mt-2 flex items-baseline gap-1">
+                  <span className="text-4xl font-extrabold text-[#F59E0B]">$0</span>
+                </div>
+                <p className="mt-1 text-sm text-[#9CA3AF]">No credit card required</p>
+                <ul className="mt-6 space-y-3">
+                  {[
+                    "All 23 tools",
+                    "200+ AI features",
+                    "Unlimited projects",
+                    "Data export",
+                    "Print support",
+                    "Keyboard shortcuts",
+                    "Firebase auth",
+                    "Vercel deployment",
+                  ].map((feature) => (
+                    <li key={feature} className="flex items-center gap-3 text-[#D1D5DB]">
+                      <Check className="h-5 w-5 shrink-0 text-[#F59E0B]" />
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/signup"
+                  className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-[#F59E0B] px-6 py-3.5 text-base font-bold text-[#0F0F0F] shadow-lg shadow-[#F59E0B]/20 transition-all hover:bg-[#D97706] hover:shadow-[#F59E0B]/30"
+                >
+                  Get Started Free
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </section>
