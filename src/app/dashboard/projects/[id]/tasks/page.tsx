@@ -37,6 +37,7 @@ import {
   LayoutGrid,
   List,
   Zap,
+  Settings,
 } from "lucide-react";
 import {
   getProject,
@@ -255,6 +256,10 @@ export default function TaskBoardPage() {
   const [showPlanningPoker, setShowPlanningPoker] = useState(false);
   const [pokerIndex, setPokerIndex] = useState(0);
 
+  const [wipLimits, setWipLimits] = useState<Record<string, number | null>>({});
+  const [wipEditingCol, setWipEditingCol] = useState<string | null>(null);
+  const [wipEditValue, setWipEditValue] = useState("");
+
   const handleConvertToBug = (taskId: string) => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
@@ -315,6 +320,21 @@ export default function TaskBoardPage() {
       const saved = localStorage.getItem(`retro_${projectId}`);
       if (saved) setRetroNotes(JSON.parse(saved));
     } catch { /* ignore */ }
+  }, [projectId]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`wip_limits_${projectId}`);
+      if (saved) setWipLimits(JSON.parse(saved));
+    } catch { /* ignore */ }
+  }, [projectId]);
+
+  const saveWipLimit = useCallback((colKey: string, limit: number | null) => {
+    setWipLimits((prev) => {
+      const updated = { ...prev, [colKey]: limit };
+      localStorage.setItem(`wip_limits_${projectId}`, JSON.stringify(updated));
+      return updated;
+    });
   }, [projectId]);
 
   const nextSprintNum = useMemo(() => {
@@ -2398,6 +2418,8 @@ export default function TaskBoardPage() {
           const prevCol = colIndex > 0 ? COLUMNS[colIndex - 1] : null;
           const nextCol =
             colIndex < COLUMNS.length - 1 ? COLUMNS[colIndex + 1] : null;
+          const wipLimit = wipLimits[column.key] ?? null;
+          const isOverWip = wipLimit !== null && columnTasks.length > wipLimit;
 
           return (
             <div key={column.key} className="space-y-3">
@@ -2417,32 +2439,107 @@ export default function TaskBoardPage() {
                   </button>
                   <div
                     className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: column.color }}
+                    style={{ backgroundColor: isOverWip ? "#EF4444" : column.color }}
                   />
                   <span className="text-sm font-semibold">{column.label}</span>
                   <span
-                    className="rounded-full px-2 py-0.5 text-xs font-semibold"
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${isOverWip ? "animate-pulse" : ""}`}
                     style={{
-                      backgroundColor: `${column.color}15`,
-                      color: column.color,
+                      backgroundColor: isOverWip ? "rgba(239,68,68,0.15)" : `${column.color}15`,
+                      color: isOverWip ? "#EF4444" : column.color,
                     }}
                   >
-                    {columnTasks.length}
+                    {wipLimit !== null ? `${columnTasks.length}/${wipLimit}` : columnTasks.length}
                   </span>
+                  {isOverWip && (
+                    <span className="flex items-center gap-1 rounded-md bg-[#EF4444]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#EF4444]">
+                      <AlertTriangle className="h-3 w-3" /> Over limit
+                    </span>
+                  )}
                 </div>
-                <button
-                  onClick={() => {
-                    setAddToColumn(column.key);
-                    setShowAddForm(true);
-                  }}
-                  className="rounded p-1 text-[#6B7280] transition-colors hover:text-[#F59E0B]"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-0.5">
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        if (wipEditingCol === column.key) {
+                          setWipEditingCol(null);
+                        } else {
+                          setWipEditingCol(column.key);
+                          setWipEditValue(wipLimit !== null ? String(wipLimit) : "");
+                        }
+                      }}
+                      className={`rounded p-1 transition-colors ${wipLimit !== null ? "text-[#F59E0B]" : "text-[#6B7280]"} hover:text-[#F59E0B]`}
+                      title="Set WIP limit"
+                    >
+                      <Settings className="h-3.5 w-3.5" />
+                    </button>
+                    {wipEditingCol === column.key && (
+                      <div className="absolute right-0 top-full z-20 mt-1.5 w-48 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] p-3 shadow-xl">
+                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF]">
+                          WIP Limit
+                        </p>
+                        <div className="flex gap-1.5">
+                          <input
+                            type="number"
+                            min="1"
+                            value={wipEditValue}
+                            onChange={(e) => setWipEditValue(e.target.value)}
+                            placeholder="No limit"
+                            className="min-w-0 flex-1 rounded-md border border-[#2A2A2A] bg-[#0F0F0F] px-2 py-1.5 text-xs text-[#F5F5F5] placeholder-[#555] outline-none focus:border-[#F59E0B]/40"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                const val = parseInt(wipEditValue);
+                                saveWipLimit(column.key, isNaN(val) || val < 1 ? null : val);
+                                setWipEditingCol(null);
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={() => {
+                              const val = parseInt(wipEditValue);
+                              saveWipLimit(column.key, isNaN(val) || val < 1 ? null : val);
+                              setWipEditingCol(null);
+                            }}
+                            className="shrink-0 rounded-md bg-[#F59E0B] px-2 py-1.5 text-xs font-medium text-black hover:bg-[#D97706]"
+                          >
+                            Set
+                          </button>
+                        </div>
+                        {wipLimit !== null && (
+                          <button
+                            onClick={() => {
+                              saveWipLimit(column.key, null);
+                              setWipEditingCol(null);
+                            }}
+                            className="mt-2 w-full rounded-md border border-[#2A2A2A] px-2 py-1 text-[10px] text-[#9CA3AF] hover:border-red-400/30 hover:text-red-400 transition-colors"
+                          >
+                            Remove limit
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setAddToColumn(column.key);
+                      setShowAddForm(true);
+                    }}
+                    className="rounded p-1 text-[#6B7280] transition-colors hover:text-[#F59E0B]"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
+              {isOverWip && (
+                <div className="rounded-lg border border-[#EF4444]/30 bg-[#EF4444]/5 px-3 py-1.5 text-[11px] text-[#EF4444]">
+                  This column has {columnTasks.length} tasks but a limit of {wipLimit}. Move or complete tasks to reduce WIP.
+                </div>
+              )}
+
               {/* Column Body */}
-              <div className="min-h-[200px] space-y-2 rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]/50 p-2">
+              <div className={`min-h-[200px] space-y-2 rounded-xl border p-2 ${isOverWip ? "border-[#EF4444]/40 bg-[#EF4444]/[0.03]" : "border-[#2A2A2A] bg-[#1A1A1A]/50"}`}>
                 {/* Quick Add */}
                 <div className="flex gap-1.5">
                   <input

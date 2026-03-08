@@ -14,6 +14,7 @@ import {
   Plus,
   Users,
   X,
+  MapPin,
 } from "lucide-react";
 
 const SETTINGS = ["Fantasy", "Sci-Fi", "Post-Apocalyptic", "Modern", "Historical"] as const;
@@ -221,6 +222,58 @@ export default function WorldBuilderPage() {
   const [relTo, setRelTo] = useState("");
   const [relType, setRelType] = useState<RelationshipType>("ally");
   const [charGenLoading, setCharGenLoading] = useState(false);
+
+  const [placeNames, setPlaceNames] = useState<{ name: string; desc: string }[]>([]);
+  const [placeNamesLoading, setPlaceNamesLoading] = useState(false);
+
+  const generatePlaceNames = useCallback(async () => {
+    setPlaceNamesLoading(true);
+    setPlaceNames([]);
+    try {
+      const prompt = `Generate 10 place names for a ${setting} game world with a ${tone} tone. Include: 3 cities/towns, 3 wilderness areas, 2 dungeons/dangerous places, 2 landmarks. For each: name and a one-line description. Just list them.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const lines = content.split("\n").filter((l: string) => l.trim());
+      const parsed: { name: string; desc: string }[] = [];
+      for (const line of lines) {
+        const match = line.match(/^\d+[\.\)]\s*\*{0,2}(.+?)\*{0,2}\s*[-:]\s*(.+)/);
+        if (match) {
+          parsed.push({ name: match[1].trim(), desc: match[2].trim() });
+        } else if (line.includes(" - ") || line.includes(": ")) {
+          const sep = line.includes(" - ") ? " - " : ": ";
+          const [n, ...rest] = line.split(sep);
+          const cleanName = n.replace(/^\d+[\.\)]\s*/, "").replace(/\*+/g, "").trim();
+          if (cleanName && rest.length > 0) {
+            parsed.push({ name: cleanName, desc: rest.join(sep).replace(/\*+/g, "").trim() });
+          }
+        }
+      }
+      setPlaceNames(parsed.length > 0 ? parsed : [{ name: "Could not parse results", desc: "Try again" }]);
+    } catch {
+      setPlaceNames([{ name: "Generation failed", desc: "Please try again" }]);
+    } finally {
+      setPlaceNamesLoading(false);
+    }
+  }, [setting, tone]);
+
+  const appendPlaceToResult = useCallback((placeName: string, placeDesc: string) => {
+    const entry = `\n**${placeName}** - ${placeDesc}`;
+    setResult((prev) => prev ? prev + entry : entry);
+  }, []);
 
   useEffect(() => {
     try {
@@ -752,6 +805,48 @@ export default function WorldBuilderPage() {
                 </>
               )}
             </button>
+
+            <button
+              onClick={generatePlaceNames}
+              disabled={placeNamesLoading}
+              className="w-full flex items-center justify-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#111] px-4 py-2.5 text-sm font-medium text-[#F5F5F5] transition-colors hover:bg-[#2A2A2A] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {placeNamesLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin text-[#F59E0B]" />
+                  Generating Place Names...
+                </>
+              ) : (
+                <>
+                  <MapPin className="h-4 w-4 text-[#F59E0B]" />
+                  AI Name Places
+                </>
+              )}
+            </button>
+
+            {placeNames.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                  Click to add to description
+                </p>
+                <div className="max-h-[260px] overflow-y-auto space-y-1 pr-1">
+                  {placeNames.map((place, i) => (
+                    <button
+                      key={i}
+                      onClick={() => appendPlaceToResult(place.name, place.desc)}
+                      className="w-full text-left rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 transition-colors hover:border-[#F59E0B]/30 hover:bg-[#F59E0B]/5 group"
+                    >
+                      <span className="text-xs font-medium text-[#F59E0B] group-hover:underline">
+                        {place.name}
+                      </span>
+                      <p className="text-[11px] text-[#6B7280] mt-0.5 leading-snug">
+                        {place.desc}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Saved Worlds */}
