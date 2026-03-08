@@ -12,7 +12,7 @@ const POPULAR_PAGES = [
 
 export default function NotFound() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#0F0F0F] px-4 text-center">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#0F0F0F] px-4 text-center animate-slide-up">
       <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#F59E0B]/10">
         <Gamepad2 className="h-8 w-8 text-[#F59E0B]" />
       </div>
