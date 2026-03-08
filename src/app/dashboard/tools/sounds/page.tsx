@@ -27,6 +27,7 @@ import {
   Save,
   Trash2,
   FileDown,
+  Copy,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -208,6 +209,7 @@ export default function SoundsPage() {
   const [aiNamingLoading, setAiNamingLoading] = useState(false);
   const [aiWaveLoading, setAiWaveLoading] = useState(false);
   const [aiWaveResult, setAiWaveResult] = useState("");
+  const [copyFeedback, setCopyFeedback] = useState(false);
 
   const toggleAdvisorCheck = (catIdx: number, itemIdx: number) => {
     setAdvisorResults((prev) =>
@@ -487,6 +489,15 @@ export default function SoundsPage() {
     a.download = `sound-library-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  }, [savedSounds]);
+
+  const copyLibrary = useCallback(async () => {
+    if (savedSounds.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(savedSounds, null, 2));
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 1500);
+    } catch {}
   }, [savedSounds]);
 
   const playSound = useCallback(
@@ -1051,13 +1062,31 @@ export default function SoundsPage() {
                   ))}
                 </div>
 
-                <button
-                  onClick={exportSoundLibrary}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-4 py-2.5 text-sm font-medium text-[#9CA3AF] transition-all hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
-                >
-                  <FileDown className="h-4 w-4" />
-                  Export Library as JSON
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={exportSoundLibrary}
+                    className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-xs font-medium text-[#9CA3AF] transition-all hover:border-[#F59E0B]/40 hover:text-[#F59E0B]"
+                  >
+                    <FileDown className="h-3.5 w-3.5 text-[#F59E0B]" />
+                    Export Library
+                  </button>
+                  <button
+                    onClick={copyLibrary}
+                    className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-1.5 text-xs font-medium text-[#9CA3AF] transition-all hover:border-[#F59E0B]/40 hover:text-[#F59E0B]"
+                  >
+                    {copyFeedback ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-[#22C55E]" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5 text-[#F59E0B]" />
+                        Copy Library
+                      </>
+                    )}
+                  </button>
+                </div>
               </>
             )}
           </div>
