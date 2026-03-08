@@ -28,6 +28,10 @@ import {
   Film,
   FileText,
   Download,
+  Eye,
+  AlertTriangle as TriangleAlert,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { getProject, type Project } from "@/lib/store";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -196,6 +200,76 @@ function parseMarketingSections(text: string): { title: string; content: string 
   return sections;
 }
 
+function AccessibilityResults({ text }: { text: string }) {
+  const sections: { category: string; rating: "pass" | "warning" | "fail"; lines: string[] }[] = [];
+  let current: { category: string; rating: "pass" | "warning" | "fail"; lines: string[] } | null = null;
+
+  for (const line of text.split("\n")) {
+    const ratingMatch = line.match(/\*\*(.+?)\*\*[:\s\-–]*(Pass|Warning|Fail)/i)
+      || line.match(/^#{1,4}\s*(.+?)[:\s\-–]+(Pass|Warning|Fail)/i)
+      || line.match(/^(.+?)[:\s\-–]+(Pass|Warning|Fail)\s*$/i);
+
+    if (ratingMatch) {
+      if (current) sections.push(current);
+      current = {
+        category: ratingMatch[1].replace(/[*#]/g, "").trim(),
+        rating: ratingMatch[2].toLowerCase() as "pass" | "warning" | "fail",
+        lines: [],
+      };
+    } else if (current && line.trim()) {
+      current.lines.push(line.replace(/^[-*]\s*/, "").trim());
+    }
+  }
+  if (current) sections.push(current);
+
+  if (sections.length === 0) {
+    return (
+      <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#D1D5DB]">
+        {text}
+      </div>
+    );
+  }
+
+  const ratingConfig = {
+    pass: { icon: CheckCircle2, color: "#10B981", bg: "bg-[#10B981]/10", label: "Pass" },
+    warning: { icon: TriangleAlert, color: "#F59E0B", bg: "bg-[#F59E0B]/10", label: "Warning" },
+    fail: { icon: XCircle, color: "#EF4444", bg: "bg-[#EF4444]/10", label: "Fail" },
+  };
+
+  return (
+    <div className="space-y-3">
+      {sections.map((s) => {
+        const cfg = ratingConfig[s.rating];
+        const Icon = cfg.icon;
+        return (
+          <div key={s.category} className="rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-4">
+            <div className="flex items-center gap-3">
+              <Icon className="h-5 w-5 shrink-0" style={{ color: cfg.color }} />
+              <span className="flex-1 text-sm font-semibold text-[#F5F5F5]">{s.category}</span>
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${cfg.bg}`}
+                style={{ color: cfg.color }}
+              >
+                {cfg.label}
+              </span>
+            </div>
+            {s.lines.length > 0 && (
+              <ul className="mt-2.5 space-y-1.5 pl-8">
+                {s.lines.map((l, i) => (
+                  <li key={i} className="text-sm leading-relaxed text-[#9CA3AF]">
+                    <span className="mr-1.5 text-[#4B5563]">&bull;</span>
+                    {l}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function LaunchChecklistPage() {
   const params = useParams();
   const router = useRouter();
@@ -224,6 +298,9 @@ export default function LaunchChecklistPage() {
   const [aiPressKit, setAiPressKit] = useState<string>("");
   const [aiPressKitLoading, setAiPressKitLoading] = useState(false);
   const [aiPressKitOpen, setAiPressKitOpen] = useState(false);
+  const [aiAccessibility, setAiAccessibility] = useState<string>("");
+  const [aiAccessibilityLoading, setAiAccessibilityLoading] = useState(false);
+  const [aiAccessibilityOpen, setAiAccessibilityOpen] = useState(false);
 
   useEffect(() => {
     const p = getProject(projectId);
@@ -441,6 +518,44 @@ export default function LaunchChecklistPage() {
     URL.revokeObjectURL(url);
   }, [aiPressKit, project]);
 
+  const generateAccessibilityCheck = useCallback(async () => {
+    if (!project || aiAccessibilityLoading) return;
+    setAiAccessibilityLoading(true);
+    setAiAccessibilityOpen(true);
+    setAiAccessibility("");
+    try {
+      const gddRaw = localStorage.getItem(`gameforge_gdd_${projectId}`);
+      const gddData: Record<string, string> | null = gddRaw ? JSON.parse(gddRaw) : null;
+      const genre = project.genre || gddData?.genre || "unknown genre";
+      const controls = gddData?.controls || "not specified";
+      const features = gddData
+        ? [gddData.coreVerbs, gddData.gameplayLoop, gddData.elevatorPitch].filter(Boolean).join(". ")
+        : project.description || "not specified";
+      const prompt = `Review this ${genre} game for accessibility. Controls: ${controls}. Features: ${features}. Check for: visual accessibility (color blindness, text size, contrast), motor accessibility (rebindable controls, difficulty options, auto-aim), audio accessibility (subtitles, visual cues for audio), cognitive accessibility (tutorials, UI clarity). Rate each area Pass/Warning/Fail and suggest specific improvements. Be brief. Format each area as: **Area Name**: Rating\n- suggestion`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 512,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "Could not generate accessibility review. Please try again.";
+      setAiAccessibility(content);
+    } catch {
+      setAiAccessibility("Failed to generate accessibility review. Check your API key and try again.");
+    } finally {
+      setAiAccessibilityLoading(false);
+    }
+  }, [project, aiAccessibilityLoading, projectId]);
+
   const copyToClipboard = useCallback((text: string, sectionTitle: string) => {
     navigator.clipboard.writeText(text);
     setCopiedSection(sectionTitle);
@@ -615,6 +730,18 @@ export default function LaunchChecklistPage() {
                 <FileText className="h-3.5 w-3.5" />
               )}
               {aiPressKitLoading ? "Generating..." : "AI Press Kit"}
+            </button>
+            <button
+              onClick={generateAccessibilityCheck}
+              disabled={aiAccessibilityLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#14B8A6]/40 bg-[#14B8A6]/10 px-3 py-2 text-sm font-medium text-[#14B8A6] transition-colors hover:bg-[#14B8A6]/20 disabled:opacity-50"
+            >
+              {aiAccessibilityLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Eye className="h-3.5 w-3.5" />
+              )}
+              {aiAccessibilityLoading ? "Checking..." : "AI Accessibility"}
             </button>
             <button
               onClick={handleReset}
@@ -915,6 +1042,34 @@ export default function LaunchChecklistPage() {
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AI Accessibility Panel */}
+      {aiAccessibilityOpen && (
+        <div className="rounded-xl border border-[#14B8A6]/30 bg-[#1A1A1A] overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#2A2A2A] px-5 py-3">
+            <div className="flex items-center gap-2">
+              <Eye className="h-4 w-4 text-[#14B8A6]" />
+              <h3 className="text-sm font-semibold text-[#14B8A6]">AI Accessibility Review</h3>
+            </div>
+            <button
+              onClick={() => setAiAccessibilityOpen(false)}
+              className="rounded-md p-1 text-[#6B7280] transition-colors hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="px-5 py-4">
+            {aiAccessibilityLoading ? (
+              <div className="flex items-center gap-3 py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-[#14B8A6]" />
+                <p className="text-sm text-[#9CA3AF]">Running accessibility audit for {project.name}...</p>
+              </div>
+            ) : (
+              <AccessibilityResults text={aiAccessibility} />
             )}
           </div>
         </div>

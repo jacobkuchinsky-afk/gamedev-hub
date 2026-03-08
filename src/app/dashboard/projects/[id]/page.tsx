@@ -40,6 +40,7 @@ import {
   Tag,
   ChevronLeft,
   CalendarDays,
+  StickyNote,
 } from "lucide-react";
 import {
   getProject,
@@ -1259,6 +1260,9 @@ export default function ProjectDetailPage() {
   const [riskLoading, setRiskLoading] = useState(false);
   const [riskCards, setRiskCards] = useState<{ title: string; level: "High" | "Medium" | "Low"; description: string; mitigation: string }[] | null>(null);
   const [riskError, setRiskError] = useState<string | null>(null);
+  const [quickNotes, setQuickNotes] = useState("");
+  const [quickNotesOpen, setQuickNotesOpen] = useState(false);
+  const quickNoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -1283,7 +1287,25 @@ export default function ProjectDetailPage() {
     setPlaytest(getPlaytestResponses(projectId));
     setSprints(getSprints(projectId));
     setMilestones(getMilestones(projectId));
+    const savedNotes = localStorage.getItem(`gameforge_quicknotes_${projectId}`);
+    if (savedNotes) setQuickNotes(savedNotes);
   }, [projectId, router]);
+
+  const handleQuickNoteChange = useCallback(
+    (value: string) => {
+      setQuickNotes(value);
+      if (quickNoteTimer.current) clearTimeout(quickNoteTimer.current);
+      quickNoteTimer.current = setTimeout(() => {
+        localStorage.setItem(`gameforge_quicknotes_${projectId}`, value);
+      }, 500);
+    },
+    [projectId]
+  );
+
+  const quickNoteWordCount = useMemo(() => {
+    const trimmed = quickNotes.trim();
+    return trimmed ? trimmed.split(/\s+/).length : 0;
+  }, [quickNotes]);
 
   if (!project) return null;
 
@@ -2700,6 +2722,42 @@ export default function ProjectDetailPage() {
                   );
                 })}
             </div>
+          </div>
+
+          {/* Quick Notes */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]">
+            <button
+              onClick={() => setQuickNotesOpen((p) => !p)}
+              className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-[#1F1F1F]"
+            >
+              <div className="flex items-center gap-2">
+                <StickyNote className="h-4 w-4 text-[#F59E0B]" />
+                <h2 className="font-semibold">Quick Notes</h2>
+                {quickNoteWordCount > 0 && !quickNotesOpen && (
+                  <span className="rounded-full bg-[#F59E0B]/10 px-2 py-0.5 text-xs font-medium text-[#F59E0B]">
+                    {quickNoteWordCount} words
+                  </span>
+                )}
+              </div>
+              <ChevronDown
+                className={`h-4 w-4 text-[#6B7280] transition-transform ${quickNotesOpen ? "" : "-rotate-90"}`}
+              />
+            </button>
+            {quickNotesOpen && (
+              <div className="border-t border-[#2A2A2A] px-5 py-4">
+                <textarea
+                  value={quickNotes}
+                  onChange={(e) => handleQuickNoteChange(e.target.value)}
+                  placeholder="Jot down quick ideas, reminders, or thoughts..."
+                  rows={6}
+                  className="w-full resize-y rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2.5 font-mono text-sm leading-relaxed text-[#D1D5DB] placeholder-[#4B5563] outline-none transition-colors focus:border-[#F59E0B]/40"
+                />
+                <div className="mt-2 flex items-center justify-between text-xs text-[#6B7280]">
+                  <span>{quickNoteWordCount} {quickNoteWordCount === 1 ? "word" : "words"}</span>
+                  <span className="text-[#4B5563]">Auto-saved</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
