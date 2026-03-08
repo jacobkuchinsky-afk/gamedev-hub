@@ -21,6 +21,7 @@ import {
   Monitor,
   Map,
   Sparkles,
+  Loader2,
 } from "lucide-react";
 import {
   getProject,
@@ -81,6 +82,8 @@ export default function AssetPipelinePage() {
   const [newPriority, setNewPriority] = useState<GameAsset["priority"]>("medium");
   const [newNotes, setNewNotes] = useState("");
   const [newFileRef, setNewFileRef] = useState("");
+  const [aiSuggestion, setAiSuggestion] = useState("");
+  const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
 
   const reload = useCallback(() => {
     console.log("[AssetPipelinePage] reloading assets for", projectId);
@@ -150,7 +153,38 @@ export default function AssetPipelinePage() {
     setNewFileRef("");
     setNewPriority("medium");
     setShowAddForm(false);
+    setAiSuggestion("");
     reload();
+  };
+
+  const handleAiSuggest = async () => {
+    if (!newName.trim()) return;
+    setAiSuggestLoading(true);
+    setAiSuggestion("");
+    try {
+      const prompt = `I'm organizing assets for a game. I have an asset: name='${newName.trim()}', type='${newType}'. Suggest: a good file naming convention, recommended format (e.g., PNG for sprites, WAV for sounds), and one organizational tip. Be brief (3 lines max).`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      setAiSuggestion(content || "No suggestion available.");
+    } catch {
+      setAiSuggestion("Failed to get suggestion. Try again.");
+    } finally {
+      setAiSuggestLoading(false);
+    }
   };
 
   const moveAsset = (assetId: string, newStatus: AssetStatus) => {
@@ -598,6 +632,28 @@ export default function AssetPipelinePage() {
                   </select>
                 </div>
               </div>
+              {newName.trim() && (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={handleAiSuggest}
+                    disabled={aiSuggestLoading}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 py-2 text-sm text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10 disabled:opacity-50"
+                  >
+                    {aiSuggestLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                    {aiSuggestLoading ? "Thinking..." : "AI Suggest Details"}
+                  </button>
+                  {aiSuggestion && (
+                    <div className="rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-4 py-3 text-xs leading-relaxed text-[#D1D5DB] whitespace-pre-line">
+                      {aiSuggestion}
+                    </div>
+                  )}
+                </div>
+              )}
               <div>
                 <label className="mb-1 block text-xs text-[#6B7280]">Assignee</label>
                 <input

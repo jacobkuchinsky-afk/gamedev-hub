@@ -18,6 +18,8 @@ import {
   Eye,
   EyeOff,
   Plus,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 
 type Tool = "pencil" | "eraser" | "fill" | "line" | "rectangle" | "eyedropper";
@@ -182,6 +184,9 @@ export default function SpriteEditorPage() {
   const [notification, setNotification] = useState<string | null>(null);
   const [hexInput, setHexInput] = useState("#F59E0B");
   const [mirrorMode, setMirrorMode] = useState(false);
+  const [aiPaletteTheme, setAiPaletteTheme] = useState("");
+  const [aiPaletteLoading, setAiPaletteLoading] = useState(false);
+  const [showAiPaletteInput, setShowAiPaletteInput] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const minimapRef = useRef<HTMLCanvasElement>(null);
@@ -636,6 +641,42 @@ export default function SpriteEditorPage() {
     addRecentColor(color);
   };
 
+  const handleAiPalette = async () => {
+    const theme = aiPaletteTheme.trim() || "game character sprites";
+    setAiPaletteLoading(true);
+    try {
+      const prompt = `Suggest a 8-color limited palette for pixel art. Theme: ${theme}. Return exactly 8 hex color codes, one per line. Include skin tone, hair, eyes, clothing (2 colors), outline, highlight, and shadow.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.8,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      const hexMatches = content.match(/#[0-9a-fA-F]{6}/g);
+      if (hexMatches && hexMatches.length >= 1) {
+        setCustomPalette(hexMatches.slice(0, 8));
+        setActivePalette("custom");
+        notify(`AI palette loaded (${Math.min(hexMatches.length, 8)} colors)`);
+      } else {
+        notify("Could not parse palette. Try again.");
+      }
+    } catch {
+      notify("AI palette failed. Try again.");
+    } finally {
+      setAiPaletteLoading(false);
+    }
+  };
+
   const addLayer = () => {
     if (layers.length >= MAX_LAYERS) return;
     pushUndo();
@@ -946,6 +987,41 @@ export default function SpriteEditorPage() {
                   <option value="custom">Custom</option>
                 </select>
               </div>
+              {!showAiPaletteInput ? (
+                <button
+                  onClick={() => setShowAiPaletteInput(true)}
+                  className="mb-2 flex w-full items-center justify-center gap-1 rounded border border-[#F59E0B]/30 bg-[#F59E0B]/5 py-1.5 text-[11px] text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/10"
+                >
+                  <Sparkles size={11} />
+                  AI Palette
+                </button>
+              ) : (
+                <div className="mb-2 space-y-1.5">
+                  <div className="flex gap-1">
+                    <input
+                      type="text"
+                      value={aiPaletteTheme}
+                      onChange={(e) => setAiPaletteTheme(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleAiPalette()}
+                      placeholder="e.g. forest creature"
+                      className="min-w-0 flex-1 rounded border border-[#2A2A2A] bg-[#1A1A1A] px-2 py-1 text-[11px] text-[#D1D5DB] placeholder-[#4A4A4A] outline-none focus:border-[#F59E0B]/40"
+                    />
+                    <button
+                      onClick={handleAiPalette}
+                      disabled={aiPaletteLoading}
+                      className="flex shrink-0 items-center gap-1 rounded border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-2 py-1 text-[11px] text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20 disabled:opacity-50"
+                    >
+                      {aiPaletteLoading ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => setShowAiPaletteInput(false)}
+                    className="w-full text-center text-[10px] text-[#4A4A4A] hover:text-[#6B7280]"
+                  >
+                    cancel
+                  </button>
+                </div>
+              )}
               <div
                 className={`grid gap-0.5 ${
                   currentPaletteColors.length <= 4 ? "grid-cols-4" : "grid-cols-8"
