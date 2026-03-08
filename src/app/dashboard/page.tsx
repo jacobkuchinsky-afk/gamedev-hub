@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   FolderKanban,
+  FolderOpen,
   ListTodo,
   Bug,
   BookOpen,
@@ -2419,13 +2420,36 @@ export default function DashboardPage() {
       <div>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-semibold">Your Projects</h2>
-          <Link
-            href="/dashboard/projects"
-            className="flex items-center gap-1 text-xs text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
-          >
-            View all <ChevronRight className="h-3 w-3" />
-          </Link>
+          {allProjects.length > 0 && (
+            <Link
+              href="/dashboard/projects"
+              className="flex items-center gap-1 text-xs text-[#9CA3AF] transition-colors hover:text-[#F59E0B]"
+            >
+              View all <ChevronRight className="h-3 w-3" />
+            </Link>
+          )}
         </div>
+        {allProjects.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-16">
+            <FolderOpen className="h-12 w-12 text-[#F59E0B]/70" strokeWidth={1.5} />
+            <p className="mt-5 text-lg font-medium text-[#E5E7EB]">
+              Welcome to GameForge! Create your first project to get started.
+            </p>
+            <Link
+              href="/dashboard/projects/new"
+              className="mt-6 flex items-center gap-2 rounded-lg bg-[#F59E0B] px-5 py-3 text-sm font-semibold text-black transition-colors hover:bg-[#F59E0B]/90"
+            >
+              <Plus className="h-4 w-4" />
+              Create Project
+            </Link>
+            <ul className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-1 text-sm text-[#6B7280]">
+              <li className="flex items-center gap-1.5">Create projects</li>
+              <li className="flex items-center gap-1.5">Use 23 tools</li>
+              <li className="flex items-center gap-1.5">Track bugs</li>
+              <li className="flex items-center gap-1.5">Write devlogs</li>
+            </ul>
+          </div>
+        ) : (
         <div className="flex gap-3 overflow-x-auto py-2 scrollbar-thin">
           {allProjects.map((project) => (
             <Link
@@ -2480,6 +2504,7 @@ export default function DashboardPage() {
             <span className="text-sm font-medium text-[#6B7280]">New Project</span>
           </Link>
         </div>
+        )}
       </div>
 
       {/* Content grid */}
