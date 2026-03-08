@@ -20,6 +20,7 @@ import {
   Clock,
   ArrowRight,
   Download,
+  FileSpreadsheet,
   TrendingUp,
   TrendingDown,
   BarChart3,
@@ -385,6 +386,37 @@ Be concise and professional. Fill in any missing sections based on the title and
     const a = document.createElement("a");
     a.href = url;
     a.download = `${slug}-bugs.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportBugCSV = () => {
+    if (!project || bugs.length === 0) return;
+    const escape = (v: string) => {
+      if (v.includes(",") || v.includes('"') || v.includes("\n")) {
+        return '"' + v.replace(/"/g, '""') + '"';
+      }
+      return v;
+    };
+    const header = "ID,Title,Severity,Status,Platform,Created,Description";
+    const rows = bugs.map((bug, i) =>
+      [
+        String(i + 1),
+        escape(bug.title),
+        bug.severity.charAt(0).toUpperCase() + bug.severity.slice(1),
+        STATUS_LABELS[bug.status],
+        bug.platform,
+        new Date(bug.created_at).toLocaleDateString(),
+        escape(bug.description || ""),
+      ].join(",")
+    );
+    const csv = [header, ...rows].join("\n");
+    const slug = project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${slug}-bugs.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -787,13 +819,23 @@ Be concise and professional. Fill in any missing sections based on the title and
               Quick File
             </button>
             {bugs.length > 0 && (
-              <button
-                onClick={exportBugReport}
-                className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
-              >
-                <Download className="h-4 w-4" />
-                Export
-              </button>
+              <>
+                <button
+                  onClick={exportBugReport}
+                  className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                >
+                  <Download className="h-4 w-4" />
+                  Export
+                </button>
+                <button
+                  onClick={exportBugCSV}
+                  className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#9CA3AF] transition-colors hover:border-[#F59E0B]/30 hover:text-[#F59E0B]"
+                  title="Export as CSV"
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  CSV
+                </button>
+              </>
             )}
             <button
               onClick={() => setShowAddForm(true)}

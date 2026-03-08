@@ -20,6 +20,8 @@ import {
   Plus,
   Sparkles,
   Loader2,
+  Lightbulb,
+  ChevronUp,
 } from "lucide-react";
 
 type Tool = "pencil" | "eraser" | "fill" | "line" | "rectangle" | "eyedropper";
@@ -295,6 +297,10 @@ export default function SpriteEditorPage() {
   const [canvasAreaMousePos, setCanvasAreaMousePos] = useState<{ x: number; y: number } | null>(null);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const [exportScale, setExportScale] = useState(1);
+  const [aiDesignSubject, setAiDesignSubject] = useState("");
+  const [aiDesignTips, setAiDesignTips] = useState("");
+  const [aiDesignLoading, setAiDesignLoading] = useState(false);
+  const [showDesignTips, setShowDesignTips] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const minimapRef = useRef<HTMLCanvasElement>(null);
@@ -857,6 +863,36 @@ export default function SpriteEditorPage() {
     }
   };
 
+  const handleAiDesignTips = async () => {
+    const subject = aiDesignSubject.trim() || "game character";
+    setAiDesignLoading(true);
+    setShowDesignTips(true);
+    try {
+      const prompt = `Give 3 pixel art design tips for drawing a '${subject}' in a ${canvasSize}x${canvasSize} pixel grid. Include: color count suggestion, important details to include, common mistakes to avoid. Be very brief.`;
+      const response = await fetch("https://llm.chutes.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (process.env.NEXT_PUBLIC_CHUTES_API_TOKEN || ""),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "moonshotai/Kimi-K2.5-TEE",
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          max_tokens: 256,
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "";
+      setAiDesignTips(content.trim() || "No tips available. Try again.");
+    } catch {
+      setAiDesignTips("Failed to get tips. Try again.");
+    } finally {
+      setAiDesignLoading(false);
+    }
+  };
+
   const addLayer = () => {
     if (layers.length >= MAX_LAYERS) return;
     pushUndo();
@@ -1263,6 +1299,64 @@ export default function SpriteEditorPage() {
                   + Add current color
                 </button>
               )}
+            </section>
+
+            {/* AI Design Tips */}
+            <section>
+              <h3 className="mb-2 text-[10px] font-bold uppercase tracking-widest text-[#F59E0B]/70">
+                AI Design Tips
+              </h3>
+              <div className="space-y-1.5">
+                <div className="flex gap-1">
+                  <input
+                    type="text"
+                    value={aiDesignSubject}
+                    onChange={(e) => setAiDesignSubject(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleAiDesignTips()}
+                    placeholder="e.g. player character"
+                    className="min-w-0 flex-1 rounded border border-[#2A2A2A] bg-[#1A1A1A] px-2 py-1 text-[11px] text-[#D1D5DB] placeholder-[#4A4A4A] outline-none focus:border-[#F59E0B]/40"
+                  />
+                  <button
+                    onClick={handleAiDesignTips}
+                    disabled={aiDesignLoading}
+                    className="flex shrink-0 items-center gap-1 rounded border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-2 py-1 text-[11px] text-[#F59E0B] transition-colors hover:bg-[#F59E0B]/20 disabled:opacity-50"
+                  >
+                    {aiDesignLoading ? <Loader2 size={11} className="animate-spin" /> : <Lightbulb size={11} />}
+                    Tips
+                  </button>
+                </div>
+                {aiDesignTips && (
+                  <div className="rounded-md border border-[#F59E0B]/20 bg-[#F59E0B]/5">
+                    <button
+                      onClick={() => setShowDesignTips((v) => !v)}
+                      className="flex w-full items-center justify-between px-2.5 py-1.5 text-left"
+                    >
+                      <span className="flex items-center gap-1 text-[11px] font-medium text-[#F59E0B]">
+                        <Lightbulb size={11} />
+                        Design Tips
+                      </span>
+                      <ChevronUp
+                        size={12}
+                        className={`text-[#F59E0B]/60 transition-transform ${showDesignTips ? "" : "rotate-180"}`}
+                      />
+                    </button>
+                    {showDesignTips && (
+                      <div className="border-t border-[#F59E0B]/10 px-2.5 py-2">
+                        {aiDesignLoading ? (
+                          <div className="flex items-center gap-2 py-2">
+                            <Loader2 size={12} className="animate-spin text-[#F59E0B]" />
+                            <span className="text-[11px] text-[#9CA3AF]">Getting tips...</span>
+                          </div>
+                        ) : (
+                          <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-[#D1D5DB]">
+                            {aiDesignTips}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </section>
 
             {/* Canvas settings */}
